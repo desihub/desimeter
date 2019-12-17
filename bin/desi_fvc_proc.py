@@ -31,7 +31,7 @@ elif filename.find(".csv")>0 :
     log.info("read CSV spots table")
     spots = Table.read(filename,format="csv")
 else :
-    log.info("sorry, I don't know what to do with input file {} because not .fits nor .csv")
+    log.info("sorry, I don't know what to do with input file {} because not .fits nor .csv".format(filename))
     sys.exit(12)
 
 
