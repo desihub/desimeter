@@ -2,7 +2,7 @@
 """
 Utility functions to detect spots in fiber view camera image
 """
-
+import sys
 import numpy as np
 from desiutil.log import get_logger
 from astropy.table import Table
@@ -25,11 +25,13 @@ def gaussian_convolve(image,sigma=1.) :
     kernel /= np.sum(kernel)
     return fftconvolve(image,kernel,"same")
 
-def fitcentroid(stamp) :
+def fitcentroid_barycenter(stamp) :
     """
     fit the centroid of a 2D image square stamp of size (2*hw+1,2*hw+1)
     in a coordinate system centered on the stamp, i.e. the central pixel has coordinates = (0,0)
     """
+
+    
     hw=stamp.shape[0]//2
     x1d=np.arange(-hw,hw+1)
     
@@ -47,6 +49,78 @@ def fitcentroid(stamp) :
     ye=1.
     
     return xc,yc,xe,ye,norm
+
+
+def psf(i0,i1,xc,yc,sigma) :
+    a=1/(np.sqrt(2)*sigma)
+    return 0.25*(np.erf(a*(i1+0.5-xc))-np.erf(a*(i1-0.5-xc)))*(np.erf(a*(i0+0.5-yc))-np.erf(a*(i0-0.5-yc)))
+
+def dpsfdxc(i0,i1,xc,yc,sigma) :
+    a=1/(np.sqrt(2)*sigma)
+    return -a*0.25*2/np.sqrt(np.pi)*(np.exp(-(a*(i1+0.5-xc))**2)-np.exp(-(a*(i1-0.5-xc))**2))*(np.erf(a*(i0+0.5-yc))-np.erf(a*(i0-0.5-yc)))
+
+def dpsfdyc(i0,i1,xc,yc,sigma) :
+    a=1/(np.sqrt(2)*sigma)
+    return -a*0.25*2/np.sqrt(np.pi)*(np.erf(a*(i1+0.5-xc))-np.erf(a*(i1-0.5-xc)))*(np.exp(-(a*(i0+0.5-yc))**2)-np.exp(-(a*(i0-0.5-yc))**2))
+
+def fitcentroid_gaussian(stamp,sigma=1.,noise=10.) :
+    """
+    fit the centroid of a 2D image square stamp of size (2*hw+1,2*hw+1)
+    in a coordinate system centered on the stamp, i.e. the central pixel has coordinates = (0,0)
+    """
+    # iterative gauss-newton fit
+    n0=stamp.shape[0]
+    n1=stamp.shape[1]
+    xc=float(n1//2)
+    yc=float(n0//2)
+    flux=np.sum(stamp)
+    #print(flux,xc,yc)
+    mod    = np.zeros(stamp.shape)
+    dmoddx = np.zeros(stamp.shape)
+    dmoddy = np.zeros(stamp.shape)
+    # pixel indices (in 2D)
+    ii0 = np.tile(np.arange(n0),(n1,1)).T
+    ii1 = np.tile(np.arange(n1),(n0,1))
+    
+    for loop in range(5) :
+        mod    = psf(ii0,ii1,xc,yc,sigma)
+        dmoddx = dpsfdxc(ii0,ii1,xc,yc,sigma)
+        dmoddy = dpsfdyc(ii0,ii1,xc,yc,sigma)
+        H=np.array([mod,flux*dmoddx,flux*dmoddy]).reshape(3,n0*n1)
+        B=((stamp-flux*mod).reshape(n0*n1)*H).sum(axis=1)
+        A=H.dot(H.T)
+        Ai=np.linalg.inv(A)
+        delta=Ai.dot(B)
+        val=np.max(np.abs(delta[1:]))
+        if val>0.2 :
+            delta *= (0.2/val) # limiting range
+            
+        flux += delta[0]
+        xc += delta[1]
+        yc += delta[2]
+        #print(loop,delta,[flux,xc,yc])
+        if np.abs(delta[1])<0.001 and np.abs(delta[2])<0.001 : break
+
+    # coordinates should be zero at center of stamp
+    xc -= float(n1//2)
+    yc -= float(n0//2)
+    
+    xe = noise * np.sqrt(Ai[1,1])
+    ye = noise * np.sqrt(Ai[2,2])
+
+    return xc,yc,xe,ye,flux
+    #sys.exit(12)
+
+    
+def fitcentroid(stamp,noise=10.) :
+    """
+    fit the centroid of a 2D image square stamp of size (2*hw+1,2*hw+1)
+    in a coordinate system centered on the stamp, i.e. the central pixel has coordinates = (0,0)
+    """
+
+    return fitcentroid_gaussian(stamp,sigma=1,noise=noise)
+    #return fitcentroid_barycenter(stamp)
+
 
 def detectspots(fvcimage,threshold=None) :
     """
@@ -119,27 +193,30 @@ def detectspots(fvcimage,threshold=None) :
     yerr=np.zeros(npeak)
     counts=np.zeros(npeak)
     hw=3
-
-    log.warning("Fit of centroids is very approximative for now, uncertainties are made up")
+    
+    xoffset=0. # would need offsets of 1 to match with POS file. not sure what is the best choice here.
+    yoffset=0.
+    if xoffset !=0 or yoffset !=0 :
+        log.warning("Applying offsets x += {} and y += {} (to match with others, like the POS files)".format(xoffset,yoffset))
+    if xoffset == 0 and yoffset == 0 :
+        log.warning("Here center of first pixel has coord=(0,0); so we expect offsets of 1 with respect to coordinates in .pos files.")
     
     for j,index in enumerate(peakindices) :
         i0=index//n1
         i1=index%n1
-        try :
-            x,y,ex,ey,c=fitcentroid(fvcimage[i0-hw:i0+hw+1,i1-hw:i1+hw+1])
-            x += i1 # x is along axis=1 in python
-            y += i0 # y is along axis=1 in python
-            xpix[j] = x
-            ypix[j] = y
+        if 1 : #try :
+            x,y,ex,ey,c=fitcentroid(fvcimage[i0-hw:i0+hw+1,i1-hw:i1+hw+1],noise=rms)
+            xpix[j] = x + i1 + xoffset #  x is along axis=1 in python , also adding offset (definition of pixel coordinates)
+            ypix[j] = y + i0 + yoffset #  y is along axis=0 in python , also adding offset (definition of pixel coordinates)
             xerr[j] = ex
             yerr[j] = ey
             counts[j] = c
-        except Exception as e:
-            log.error("failed to fit a centroid {}".format(e))
+        #except Exception as e:
+        #    log.error("failed to fit a centroid {}".format(e))
             
         log.debug("{} x={} y={} counts={}".format(j,xpix[j],ypix[j],counts[j]))
     
-    log.warning("NOT IMPLEMENTED: would need some cleaning here for multiple detections of same spot")
+    log.warning("Would need some cleaning here for multiple detections of same spot")
 
     table = Table([xpix,ypix,xerr,yerr,counts],names=("XPIX","YPIX","XERR","YERR","COUNTS"))
     return table
