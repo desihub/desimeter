@@ -24,11 +24,11 @@ def findfiducials(spots,separation=7.) :
     log.info("findfiducials...")
     
     if pinholes_table is None :
-        filename = resource_filename('desicoord',"data/pinholes.csv")
+        filename = resource_filename('desicoord',"data/pinholes-fvcxy.csv")
         if not os.path.isfile(filename) :
             log.error("cannot find {}".format(filename))
             raise IOError("cannot find {}".format(filename))
-        log.info("reading pinholes metrology in {}".format(filename))
+        log.info("reading pinholes FVC coords in {}".format(filename))
         pinholes_table = Table.read(filename,format="csv")
 
         # the central pinhole is always pin_id 1027, but anyways I recheck this ...
@@ -101,8 +101,10 @@ def findfiducials(spots,separation=7.) :
     # now, identify pinholes
 
     nspots=spots["XPIX"].size
-    spots.add_column(Column(np.zeros(nspots,dtype=int)),name='FID_ID')
-    spots.add_column(Column(np.zeros(nspots,dtype=int)),name='PIN_ID')
+    if 'FID_ID' not in spots.dtype.names :
+        spots.add_column(Column(np.zeros(nspots,dtype=int)),name='FID_ID')
+    if 'PIN_ID' not in spots.dtype.names :
+        spots.add_column(Column(np.zeros(nspots,dtype=int)),name='PIN_ID')
     
     
     for index1,index2 in zip ( fiducials_candidates_indices , matching_known_fiducials_indices ) :

@@ -11,6 +11,7 @@ from astropy.table import Table
 from desiutil.log import get_logger
 from desicoord.detectspots import detectspots
 from desicoord.findfiducials import findfiducials
+from desicoord.fvc2fp import fit_fvc2fp
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""FVC image processing""")
@@ -44,7 +45,7 @@ else :
 
 spots = findfiducials(spots)
 
-
+spots = fit_fvc2fp(spots)
 
 spots.write(args.outfile,format="csv",overwrite=True)
 print("wrote {}".format(args.outfile))

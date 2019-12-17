@@ -1,1 +1,10 @@
-cat pinhole_references_20191105.dat | grep pinhole | awk '{print $1,$5,$2,$3}' > pinholes.csv
+scp desiobserver@desi-7.kpno.noao.edu:/n/home/desiobserver/users/jguy/fvc/platemaker-instrument-dir/desi/fiducial-desi.dat platemaker-fiducial-desi.dat
+scp desiobserver@desi-7.kpno.noao.edu:/n/home/desiobserver/users/jguy/fvc/platemaker-instrument-dir/desi/fiberpos-desi.dat platemaker-fiberpos-desi.dat
+scp desiobserver@desi-7.kpno.noao.edu:/n/home/desiobserver/users/jguy/fvc/spotmatch-data-dir/pinhole_references_20191105.dat spotmatch-pinhole-references.dat
+
+
+echo "FID_ID,PIN_ID,XPIX,YPIX" > pinholes-fvcxy.csv
+cat spotmatch-pinhole-references.dat | grep pinhole | awk '{print $1","$5","$2","$3}' >> pinholes-fvcxy.csv
+
+echo "FID_ID,Q,S" > fiducials-fpqs.csv
+cat platemaker-fiducial-desi.dat | grep -v '#' | awk '{print $1","$2","$3}' >> fiducials-fpqs.csv
