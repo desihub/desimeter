@@ -53,7 +53,7 @@ def findfiducials(spots,separation=7.) :
     tree = KDTree(xy)
     measured_spots_distances,measured_spots_indices = tree.query(xy,k=4,distance_upper_bound=separation)
     number_of_neighbors = np.sum( measured_spots_distances<separation,axis=1)
-    fiducials_candidates_indices = np.where(number_of_neighbors>=3)[0]  # including self, so at least 3 pinholes
+    fiducials_candidates_indices = np.where(number_of_neighbors>3)[0]  # including self, so at least 3 pinholes
     
     # match candidates to known fiducials
     # nearest neighbor
