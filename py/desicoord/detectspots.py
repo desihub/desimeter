@@ -41,7 +41,12 @@ def fitcentroid(stamp) :
     
     xc=np.sum(x1d*np.sum(stamp,axis=0))/norm
     yc=np.sum(x1d*np.sum(stamp,axis=1))/norm
-    return xc,yc,norm
+
+    # uncertainties, made up for now ... 
+    xe=1.
+    ye=1.
+    
+    return xc,yc,xe,ye,norm
 
 def detectspots(fvcimage,threshold=None) :
     """
@@ -110,17 +115,24 @@ def detectspots(fvcimage,threshold=None) :
                  
     xpix=np.zeros(npeak)
     ypix=np.zeros(npeak)
+    xerr=np.zeros(npeak)
+    yerr=np.zeros(npeak)
     counts=np.zeros(npeak)
     hw=3
+
+    log.warning("Fit of centroids is very approximative for now, uncertainties are made up")
+    
     for j,index in enumerate(peakindices) :
         i0=index//n1
         i1=index%n1
         try :
-            x,y,c=fitcentroid(fvcimage[i0-hw:i0+hw+1,i1-hw:i1+hw+1])
+            x,y,ex,ey,c=fitcentroid(fvcimage[i0-hw:i0+hw+1,i1-hw:i1+hw+1])
             x += i1 # x is along axis=1 in python
             y += i0 # y is along axis=1 in python
             xpix[j] = x
             ypix[j] = y
+            xerr[j] = ex
+            yerr[j] = ey
             counts[j] = c
         except Exception as e:
             log.error("failed to fit a centroid {}".format(e))
@@ -129,7 +141,7 @@ def detectspots(fvcimage,threshold=None) :
     
     log.warning("NOT IMPLEMENTED: would need some cleaning here for multiple detections of same spot")
 
-    table = Table([xpix,ypix,counts],names=("XPIX","YPIX","COUNTS"))
+    table = Table([xpix,ypix,xerr,yerr,counts],names=("XPIX","YPIX","XERR","YERR","COUNTS"))
     return table
 
     
