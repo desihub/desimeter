@@ -7,6 +7,7 @@ import numpy as np
 from desiutil.log import get_logger
 from astropy.table import Table
 from scipy.signal import fftconvolve
+from scipy.special import erf
 
 def gaussian_convolve(image,sigma=1.) :
     """FFT convolution of an image with a gaussian 2d kernel
@@ -53,15 +54,15 @@ def fitcentroid_barycenter(stamp) :
 
 def psf(i0,i1,xc,yc,sigma) :
     a=1/(np.sqrt(2)*sigma)
-    return 0.25*(np.erf(a*(i1+0.5-xc))-np.erf(a*(i1-0.5-xc)))*(np.erf(a*(i0+0.5-yc))-np.erf(a*(i0-0.5-yc)))
+    return 0.25*(erf(a*(i1+0.5-xc))-erf(a*(i1-0.5-xc)))*(erf(a*(i0+0.5-yc))-erf(a*(i0-0.5-yc)))
 
 def dpsfdxc(i0,i1,xc,yc,sigma) :
     a=1/(np.sqrt(2)*sigma)
-    return -a*0.25*2/np.sqrt(np.pi)*(np.exp(-(a*(i1+0.5-xc))**2)-np.exp(-(a*(i1-0.5-xc))**2))*(np.erf(a*(i0+0.5-yc))-np.erf(a*(i0-0.5-yc)))
+    return -a*0.25*2/np.sqrt(np.pi)*(np.exp(-(a*(i1+0.5-xc))**2)-np.exp(-(a*(i1-0.5-xc))**2))*(erf(a*(i0+0.5-yc))-erf(a*(i0-0.5-yc)))
 
 def dpsfdyc(i0,i1,xc,yc,sigma) :
     a=1/(np.sqrt(2)*sigma)
-    return -a*0.25*2/np.sqrt(np.pi)*(np.erf(a*(i1+0.5-xc))-np.erf(a*(i1-0.5-xc)))*(np.exp(-(a*(i0+0.5-yc))**2)-np.exp(-(a*(i0-0.5-yc))**2))
+    return -a*0.25*2/np.sqrt(np.pi)*(erf(a*(i1+0.5-xc))-erf(a*(i1-0.5-xc)))*(np.exp(-(a*(i0+0.5-yc))**2)-np.exp(-(a*(i0-0.5-yc))**2))
 
 def fitcentroid_gaussian(stamp,sigma=1.,noise=10.) :
     """
