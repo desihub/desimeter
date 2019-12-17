@@ -18,6 +18,8 @@ parser.add_argument('-i','--infile', type = str, default = None, required = True
                     help = 'path to FVC image fits file or CSV file with spots positions')
 parser.add_argument('-o','--outfile', type = str, default = None, required = True,
                     help = 'path to output CSV ASCII file')
+parser.add_argument('--extname', type = str, default = 'F0000', required = False,
+                    help = 'input EXTNAME to use if more than one HDU')
 
 args  = parser.parse_args()
 log   = get_logger()
@@ -25,7 +27,12 @@ log   = get_logger()
 filename = args.infile
 if filename.find(".fits")>0 :
     log.info("read FITS FVC image")
-    image = fitsio.read(args.infile).astype(float)
+    with fitsio.FITS(args.infile) as fx:
+        if len(fx) == 1:
+            image = fx[0].read().astype(float)
+        else:
+            image = fx[args.extname].read().astype(float)
+
     spots = detectspots(image)
 elif filename.find(".csv")>0 :
     log.info("read CSV spots table")

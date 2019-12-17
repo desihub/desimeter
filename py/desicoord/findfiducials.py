@@ -106,7 +106,7 @@ def findfiducials(spots,separation=7.) :
     
     
     for index1,index2 in zip ( fiducials_candidates_indices , matching_known_fiducials_indices ) :
-        pinholes_index1 = measured_spots_indices[index1]
+        pinholes_index1 = measured_spots_indices[index1][measured_spots_distances[index1]<separation]
         pinholes_index2 = np.where(pinholes_table["FID_ID"]==fiducials_table["FID_ID"][index2])[0]
 
         dx=spots["XPIX"][index1]-fiducials_table["XPIX"][index2]
