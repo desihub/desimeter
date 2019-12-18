@@ -31,7 +31,8 @@ log.info("reading petal metrology")
 filename = resource_filename('desicoord',"data/UMT-DESI-5421-v1.csv")
 log.info(" in {}".format(filename))
 spots = Table.read(filename,format="csv")
-
+r=np.sqrt(spots["X FCL"]**2+spots["Y FCL"]**2)
+spots=spots[:][r>1.] # exclude bad data??
 spots = apply_pl2fp(spots,petal_alignment_dict)
 
 spots["LOCATION"] = spots["Petal Loc ID"]*1000+spots["Device Loc ID"]
