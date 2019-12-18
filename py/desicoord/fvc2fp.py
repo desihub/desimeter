@@ -163,4 +163,60 @@ def fit_fvc2fp(spots) :
     #plt.show()
 
     return spots
+
+
+# %% rotation matrices
+def Rx(angle):  # all in radians
+    Rx = np.array([
+        [1.0,           0.0,            0.0],
+        [0.0,           np.cos(angle),  -np.sin(angle)],
+	[0.0,           np.sin(angle),  np.cos(angle)]
+    ])
+    return Rx
+
+	
+def Ry(angle):  # all in radians
+    Ry = np.array([
+	[np.cos(angle),  0.0,            np.sin(angle)],
+	[0.0,            1.0,            0.0],
+	[-np.sin(angle), 0.0,            np.cos(angle)]
+    ])
+    return Ry
+	
+	
+def Rz(angle):  # all in radians
+    Rz = np.array([
+	[np.cos(angle), -np.sin(angle), 0.0],
+    [np.sin(angle), np.cos(angle),  0.0],
+	[0.0,           0.0,            1.0]
+    ])
+    return Rz
+
+	
+def Rxyz(alpha, beta, gamma):  # yaw-pitch-roll system, all in radians
+    return Rz(gamma) @ Ry(beta) @ Rx(alpha)  # @ is matrix multiplication
+	
+def apply_pl2fp(spots,petal_alignment_dict) :
+
+    nspot = spots['Petal Loc ID'].size
+
+    # local petal coordinates 'pl'
+    xyzpl = np.zeros((3,nspot))
+    xyzpl[0] = spots['X FCL']
+    xyzpl[1] = spots['Y FCL']
+    xyzpl[2] = spots['Z FCL']
+
+    # global focal plane coordinates 'fp'
+    xyzfp = np.zeros((3,nspot))
+    
+    for petal in np.unique(spots['Petal Loc ID']) :
+        ii = np.where(spots['Petal Loc ID']==petal)[0]
+        params = petal_alignment_dict[petal]
+        Rotation = Rxyz(params["alpha"],params["beta"],params["gamma"])
+        Translation = np.array([params["Tx"],params["Ty"],params["Tz"]])
+        xyzfp[:,ii] = Rotation.dot(xyzpl) + Translation
+    
+    import matplotlib.pyplot as plt
+    plt.plot(xyzfp[0],xyzfp[1],"o")
+    plt.show()
     

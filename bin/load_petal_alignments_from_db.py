@@ -10,7 +10,7 @@ import yaml
 import datetime
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                     description="""FVC image processing""")
+                                     description="""Read petal alignment from DB and write it to a yaml file.""")
 
 parser.add_argument('-o','--outfile', type = str, default = None, required = True, help = 'output yaml file')
 parser.add_argument('--host', type = str, default = "db.replicator.dev-cattle.stable.spin.nersc.org", required = False, help = 'db host, use desi-db at KPNO')

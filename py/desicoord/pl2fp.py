@@ -50,19 +50,19 @@ def apply_pl2fp(spots,petal_alignment_dict) :
 
     # rename the columns if needed
     if 'X FCL' in spots.dtype.names :
-        spots.rename_column('X FCL', 'XLP')
-        log.warning("rename_column('X FCL', 'XLP')")
+        spots.rename_column('X FCL', 'XPL')
+        log.warning("rename_column('X FCL', 'XPL')")
     if 'Y FCL' in spots.dtype.names :
-        spots.rename_column('Y FCL', 'YLP')
-        log.warning("rename_column('Y FCL', 'YLP')")
+        spots.rename_column('Y FCL', 'YPL')
+        log.warning("rename_column('Y FCL', 'YPL')")
     if 'Z FCL' in spots.dtype.names :
-        spots.rename_column('Z FCL', 'ZLP')
-        log.warning("rename_column('Z FCL', 'ZLP')")
+        spots.rename_column('Z FCL', 'ZPL')
+        log.warning("rename_column('Z FCL', 'ZPL')")
     
         
-    xyzpl[0] = spots['XLP']
-    xyzpl[1] = spots['YLP']
-    xyzpl[2] = spots['ZLP']
+    xyzpl[0] = spots['XPL']
+    xyzpl[1] = spots['YPL']
+    xyzpl[2] = spots['ZPL']
     
     # global focal plane coordinates 'fp'
     xyzfp = np.zeros((3,nspot))
