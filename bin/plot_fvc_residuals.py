@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import os.path
 import sys
 import matplotlib.pyplot as plt
 import numpy as np
@@ -26,10 +27,15 @@ x = table["XFP"][ii]
 y = table["YFP"][ii]
 xm = table["XMETRO"][ii]
 ym = table["YMETRO"][ii]
-    
+
+a = plt.subplot(1,1,1)
+a.set_title(os.path.basename(filename))
+
 plt.plot(x,y,".")
 dx=xm-x
 dy=ym-y
 plt.quiver(x,y,dx,dy)
+plt.xlabel("XFP (mm)")
+plt.ylabel("YFP (mm)")
 plt.show()
 
