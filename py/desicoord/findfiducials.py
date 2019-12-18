@@ -20,11 +20,10 @@ def findfiducials(spots,separation=7.) :
     global fiducials_tree
     
     log = get_logger()
-
     log.info("findfiducials...")
     
     if pinholes_table is None :
-        filename = resource_filename('desicoord',"data/pinholes-fvcxy.csv")
+        filename = resource_filename('desicoord',"data/pinholes-new.csv")
         if not os.path.isfile(filename) :
             log.error("cannot find {}".format(filename))
             raise IOError("cannot find {}".format(filename))
@@ -32,20 +31,20 @@ def findfiducials(spots,separation=7.) :
         pinholes_table = Table.read(filename,format="csv")
 
         # the central pinhole is always pin_id 1027, but anyways I recheck this ...
-        fidid=np.unique(pinholes_table["FID_ID"])
-        xpix=np.zeros(fidid.size)
-        ypix=np.zeros(fidid.size)
-        for j,f in enumerate(fidid) :
-            ii=(pinholes_table["FID_ID"]==f)
+        loc=np.unique(pinholes_table["LOCATION"])
+        xpix=np.zeros(loc.size)
+        ypix=np.zeros(loc.size)
+        for j,f in enumerate(loc) :
+            ii=(pinholes_table["LOCATION"]==f)
             mx=np.mean(pinholes_table["XPIX"][ii])
             my=np.mean(pinholes_table["YPIX"][ii])
             # keep coordinates of the central pinhole
             k=np.argmin((pinholes_table["XPIX"][ii]-mx)**2+(pinholes_table["YPIX"][ii]-my)**2)
             xpix[j]=pinholes_table["XPIX"][ii][k]
             ypix[j]=pinholes_table["YPIX"][ii][k]
-            #print(f,"pinid=",pinholes_table["PIN_ID"][ii][k])
+            #print(f,"pinid=",pinholes_table["DOTID"][ii][k])
         
-        fiducials_table = Table([fidid,xpix,ypix],names=("FID_ID","XPIX","YPIX"))
+        fiducials_table = Table([loc,xpix,ypix],names=("LOCATION","XPIX","YPIX"))
         
     # find fiducials candidates  
     # select spots with at least two close neighbors (in pixel units)
@@ -101,15 +100,15 @@ def findfiducials(spots,separation=7.) :
     # now, identify pinholes
 
     nspots=spots["XPIX"].size
-    if 'FID_ID' not in spots.dtype.names :
-        spots.add_column(Column(np.zeros(nspots,dtype=int)),name='FID_ID')
-    if 'PIN_ID' not in spots.dtype.names :
-        spots.add_column(Column(np.zeros(nspots,dtype=int)),name='PIN_ID')
+    if 'LOCATION' not in spots.dtype.names :
+        spots.add_column(Column(np.zeros(nspots,dtype=int)),name='LOCATION')
+    if 'DOTID' not in spots.dtype.names :
+        spots.add_column(Column(np.zeros(nspots,dtype=int)),name='DOTID')
     
     
     for index1,index2 in zip ( fiducials_candidates_indices , matching_known_fiducials_indices ) :
         pinholes_index1 = measured_spots_indices[index1][measured_spots_distances[index1]<separation]
-        pinholes_index2 = np.where(pinholes_table["FID_ID"]==fiducials_table["FID_ID"][index2])[0]
+        pinholes_index2 = np.where(pinholes_table["LOCATION"]==fiducials_table["LOCATION"][index2])[0]
 
         dx=spots["XPIX"][index1]-fiducials_table["XPIX"][index2]
         dy=spots["YPIX"][index1]-fiducials_table["YPIX"][index2]
@@ -119,14 +118,8 @@ def findfiducials(spots,separation=7.) :
         xy   = np.array([spots["XPIX"][pinholes_index1],spots["YPIX"][pinholes_index1]]).T
         distances,matched_indices = pinholes_tree.query(xy,k=1)
         
-        spots["FID_ID"][pinholes_index1] = fiducials_table["FID_ID"][index2]
-        spots["PIN_ID"][pinholes_index1] = pinholes_table["PIN_ID"][pinholes_index2][matched_indices]
+        spots["LOCATION"][pinholes_index1] = fiducials_table["LOCATION"][index2]
+        spots["DOTID"][pinholes_index1] = pinholes_table["DOTID"][pinholes_index2][matched_indices]
         
-        #import matplotlib.pyplot as plt
-        #plt.plot(spots["XPIX"][pinholes_index1],spots["YPIX"][pinholes_index1],"o")
-        #plt.plot(pinholes_table["XPIX"][pinholes_index2]+dx,pinholes_table["YPIX"][pinholes_index2]+dy,"x")
-        #plt.plot(spots["XPIX"][index1],spots["YPIX"][index1],"+")
-        #plt.plot(pinholes_table["XPIX"][pinholes_index2]+dx,pinholes_table["YPIX"][pinholes_index2]+dy,"x")
-        #plt.show()
     
     return spots

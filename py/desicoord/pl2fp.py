@@ -74,9 +74,6 @@ def apply_pl2fp(spots,petal_alignment_dict) :
         Translation = np.array([params["Tx"],params["Ty"],params["Tz"]])
         xyzfp[:,ii] = Rotation.dot(xyzpl[:,ii]) + Translation[:,None]
     
-    if 'XFP' not in spots.dtype.names : spots.add_column(Column(np.zeros(nspot,dtype=float)),name='XFP')
-    if 'YFP' not in spots.dtype.names : spots.add_column(Column(np.zeros(nspot,dtype=float)),name='YFP')
-    if 'ZFP' not in spots.dtype.names : spots.add_column(Column(np.zeros(nspot,dtype=float)),name='ZFP')
     spots['XFP'] = xyzfp[0]
     spots['YFP'] = xyzfp[1]
     spots['ZFP'] = xyzfp[2]

@@ -32,7 +32,12 @@ filename = resource_filename('desicoord',"data/UMT-DESI-5421-v1.csv")
 log.info(" in {}".format(filename))
 spots = Table.read(filename,format="csv")
 
-spots =apply_pl2fp(spots,petal_alignment_dict)
+spots = apply_pl2fp(spots,petal_alignment_dict)
+
+spots["LOCATION"] = spots["Petal Loc ID"]*1000+spots["Device Loc ID"]
+if 'Dot ID' in spots.dtype.names :
+    spots.rename_column('Dot ID', 'DOTID')
+    log.warning("rename_column('Dot ID', 'DOTID')")
 
 spots.write(args.outfile,format='csv',overwrite=True)
 

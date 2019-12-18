@@ -14,7 +14,8 @@ print(np.unique(spots["Device Type"]))
 
 for petal in np.unique(spots['Petal Loc ID']) :
     selection=(spots['Petal Loc ID']==petal)&(spots['Device Type']=="POS")
-    plt.plot(spots["XFP"][selection],spots["YFP"][selection],".",alpha=0.5,label="POS PETAL{}".format(petal))
+    petalid = spots['Petal ID'][selection][0]
+    plt.plot(spots["XFP"][selection],spots["YFP"][selection],".",alpha=0.5,label="PETAL LOC={} ID={}".format(petal,petalid))
 
 selection=(spots['Device Type']=="FIF")
 plt.plot(spots["XFP"][selection],spots["YFP"][selection],".",label="FIF")
