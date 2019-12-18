@@ -10,7 +10,7 @@ from astropy.table import Table,Column
 from pkg_resources import resource_filename
 
 
-fiducials_fpqs_table = None
+metrology_table = None
 
 
 def _reduced_coords(xpix,ypix,xerr,yerr) :
@@ -22,21 +22,21 @@ def fit_fvc2fp(spots) :
 
     # spots are supposed to be matched
 
-    global fiducials_fpqs_table
+    global metrology_table
 
 
     log = get_logger()
 
     
-    if fiducials_fpqs_table is None :
+    if metrology_table is None :
         filename = resource_filename('desicoord',"data/fp-metrology.csv")
         if not os.path.isfile(filename) :
             log.error("cannot find {}".format(filename))
             raise IOError("cannot find {}".format(filename))
         log.info("reading fiducials metrology in {}".format(filename))
-        fiducials_fpqs_table = Table.read(filename,format="csv")
+        metrology_table = Table.read(filename,format="csv")
     
-    selection = np.where((spots["LOCATION"]>0)&(spots["DOTID"]==4))[0]
+    selection = np.where((spots["LOCATION"]>0))[0]
     if len(selection)<4 : 
         log.error("Only {} fiducials were matched, I cannot fit a transfo".format(len(selection)))
         raise RuntimError("Only {} fiducials were matched, I cannot fit a transfo".format(len(selection)))
@@ -47,19 +47,37 @@ def fit_fvc2fp(spots) :
     xerr = spots["XERR"][selection]
     yerr = spots["YERR"][selection]
 
-    # now match Q and S
-    fid_id = { f : i for i,f in enumerate(fiducials_fpqs_table["LOCATION"]) } # dictionary of indices
-    indices = [ fid_id[f] for f in spots["LOCATION"][selection] ]
-    xfp = fiducials_fpqs_table["XFP"][indices]
-    yfp = fiducials_fpqs_table["YFP"][indices]
+    # now match
 
+    spots_identifier = np.array(spots["LOCATION"][selection])*100 + np.array(spots["DOTID"])[selection]
+    metro_identifier = np.array(metrology_table["LOCATION"])*100 +  np.array(metrology_table["DOTID"])
+    
+    tmpid = { f : i for i,f in enumerate(metro_identifier) } # dictionary of indices
+    
+    spots_indices = []
+    metro_indices = []
+
+    for i,f in enumerate(spots_identifier) :
+        if f in tmpid :
+           spots_indices.append(i)
+           metro_indices.append(tmpid[f])
+        else :
+            log.warning("cannot find metrology for LOCATION={} DOTID={}".format(int(f//100),int(f%100)))
+    
+    xfp = metrology_table["XFP"][metro_indices]
+    yfp = metrology_table["YFP"][metro_indices]
+    xpix = xpix[spots_indices]
+    ypix = ypix[spots_indices]
+    xerr = xerr[spots_indices]
+    yerr = yerr[spots_indices]
+    selection = selection[spots_indices]  
     log.warning("Trivial transformation fit with polynomials (pretty bad residuals)")
 
     rx,ry,ex,ey = _reduced_coords(xpix,ypix,xerr,yerr)
     
     # solve linear system
     nspot=xpix.size
-    deg=4 # that includes translation,rotation,dilatation
+    deg=3 # that includes translation,rotation,dilatation
 
     npar=0
     for dx in range(0,deg+1) :
