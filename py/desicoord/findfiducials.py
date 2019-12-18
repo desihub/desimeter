@@ -23,7 +23,7 @@ def findfiducials(spots,separation=7.) :
     log.info("findfiducials...")
     
     if pinholes_table is None :
-        filename = resource_filename('desicoord',"data/pinholes-new.csv")
+        filename = resource_filename('desicoord',"data/pinholes-fvcxy.csv")
         if not os.path.isfile(filename) :
             log.error("cannot find {}".format(filename))
             raise IOError("cannot find {}".format(filename))
