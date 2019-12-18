@@ -22,16 +22,23 @@ filename = args.infile
     
 table=Table.read(filename,format="csv")
 
-ii = np.where(table["LOCATION"]>0)[0]
+ii = np.where((table["LOCATION"]>0)&(table["XMETRO"]!=0))[0]
 x = table["XFP"][ii]
 y = table["YFP"][ii]
 xm = table["XMETRO"][ii]
 ym = table["YMETRO"][ii]
 
+print(xm)
+
 a = plt.subplot(1,1,1)
 a.set_title(os.path.basename(filename))
 
 plt.plot(x,y,".")
+plt.plot(xm,ym,".")
+
+for i in range(x.size) :
+    plt.plot([x[i],xm[i]],[y[i],ym[i]],"-",c="gray",alpha=0.5)
+
 dx=xm-x
 dy=ym-y
 plt.quiver(x,y,dx,dy)
