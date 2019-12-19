@@ -113,11 +113,18 @@ def findfiducials(spots,separation=7.) :
         dx=spots["XPIX"][index1]-fiducials_table["XPIX"][index2]
         dy=spots["YPIX"][index1]-fiducials_table["YPIX"][index2]
 
-        xy   = np.array([pinholes_table["XPIX"][pinholes_index2]+dx,pinholes_table["YPIX"][pinholes_index2]+dy]).T
-        pinholes_tree = KDTree(xy)
-        xy   = np.array([spots["XPIX"][pinholes_index1],spots["YPIX"][pinholes_index1]]).T
-        distances,matched_indices = pinholes_tree.query(xy,k=1)
-        
+        xy_metro = np.array([pinholes_table["XPIX"][pinholes_index2]+dx,pinholes_table["YPIX"][pinholes_index2]+dy]).T
+        metrology_tree = KDTree(xy_metro)
+        xy_meas  = np.array([spots["XPIX"][pinholes_index1],spots["YPIX"][pinholes_index1]]).T
+        distances,matched_indices = metrology_tree.query(xy_meas,k=1)
+
+        if True : # median offset and then rematch
+            dx = np.median( spots["XPIX"][pinholes_index1] - pinholes_table["XPIX"][pinholes_index2][matched_indices] )
+            dy = np.median( spots["YPIX"][pinholes_index1] - pinholes_table["YPIX"][pinholes_index2][matched_indices] )
+            xy_metro = np.array([pinholes_table["XPIX"][pinholes_index2]+dx,pinholes_table["YPIX"][pinholes_index2]+dy]).T
+            metrology_tree = KDTree(xy_metro)
+            distances,matched_indices = metrology_tree.query(xy_meas,k=1)
+
         spots["LOCATION"][pinholes_index1] = fiducials_table["LOCATION"][index2]
         spots["DOTID"][pinholes_index1] = pinholes_table["DOTID"][pinholes_index2][matched_indices]
         
