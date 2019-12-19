@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from astropy.table import Table
 from pkg_resources import resource_filename
 
-filename = resource_filename('desicoord',"data/fp-metrology.csv")
+filename = resource_filename('desimeter',"data/fp-metrology.csv")
 spots    = Table.read(filename,format="csv")
 
 print(spots.dtype.names)

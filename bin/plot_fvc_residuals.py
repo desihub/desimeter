@@ -34,7 +34,7 @@ a.set_title(os.path.basename(filename))
 
 
 # plotting all of FIF and GIF
-filename = resource_filename('desicoord',"data/fp-metrology.csv")
+filename = resource_filename('desimeter',"data/fp-metrology.csv")
 metrology = Table.read(filename,format="csv")
 selection=(metrology["Device Type"]=="FIF")|(metrology["Device Type"]=="GIF")
 plt.plot(metrology["XFP"][selection],metrology["YFP"][selection],"o",c="gray")

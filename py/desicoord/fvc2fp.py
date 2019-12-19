@@ -29,7 +29,7 @@ def fit_fvc2fp(spots) :
 
     
     if metrology_table is None :
-        filename = resource_filename('desicoord',"data/fp-metrology.csv")
+        filename = resource_filename('desimeter',"data/fp-metrology.csv")
         if not os.path.isfile(filename) :
             log.error("cannot find {}".format(filename))
             raise IOError("cannot find {}".format(filename))

@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from astropy.table import Table
 from pkg_resources import resource_filename
 
-filename = resource_filename('desicoord',"data/fp-metrology.csv")
+filename = resource_filename('desimeter',"data/fp-metrology.csv")
 spots    = Table.read(filename,format="csv")
 spots_fidid = spots["Petal ID"]*1000+spots["Device Loc ID"]
 spots_identifier = np.array(spots_fidid)*100 + np.array(spots["DOTID"])
@@ -22,7 +22,7 @@ print(spots_identifier)
 #echo "FID_ID,PIN_ID,XPIX,YPIX" > tmp.csv
 #cat spotmatch-pinhole-references.dat | grep pinhole | awk '{print $1","$5","$2","$3}' >> tmp.csv
 
-pinholes_filename = resource_filename('desicoord',"tmp.csv")
+pinholes_filename = resource_filename('desimeter',"tmp.csv")
 pinholes = Table.read(pinholes_filename,format="csv")
 
 print(pinholes.dtype.names)

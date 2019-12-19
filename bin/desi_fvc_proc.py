@@ -9,9 +9,9 @@ import fitsio
 
 from astropy.table import Table
 from desiutil.log import get_logger
-from desicoord.detectspots import detectspots
-from desicoord.findfiducials import findfiducials
-from desicoord.fvc2fp import fit_fvc2fp
+from desimeter.detectspots import detectspots
+from desimeter.findfiducials import findfiducials
+from desimeter.fvc2fp import fit_fvc2fp
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""FVC image processing""")
