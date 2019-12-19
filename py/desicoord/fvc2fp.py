@@ -125,7 +125,7 @@ def fit_fvc2fp(spots) :
     
     dist = np.sqrt((xfp_meas[selection]-xfp)**2 + (yfp_meas[selection]-yfp)**2)
     mdist = np.mean(dist)
-    log.info("Mean distance = {} mm".format(mdist))
+    log.info("Mean and median distance = {} , {} mm".format(np.mean(dist),np.median(dist)))
     
     spots["XFP"] = xfp_meas
     spots["YFP"] = yfp_meas
