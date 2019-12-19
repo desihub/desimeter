@@ -28,8 +28,6 @@ y = table["YFP"][ii]
 xm = table["XMETRO"][ii]
 ym = table["YMETRO"][ii]
 
-print(xm)
-
 a = plt.subplot(1,1,1)
 a.set_title(os.path.basename(filename))
 
