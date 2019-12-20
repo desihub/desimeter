@@ -57,6 +57,11 @@ def _polyfit2d(rx, ry, px, py, degree=3):
     return Px, Py
 
 class FVC2FP_Base(object):
+    """
+    Base class for transforms between FVC and FP coordinates
+
+    Subclasses implement this interface with specific parameterizations
+    """
     def __init__(self):
         pass
     
@@ -69,7 +74,8 @@ class FVC2FP_Base(object):
     
     @classmethod
     def read_jsonfile(cls, filename):
-        s = json.load(filename)
+        with open(filename) as fx:
+            s = fx.read()
         return cls.fromjson(s)
 
     def write_jsonfile(self, filename):
@@ -92,6 +98,10 @@ class FVC2FP_Base(object):
         raise NotImplmentedError
 
 class FVCFP_Polynomial(FVC2FP_Base):
+    """
+    Naive 2D polynomial transform between FVC and FP, mainly to demonstrate
+    interfaces rather than quality of actual transform.
+    """
 
     def tojson(self):
         params = dict()
@@ -99,15 +109,20 @@ class FVCFP_Polynomial(FVC2FP_Base):
         params['degree'] = self.degree
         params['fvc2fp_x_coeff'] = list(self.Px)
         params['fvc2fp_y_coeff'] = list(self.Py)
+        params['fp2fvc_x_coeff'] = list(self.Qx)
+        params['fp2fvc_y_coeff'] = list(self.Qy)
         return json.dumps(params)
     
     @classmethod
     def fromjson(cls, jsonstring):
         tx = cls()
         params = json.loads(jsonstring)
-        tx.deg = params['degree']
+        assert params['method'] == 'xy polynomial'
+        tx.degree = params['degree']
         tx.Px = np.asarray(params['fvc2fp_x_coeff'])
         tx.Py = np.asarray(params['fvc2fp_y_coeff'])
+        tx.Qx = np.asarray(params['fp2fvc_x_coeff'])
+        tx.Qy = np.asarray(params['fp2fvc_y_coeff'])
         return tx
     
     def _fvc_reduced_coords(self,xpix,ypix,xerr=None,yerr=None) :
@@ -154,7 +169,7 @@ class FVCFP_Polynomial(FVC2FP_Base):
         selection = np.where((spots["LOCATION"]>0))[0]
         if len(selection)<4 : 
             log.error("Only {} fiducials were matched, I cannot fit a transform".format(len(selection)))
-            raise RuntimError("Only {} fiducials were matched, I cannot fit a transfo".format(len(selection)))
+            raise RuntimError("Only {} fiducials were matched, I cannot fit a transform".format(len(selection)))
     
         xpix = spots["XPIX"][selection]
         ypix = spots["YPIX"][selection]
