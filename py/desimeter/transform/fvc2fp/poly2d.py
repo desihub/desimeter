@@ -12,6 +12,9 @@ from astropy.table import Table,Column
 # from desimodel.focalplane.geometry import qs2xy,xy2qs
 from desiutil.log import get_logger
 
+from .base import FVC2FP_Base
+
+#- Utility functions used by FVCFP_Polynomial
 def _vander2d(rx, ry, degree=3):
     """
     Return 2D equivalent of a Vandermonde matrix (loosely speaking)
@@ -55,47 +58,6 @@ def _polyfit2d(rx, ry, px, py, degree=3):
     Py = Ai.dot(By)
     
     return Px, Py
-
-class FVC2FP_Base(object):
-    """
-    Base class for transforms between FVC and FP coordinates
-
-    Subclasses implement this interface with specific parameterizations
-    """
-    def __init__(self):
-        pass
-    
-    def tojson(self):
-        raise NotImplementedError
-    
-    @classmethod
-    def fromjson(cls, jsonstring):
-        raise NotImplementedError
-    
-    @classmethod
-    def read_jsonfile(cls, filename):
-        with open(filename) as fx:
-            s = fx.read()
-        return cls.fromjson(s)
-
-    def write_jsonfile(self, filename):
-        with open(filename, 'w') as fx:
-            fx.write(self.tojson())
-
-    def fit(spots, metrology=None):
-        raise NotImplementedError
-
-    def fvc2fp(xpix, ypix, xerr=None, yerr=None):
-        """
-        Converts fiber view camera pixel x,y -> focal plane x,y
-        """
-        raise NotImplmentedError
-
-    def fpxy2fvc(xfp, yfp):
-        """
-        Converts focal plane x,y -> fiber view camera pixel x,y
-        """
-        raise NotImplmentedError
 
 class FVCFP_Polynomial(FVC2FP_Base):
     """
