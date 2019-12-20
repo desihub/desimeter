@@ -11,7 +11,7 @@ from astropy.table import Table
 from desiutil.log import get_logger
 from desimeter.detectspots import detectspots
 from desimeter.findfiducials import findfiducials
-from desimeter.fvc2fp import fit_fvc2fp
+from desimeter.fvc2fp import FVCFP_Polynomial
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""FVC image processing""")
@@ -45,7 +45,9 @@ else :
 
 spots = findfiducials(spots)
 
-spots = fit_fvc2fp(spots)
+tx = FVCFP_Polynomial()
+tx.fit(spots, update_spots=True)
+# spots = fit_fvc2fp(spots)
 
 spots.write(args.outfile,format="csv",overwrite=True)
 print("wrote {}".format(args.outfile))

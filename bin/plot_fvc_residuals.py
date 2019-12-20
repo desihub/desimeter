@@ -29,6 +29,7 @@ y = table["YFP"][ii]
 xm = table["XMETRO"][ii]
 ym = table["YMETRO"][ii]
 
+plt.figure(figsize=(6,6))
 a = plt.subplot(1,1,1)
 a.set_title(os.path.basename(filename))
 
