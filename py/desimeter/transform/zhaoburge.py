@@ -4,14 +4,7 @@
 #-------------------IMPORT ZONE-----------------------
 
 import numpy as np
-import matplotlib
 import time
-matplotlib.use("TkAgg")   # explicit backend, has default margins
-import matplotlib.pyplot as plt
-print("Current backend is ", matplotlib.get_backend())
-from scipy.optimize import curve_fit
-
-
 
 #-----------ZERNIKE NORMALIZED EDGE=1 PACKAGE-----------
 #-----------Using BORN-WOLF {n,m} definitions-----------
