@@ -14,8 +14,8 @@ It comprises
 * fit of transformation from FVC pixels to focal plane X Y coordinates.
 * metrology data, with all the routines to convert the engineering data in DocDB to the files used to fit the transformation, including a patch that corrects for missing or erroneous metrology, see py/desimeter/data/README.rst for more information on this.
 
-Example
-------------
+Script Examples
+---------------
 
 Here is an example::
 
@@ -28,3 +28,33 @@ Plot of the residuals with respect to the metrology::
 Plot of the metrology data ::
 
     plot_metrology.py
+
+Code transform examples
+-----------------------
+
+Loading spots and fitting a FVC -> FP transform::
+
+    from astropy.table import Table
+    from desimeter.fvc2fp import FVCFP_Polynomial
+    spots = Table.read('spots.csv')
+    tx = FVCFP_Polynomial()
+    tx.fit(spots)
+
+Save that transform for later use::
+
+    tx.write_jsonfile('fvc2fp.json')
+
+Read it back in and do transforms between FVC and FP::
+
+    t2 = FVCFP_Polynomial.read_jsonfile('fvc2fp.json')
+
+    import numpy as np
+    xpix, ypix = np.random.uniform(1000,5000, size=(2,50))
+    xfp, yfp = t2.fvc2fp(xpix, ypix)
+
+    xpix2, ypix2 = t2.fp2fvc(xfp, yfp)
+    dr = np.sqrt((xpix2-xpix)**2 + (ypix2-ypix)**2)
+    print(np.median(dr))
+
+Note: class names and module organization will change.
+

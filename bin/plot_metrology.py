@@ -12,6 +12,7 @@ spots    = Table.read(filename,format="csv")
 print(spots.dtype.names)
 print(np.unique(spots["Device Type"]))
 
+plt.figure(figsize=(6,6))
 for petal in np.unique(spots['Petal Loc ID']) :
     selection=(spots['Petal Loc ID']==petal)&(spots['Device Type']=="POS")
     petalid = spots['Petal ID'][selection][0]
