@@ -26,9 +26,6 @@ for number,filename in enumerate(args.infile) :
     if "XPIX" in table.dtype.names :
         x=table["XPIX"]
         y=table["YPIX"]
-#    elif "Q" in  table.dtype.names :
-#        x=table["S"]*np.cos(table["Q"]*np.pi/180)
-#        y=table["S"]*np.sin(table["Q"]*np.pi/180)
     else :
         print("don't know what to do")
         sys.exit(12)
@@ -49,8 +46,8 @@ for number,filename in enumerate(args.infile) :
             ypix[loc].append(y[i])
     
     
-if "DOTID" in table.dtype.names and number == 0 :
-    ii=table["DOTID"]==4
+if "PINHOLE_ID" in table.dtype.names and number == 0 :
+    ii=table["PINHOLE_ID"]==4
     if np.sum(ii)>0 :
         plt.plot(x[ii],y[ii],"X")
 
