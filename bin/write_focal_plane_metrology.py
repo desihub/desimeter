@@ -8,7 +8,7 @@ import yaml
 from desiutil.log import get_logger
 from pkg_resources import resource_filename
 from astropy.table import Table
-from desimeter.pl2fp import apply_pl2fp
+from desimeter.ptl2fp import apply_ptl2fp
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Combine petal metrology and petal alignment data into a single CSV file""")
@@ -28,37 +28,48 @@ petal_alignment_dict = yaml.safe_load(ifile)
 ifile.close()
 
 log.info("reading petal metrology")
-filename = resource_filename('desimeter',"data/UMT-DESI-5421-v1.csv")
+filename = resource_filename('desimeter',"data/UMT-DESI-5421.csv")
 log.info(" in {}".format(filename))
 spots = Table.read(filename,format="csv")
-r=np.sqrt(spots["X FCL"]**2+spots["Y FCL"]**2)
+
+# force int type
+spots["PETAL_LOC"]=spots["PETAL_LOC"].astype(int)
+pids=np.zeros(spots["PINHOLE_ID"].size,dtype=int)
+for i,pid in enumerate(spots["PINHOLE_ID"]) :
+    pid=str(pid)
+    if pid[0]=="M":
+        pids[i]=int(pid[1])
+    else :
+        try :
+            pids[i]=int(pid)
+        except ValueError as e :
+            pids[i]=0
+spots["PINHOLE_ID"]=pids
+
+
+r=np.sqrt(spots["X_PTL"]**2+spots["Y_PTL"]**2)
 ii=np.where( r < 1.)[0]
 for i in ii :
-    log.warning("BAD DATA {} {} type={} xflc={} yflc={} xmnt={} ymnt={}".format(spots["Petal Loc ID"][i],spots["Device Loc ID"][i],spots["Device Type"][i],spots["X FCL"][i],spots["Y FCL"][i],spots["X MNT"][i],spots["Y MNT"][i]))
+    log.warning("BAD DATA {} {} type={} xptl={} yptl={} xmnt={} ymnt={}".format(spots["PETAL_LOC"][i],spots["DEVICE_LOC"][i],spots["DEVICE_TYPE"][i],spots["X_PTL"][i],spots["Y_PTL"][i],spots["X_MNT"][i],spots["Y_MNT"][i]))
 spots=spots[:][r>1.] # exclude bad data??
 
-spots = apply_pl2fp(spots,petal_alignment_dict)
+spots = apply_ptl2fp(spots,petal_alignment_dict)
 
-spots["LOCATION"] = spots["Petal Loc ID"]*1000+spots["Device Loc ID"]
-if 'Dot ID' in spots.dtype.names :
-    spots.rename_column('Dot ID', 'DOTID')
-    log.warning("rename_column('Dot ID', 'DOTID')")
+spots["LOCATION"] = spots["PETAL_LOC"]*1000+spots["DEVICE_LOC"]
 
 log.info("applying patch")
 filename = resource_filename('desimeter',"data/fp-metrology-patch.csv")
 log.info(" from {}".format(filename))
 patch = Table.read(filename,format="csv")
-for i in range(patch["XFP"].size) :
-    selection=(spots["Petal Loc ID"]==patch["Petal Loc ID"][i])
-    for k in ["Device Loc ID","DOTID"] :
-        selection &= (spots[k]==patch[k][i])
+for i in range(patch["X_FP"].size) :
+    selection=(spots["LOCATION"]==patch["LOCATION"][i])&(spots["PINHOLE_ID"]==patch["PINHOLE_ID"][i])
     jj=np.where(selection)[0]
     if jj.size == 0 :
-        log.info("Adding LOCATION={} DOTID={}".format(patch["LOCATION"][i],patch["DOTID"][i]))
+        log.info("Adding LOCATION={} PINHOLE_ID={}".format(patch["LOCATION"][i],patch["PINHOLE_ID"][i]))
         spots.add_row(patch[:][i])
     else :
         j=jj
-        log.info("Replacing LOCATION={} DOTID={}".format(patch["LOCATION"][i],patch["DOTID"][i]))
+        log.info("Replacing LOCATION={} PINHOLE_ID={}".format(patch["LOCATION"][i],patch["PINHOLE_ID"][i]))
         spots[:][j] = patch[:][i]
 
         

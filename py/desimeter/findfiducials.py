@@ -37,10 +37,10 @@ def findfiducials(spots,input_transform=None,separation=7.) :
         metrology_table = Table.read(filename,format="csv")
 
         # keep only the pinholes
-        metrology_table = metrology_table[:][metrology_table["DOTID"]>0]
+        metrology_table = metrology_table[:][metrology_table["PINHOLE_ID"]>0]
         
-        # use input transform to convert XFP,YFP to XPIX,YPIX
-        xpix,ypix = input_tx.fp2fvc(metrology_table["XFP"],metrology_table["YFP"])
+        # use input transform to convert X_FP,Y_FP to XPIX,YPIX
+        xpix,ypix = input_tx.fp2fvc(metrology_table["X_FP"],metrology_table["Y_FP"])
         metrology_table["XPIX"]=xpix
         metrology_table["YPIX"]=ypix
         
@@ -98,8 +98,8 @@ def findfiducials(spots,input_transform=None,separation=7.) :
     nspots=spots["XPIX"].size
     if 'LOCATION' not in spots.dtype.names :
         spots.add_column(Column(np.zeros(nspots,dtype=int)),name='LOCATION')
-    if 'DOTID' not in spots.dtype.names :
-        spots.add_column(Column(np.zeros(nspots,dtype=int)),name='DOTID')
+    if 'PINHOLE_ID' not in spots.dtype.names :
+        spots.add_column(Column(np.zeros(nspots,dtype=int)),name='PINHOLE_ID')
     
     
     for index1,index2 in zip ( fiducials_candidates_indices , matching_known_fiducials_indices ) :
@@ -122,7 +122,7 @@ def findfiducials(spots,input_transform=None,separation=7.) :
             distances,matched_indices = metrology_tree.query(xy_meas,k=1)
 
         spots["LOCATION"][metrology_index1] = metrology_table["LOCATION"][index2]
-        spots["DOTID"][metrology_index1] = metrology_table["DOTID"][metrology_index2][matched_indices]
+        spots["PINHOLE_ID"][metrology_index1] = metrology_table["PINHOLE_ID"][metrology_index2][matched_indices]
         
     
     return spots

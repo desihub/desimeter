@@ -10,18 +10,18 @@ filename = resource_filename('desimeter',"data/fp-metrology.csv")
 spots    = Table.read(filename,format="csv")
 
 print(spots.dtype.names)
-print(np.unique(spots["Device Type"]))
+print(np.unique(spots["DEVICE_TYPE"]))
 
 plt.figure(figsize=(6,6))
-for petal in np.unique(spots['Petal Loc ID']) :
-    selection=(spots['Petal Loc ID']==petal)&(spots['Device Type']=="POS")
-    petalid = spots['Petal ID'][selection][0]
-    plt.plot(spots["XFP"][selection],spots["YFP"][selection],".",alpha=0.5,label="PETAL LOC={} ID={}".format(petal,petalid))
+for petal in np.unique(spots['PETAL_LOC']) :
+    selection=(spots['PETAL_LOC']==petal)&(spots['DEVICE_TYPE']=="POS")
+    petalid = spots['PETAL_ID'][selection][0]
+    plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",alpha=0.5,label="PETAL LOC={} ID={}".format(petal,petalid))
 
-selection=(spots['Device Type']=="FIF")
-plt.plot(spots["XFP"][selection],spots["YFP"][selection],".",label="FIF")
-selection=(spots['Device Type']=="GIF")
-plt.plot(spots["XFP"][selection],spots["YFP"][selection],".",label="GIF")
+selection=(spots['DEVICE_TYPE']=="FIF")
+plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",label="FIF")
+selection=(spots['DEVICE_TYPE']=="GIF")
+plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",label="GIF")
     
 plt.legend()
 plt.show()

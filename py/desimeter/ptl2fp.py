@@ -1,5 +1,5 @@
 """
-Utility functions to fit and apply coordinates transformation from PL (petal local) to FP (focal plane ~ CS5)
+Utility functions to fit and apply coordinates transformation from PTL (petal local) to FP (focal plane ~ CS5)
 """
 
 import numpy as np
@@ -39,44 +39,31 @@ def Rz(angle):  # all in radians
 def Rxyz(alpha, beta, gamma):  # yaw-pitch-roll system, all in radians
     return Rz(gamma) @ Ry(beta) @ Rx(alpha)  # @ is matrix multiplication
 	
-def apply_pl2fp(spots,petal_alignment_dict) :
+def apply_ptl2fp(spots,petal_alignment_dict) :
 
     log = get_logger()
     
-    nspot = spots['Petal Loc ID'].size
+    nspot = spots['PETAL_LOC'].size
 
-    # local petal coordinates 'pl'
-    xyzpl = np.zeros((3,nspot))
-
-    # rename the columns if needed
-    if 'X FCL' in spots.dtype.names :
-        spots.rename_column('X FCL', 'XPL')
-        log.warning("rename_column('X FCL', 'XPL')")
-    if 'Y FCL' in spots.dtype.names :
-        spots.rename_column('Y FCL', 'YPL')
-        log.warning("rename_column('Y FCL', 'YPL')")
-    if 'Z FCL' in spots.dtype.names :
-        spots.rename_column('Z FCL', 'ZPL')
-        log.warning("rename_column('Z FCL', 'ZPL')")
+    # local petal coordinates 'PTL'
+    xyzptl = np.zeros((3,nspot))
+    xyzptl[0] = spots['X_PTL']
+    xyzptl[1] = spots['Y_PTL']
+    xyzptl[2] = spots['Z_PTL']
     
-        
-    xyzpl[0] = spots['XPL']
-    xyzpl[1] = spots['YPL']
-    xyzpl[2] = spots['ZPL']
-    
-    # global focal plane coordinates 'fp'
+    # global focal plane coordinates 'FP'
     xyzfp = np.zeros((3,nspot))
     
-    for petal in np.unique(spots['Petal Loc ID']) :
-        ii = np.where(spots['Petal Loc ID']==petal)[0]
+    for petal in np.unique(spots['PETAL_LOC']) :
+        ii = np.where(spots['PETAL_LOC']==petal)[0]
         params = petal_alignment_dict[petal]
         Rotation = Rxyz(params["alpha"],params["beta"],params["gamma"])
         Translation = np.array([params["Tx"],params["Ty"],params["Tz"]])
-        xyzfp[:,ii] = Rotation.dot(xyzpl[:,ii]) + Translation[:,None]
+        xyzfp[:,ii] = Rotation.dot(xyzptl[:,ii]) + Translation[:,None]
     
-    spots['XFP'] = xyzfp[0]
-    spots['YFP'] = xyzfp[1]
-    spots['ZFP'] = xyzfp[2]
+    spots['X_FP'] = xyzfp[0]
+    spots['Y_FP'] = xyzfp[1]
+    spots['Z_FP'] = xyzfp[2]
 
     return spots
     

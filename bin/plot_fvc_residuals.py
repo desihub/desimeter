@@ -11,7 +11,7 @@ from pkg_resources import resource_filename
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Plot FVC spots, showing residuals with metrology""")
 parser.add_argument('-i','--infile', type = str, default = None, required = True,
-                    help = 'path to a FVC spots table in CSV format (with XFP,YFP,XMETRO,YMETRO columns)')
+                    help = 'path to a FVC spots table in CSV format (with X_FP,Y_FP,X_FP_METRO,Y_FP_METRO columns)')
 
 args  = parser.parse_args()
 
@@ -23,24 +23,24 @@ filename = args.infile
     
 table=Table.read(filename,format="csv")
 
-ii = np.where((table["LOCATION"]>0)&(table["XMETRO"]!=0))[0]
-x = table["XFP"][ii]
-y = table["YFP"][ii]
-xm = table["XMETRO"][ii]
-ym = table["YMETRO"][ii]
+ii = np.where((table["LOCATION"]>0)&(table["X_FP_METRO"]!=0))[0]
+x = table["X_FP"][ii]
+y = table["Y_FP"][ii]
+xm = table["X_FP_METRO"][ii]
+ym = table["Y_FP_METRO"][ii]
 
 fig = plt.figure(figsize=(6,6))
 
 a = plt.subplot(1,1,1)
 a.set_title(os.path.basename(filename))
 
-a.plot(table["XFP"],table["YFP"],".",alpha=0.5,label="all spots")
+a.plot(table["X_FP"],table["Y_FP"],".",alpha=0.5,label="all spots")
 
 # plotting all of FIF and GIF
 filename = resource_filename('desimeter',"data/fp-metrology.csv")
 metrology = Table.read(filename,format="csv")
-selection=(metrology["Device Type"]=="FIF")|(metrology["Device Type"]=="GIF")
-a.scatter(metrology["XFP"][selection],metrology["YFP"][selection],marker="o",edgecolors="gray",alpha=1.,facecolors="none",label="all FIF and GIF metrology")
+selection=(metrology["DEVICE_TYPE"]=="FIF")|(metrology["DEVICE_TYPE"]=="GIF")
+a.scatter(metrology["X_FP"][selection],metrology["Y_FP"][selection],marker="o",edgecolors="gray",alpha=1.,facecolors="none",label="all FIF and GIF metrology")
 
 a.plot(x,y,".",color="purple",label="matched measured spots")
 a.scatter(xm,ym,marker="o",edgecolors="orange",facecolors="none",label="matched metrology")
@@ -65,8 +65,8 @@ if jj.size > 0 : # sadly
 
 
 a.quiver(x,y,dx,dy)
-a.set_xlabel("XFP (mm)")
-a.set_ylabel("YFP (mm)")
+a.set_xlabel("X_FP (mm)")
+a.set_ylabel("Y_FP (mm)")
 a.legend(loc="upper left")
 
 dist=np.sqrt(dx**2+dy**2)
@@ -77,8 +77,8 @@ a2.set_xlabel("dist. (um)")
 
 if False :
     print("Write coordinates of missing or incorrect fiducials")
-    x=table["XFP"]
-    y=table["YFP"]
+    x=table["X_FP"]
+    y=table["Y_FP"]
 
     xc=-289
     yc=217
@@ -91,7 +91,6 @@ if False :
     
     # find nearests
     ii=np.where((x-xc)**2+(y-yc)**2<5**2)[0]
-    #col0,Petal ID,Petal Loc ID,Device Loc ID,Device Type,DOTID,XPL,YPL,ZPL,X MNT,Y MNT,Z MNT,FCL Source,Proj Distance,Provenance,Notes,XFP,YFP,ZFP,LOCATION
     j=np.argmin((x-xc)**2+(y-yc)**2)
     line=10000
     c=1
@@ -140,10 +139,10 @@ if False :
                     print("no match???????")
                     continue
                 j=jj[0]
-                print("X {} -> {}".format(metrology["XFP"][j],table["XFP"][i]))
-                print("Y {} -> {}".format(metrology["YFP"][j],table["YFP"][i]))
-                metrology["XFP"][j] = table["XFP"][i]
-                metrology["YFP"][j] = table["YFP"][i]
+                print("X {} -> {}".format(metrology["X_FP"][j],table["X_FP"][i]))
+                print("Y {} -> {}".format(metrology["Y_FP"][j],table["Y_FP"][i]))
+                metrology["X_FP"][j] = table["X_FP"][i]
+                metrology["Y_FP"][j] = table["Y_FP"][i]
                 line="{} : ".format(i)
                 for k in metrology.dtype.names :
                     line += ",{}".format(metrology[k][j])
