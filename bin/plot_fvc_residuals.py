@@ -29,22 +29,24 @@ y = table["YFP"][ii]
 xm = table["XMETRO"][ii]
 ym = table["YMETRO"][ii]
 
+fig = plt.figure()
 a = plt.subplot(1,1,1)
 a.set_title(os.path.basename(filename))
 
-plt.plot(table["XFP"],table["YFP"],".")
+a.plot(table["XFP"],table["YFP"],".",alpha=0.5,label="all spots")
 
 # plotting all of FIF and GIF
 filename = resource_filename('desimeter',"data/fp-metrology.csv")
 metrology = Table.read(filename,format="csv")
 selection=(metrology["Device Type"]=="FIF")|(metrology["Device Type"]=="GIF")
-plt.plot(metrology["XFP"][selection],metrology["YFP"][selection],"o",c="gray",alpha=0.2)
+a.scatter(metrology["XFP"][selection],metrology["YFP"][selection],marker="o",edgecolors="gray",alpha=1.,facecolors="none",label="all FIF and GIF metrology")
 
-plt.plot(x,y,"o")
-plt.plot(xm,ym,"X")
+a.plot(x,y,".",color="purple",label="matched measured spots")
+a.scatter(xm,ym,marker="o",edgecolors="orange",facecolors="none",label="matched metrology")
 
 dx=xm-x
 dy=ym-y
+
 
 jj=np.where((np.abs(dx)>0.1)|(np.abs(dy)>0.1))[0]
 if jj.size > 0 : # sadly
@@ -56,12 +58,20 @@ if jj.size > 0 : # sadly
             if k=="XERR" or k=="YERR" : continue
             line += " {}={:4.3f}".format(k,table[k][i])
         print(line)
-        plt.plot(x[j],y[j],"+",color="red")
+        label=None
+        if j==jj[0]: label="large residual"
+        a.plot(x[j],y[j],"+",color="red",markersize=12,label=label)
 
 
-plt.quiver(x,y,dx,dy)
-plt.xlabel("XFP (mm)")
-plt.ylabel("YFP (mm)")
+a.quiver(x,y,dx,dy)
+a.set_xlabel("XFP (mm)")
+a.set_ylabel("YFP (mm)")
+a.legend(loc="upper left")
+
+dist=np.sqrt(dx**2+dy**2)
+a2=fig.add_subplot(666)
+a2.hist(dist[dist<0.1]*1000.)
+a2.set_xlabel("dist. (um)")
 
 
 if False :
