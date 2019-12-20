@@ -35,7 +35,7 @@ Code transform examples
 Loading spots and fitting a FVC -> FP transform::
 
     from astropy.table import Table
-    from desimeter.fvc2fp import FVCFP_Polynomial
+    from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
     spots = Table.read('spots.csv')
     tx = FVCFP_Polynomial()
     tx.fit(spots)

@@ -13,7 +13,7 @@ from astropy.table import Table
 from desiutil.log import get_logger
 from desimeter.detectspots import detectspots
 from desimeter.findfiducials import findfiducials
-from desimeter.fvc2fp import FVCFP_Polynomial
+from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""FVC image processing""")

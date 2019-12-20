@@ -8,7 +8,7 @@ from desiutil.log import get_logger
 from astropy.table import Table,Column
 from pkg_resources import resource_filename
 from scipy.spatial import cKDTree as KDTree
-from desimeter.fvc2fp import FVCFP_Polynomial
+from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
 
 
 metrology_table = None
