@@ -69,7 +69,49 @@ class TestFVC2FP(unittest.TestCase):
         self.assertLess(np.std(dr), 0.05)
         self.assertLess(np.std(dr), 0.10)
         self.assertLess(np.max(dr), 0.20)
+
+    def test_fit_transforms(self):
+        '''
+        Test fits stability with FVC offsets, rotations, and scales
+        '''
+        spots = Table.read(self.spotfile)
+        tx = FVCFP_Polynomial()     
+
+        #- Original
+        tx.fit(spots)
+        xfp0, yfp0 = tx.fvc2fp(spots['XPIX'], spots['YPIX'])
+        
+        #- Translate by (1,2) pixels
+        spots['XPIX'] += 1.0
+        spots['YPIX'] += 2.0
+        tx.fit(spots)
+        xfp1, yfp1 = tx.fvc2fp(spots['XPIX'], spots['YPIX'])
+
+        #- Scale by 1% from center of image (3000,3000)
+        spots['XPIX'] = (spots['XPIX']-3000)*1.01 + 3000
+        spots['YPIX'] = (spots['YPIX']-3000)*1.01 + 3000
+        tx.fit(spots)
+        xfp2, yfp2 = tx.fvc2fp(spots['XPIX'], spots['YPIX'])
+
+        #- Rotate by 1 degree about (3000,3000)
+        theta = np.radians(1)
+        dx = spots['XPIX'] - 3000
+        dy = spots['YPIX'] - 3000
+        x = np.cos(theta)*dx - np.sin(theta)*dy + 3000
+        y = np.sin(theta)*dx + np.cos(theta)*dy + 3000
+        spots['XPIX'] = x
+        spots['YPIX'] = y
+        tx.fit(spots)
+        xfp3, yfp3 = tx.fvc2fp(spots['XPIX'], spots['YPIX'])
+
+        self.assertLess(np.std(xfp1-xfp0), 1e-9)
+        self.assertLess(np.std(xfp2-xfp0), 1e-9)
+        self.assertLess(np.std(xfp3-xfp0), 1e-9)
+        self.assertLess(np.max(np.abs(xfp1-xfp0)), 1e-9)
+        self.assertLess(np.max(np.abs(xfp2-xfp0)), 1e-9)
+        self.assertLess(np.max(np.abs(xfp3-xfp0)), 1e-9)
         
 if __name__ == '__main__':
     unittest.main()
-        
+
+
