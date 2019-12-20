@@ -7,6 +7,8 @@ import time
 import numpy as np
 import fitsio
 
+from pkg_resources import resource_filename
+
 from astropy.table import Table
 from desiutil.log import get_logger
 from desimeter.detectspots import detectspots
@@ -21,6 +23,10 @@ parser.add_argument('-o','--outfile', type = str, default = None, required = Tru
                     help = 'path to output CSV ASCII file')
 parser.add_argument('--extname', type = str, default = 'F0000', required = False,
                     help = 'input EXTNAME to use if more than one HDU')
+parser.add_argument('--output-transform', type = str, default = None, required = False,
+                    help = 'write transformation to this json file')
+parser.add_argument('--input-transform', type = str, default = None, required = False,
+                    help = 'use this json file as input for the match, default is data/default-fvc2fp.json')
 
 args  = parser.parse_args()
 log   = get_logger()
@@ -43,12 +49,18 @@ else :
     sys.exit(12)
 
 
-spots = findfiducials(spots)
+spots = findfiducials(spots,input_transform=args.input_transform)
 
 tx = FVCFP_Polynomial()
 tx.fit(spots, update_spots=True)
 # spots = fit_fvc2fp(spots)
 
+if args.output_transform is not None :
+    if not args.output_transform.endswith(".json") :
+        print("error, can only write json files, so please choose an output filename end ing with .json")
+    else :
+        tx.write_jsonfile(args.output_transform)
+        print("wrote transform in {}".format(args.output_transform))
 spots.write(args.outfile,format="csv",overwrite=True)
 print("wrote {}".format(args.outfile))
 
