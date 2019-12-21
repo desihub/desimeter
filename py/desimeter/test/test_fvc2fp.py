@@ -10,19 +10,24 @@ import numpy as np
 from astropy.table import Table
 
 from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
+from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
 
-class TestFVC2FP(unittest.TestCase):
+class _TestFVC2FP(object):
     
     @classmethod
     def setUpClass(cls):
+        cls.TransformClass = None
         cls.spotfile = resource_filename('desimeter', 'test/data/test-spots.csv')
+
+    def setUp(self):
+        self.spotfile = resource_filename('desimeter', 'test/data/test-spots.csv')
 
     @classmethod
     def tearDownClass(cls):
         pass
 
     def test_fit(self):
-        tx = FVCFP_Polynomial()
+        tx = self.TransformClass()
         spots = Table.read(self.spotfile)
         spots_orig = spots.copy()
         
@@ -33,9 +38,6 @@ class TestFVC2FP(unittest.TestCase):
             yep = np.all(spots[colname] == spots_orig[colname])
             self.assertTrue(yep, 'Column {} changed values'.format(colname))
 
-        #- Fitting with a lower degree polynomial
-        tx.fit(spots, degree=2)
-        
         #- Updating the spots should update X_FP,Y_FP but not XPIX,YPIX
         tx.fit(spots, update_spots=True)
         self.assertTrue(np.all(spots['XPIX'] == spots_orig['XPIX']))
@@ -44,7 +46,7 @@ class TestFVC2FP(unittest.TestCase):
         self.assertFalse(np.all(spots['Y_FP'] == spots_orig['Y_FP']))
 
     def test_transform(self):
-        tx = FVCFP_Polynomial()
+        tx = self.TransformClass()
         spots = Table.read(self.spotfile)
         tx.fit(spots, update_spots=True)
 
@@ -75,7 +77,7 @@ class TestFVC2FP(unittest.TestCase):
         Test fits stability with FVC offsets, rotations, and scales
         '''
         spots = Table.read(self.spotfile)
-        tx = FVCFP_Polynomial()     
+        tx = self.TransformClass()
 
         #- Original
         tx.fit(spots)
@@ -110,6 +112,21 @@ class TestFVC2FP(unittest.TestCase):
         self.assertLess(np.max(np.abs(xfp1-xfp0)), 1e-9)
         self.assertLess(np.max(np.abs(xfp2-xfp0)), 1e-9)
         self.assertLess(np.max(np.abs(xfp3-xfp0)), 1e-9)
+
+    # def test_json(self)
+    #     spots = Table.read(self.spotfile)
+    #     tx = FVCFP_Polynomial()
+    #     tx.fit(spots)
+
+class TestPoly2d(_TestFVC2FP, unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.TransformClass = FVCFP_Polynomial
+
+class TestZhaoBurge(_TestFVC2FP, unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.TransformClass = FVCFP_ZhaoBurge
         
 if __name__ == '__main__':
     unittest.main()
