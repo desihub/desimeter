@@ -2,7 +2,7 @@
 Utility functions to find fiducials in a list of spots given a know pattern of pinholes
 """
 
-import os
+import os,sys
 import numpy as np
 from desiutil.log import get_logger
 from astropy.table import Table,Column
@@ -12,6 +12,52 @@ from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
 
 
 metrology_table = None
+
+
+def compute_triangles(x,y) :
+    
+    tti=[] # indices
+    ttx=[]
+    tty=[]
+    tr=[]
+    tc=[]
+    
+    nn=len(x)
+    for i in range(nn) :
+        for j in range(i+1,nn) :
+            for k in range(j+1,nn) :
+                # x y of vertices
+                ti=[i,j,k]
+                tx=x[[i,j,k]]
+                ty=y[[i,j,k]]
+
+                # sort according to length
+                # length of sides square
+                tl2=np.array([(tx[1]-tx[0])**2+(ty[1]-ty[0])**2,(tx[2]-tx[1])**2+(ty[2]-ty[1])**2,(tx[0]-tx[2])**2+(ty[0]-ty[2])**2])
+                pairs=np.array([[0,1],[1,2],[0,2]])
+                
+                ii=np.argsort(tl2)
+                ordering = np.zeros(3).astype(int)
+                ordering[0] = np.intersect1d(pairs[ii[0]],pairs[ii[2]]) # vertex connected to shortest and longest side  
+                ordering[1] = np.intersect1d(pairs[ii[0]],pairs[ii[1]]) # vertex connected to shortest and intermediate side  
+                ordering[2] = np.intersect1d(pairs[ii[1]],pairs[ii[2]]) # vertex connected to intermediate and longest side  
+                tx=tx[ordering]
+                ty=ty[ordering]
+                #print(np.sqrt(np.array([(tx[1]-tx[0])**2+(ty[1]-ty[0])**2,(tx[2]-tx[1])**2+(ty[2]-ty[1])**2,(tx[0]-tx[2])**2+(ty[0]-ty[2])**2])))
+                r=np.sqrt(tl2[ii[2]]/tl2[ii[0]]) # ratio of longest to shortest side
+                c=((tx[1]-tx[0])*(tx[2]-tx[0])+(ty[1]-ty[0])*(ty[2]-ty[0]))/np.sqrt( ((tx[1]-tx[0])**2+(ty[1]-ty[0])**2)*((tx[2]-tx[0])**2+(ty[2]-ty[0])**2)) # cos of angle of first vertex
+                # orientation does not help here because many symmetric triangles, so I don't compute that
+                #s=((tx[1]-tx[0])*(ty[2]-ty[0])-(tx[2]-tx[0])*(ty[1]-ty[0]))/np.sqrt( ((tx[1]-tx[0])**2+(ty[1]-ty[0])**2)*((tx[2]-tx[0])**2+(ty[2]-ty[0])**2)) # orientation whether vertices are traversed in a clockwise or counterclock-wise sense
+                #print("r=",r,"c=",c)
+                                
+                tti.append(ti)
+                ttx.append(tx)
+                tty.append(ty)
+                tr.append(r)
+                tc.append(c)
+                
+    return np.array(tti),np.array(ttx),np.array(tty),np.array(tr),np.array(tc)
+
 
 def findfiducials(spots,input_transform=None,separation=7.) :
     
@@ -98,17 +144,97 @@ def findfiducials(spots,input_transform=None,separation=7.) :
     nspots=spots["XPIX"].size
     if 'LOCATION' not in spots.dtype.names :
         spots.add_column(Column(np.zeros(nspots,dtype=int)),name='LOCATION')
-    if 'DOTID' not in spots.dtype.names :
-        spots.add_column(Column(np.zeros(nspots,dtype=int)),name='DOTID')
+    if 'PINHOLE_ID' not in spots.dtype.names :
+        spots.add_column(Column(np.zeros(nspots,dtype=int)),name='PINHOLE_ID')
     
     
     for index1,index2 in zip ( fiducials_candidates_indices , matching_known_fiducials_indices ) :
+        location = metrology_table["LOCATION"][index2]
         metrology_index1 = measured_spots_indices[index1][measured_spots_distances[index1]<separation]
-        metrology_index2 = np.where(metrology_table["LOCATION"]==metrology_table["LOCATION"][index2])[0]
+        metrology_index2 = np.where(metrology_table["LOCATION"]==location)[0]
+        print("LOCATION = ",location)
 
-        dx=spots["XPIX"][index1]-metrology_table["XPIX"][index2]
-        dy=spots["YPIX"][index1]-metrology_table["YPIX"][index2]
+        x1 = spots["XPIX"][metrology_index1]
+        y1 = spots["YPIX"][metrology_index1]
 
+        x2 = metrology_table["XPIX"][metrology_index2]
+        y2 = metrology_table["YPIX"][metrology_index2]
+
+        # using http://articles.adsabs.harvard.edu/pdf/1986AJ.....91.1244G
+        # compute all possible triangles in both dat sets
+        # also computes a side length ratio 'r', a vertex cosine 'c', and an orientation 's' (see routine compute_triangles)
+        tti1,ttx1,tty1,tr1,tc1 = compute_triangles(x1,y1)
+        tti2,ttx2,tty2,tr2,tc2 = compute_triangles(x2,y2)
+        
+        # distance defined as difference of ratio and cosine
+        # ignore orientation because many symmetric triangles 
+        # could apply weights ...
+        # the following is distances of all pairs of triangles
+        dist2 = (tr1[:,None] - tr2.T)**2 + (tc1[:,None] - tc2.T)**2
+        
+        jj = np.argmin(dist2,axis=1) # this is the match
+
+        dist2 = np.min(dist2,axis=1)
+
+        goodpairs = np.where(dist2<1e-5)[0]
+
+        matched = np.zeros(x1.size)
+        for goodpair in goodpairs :
+            print("a good pair")
+            i1=tti1[goodpair]
+            i2=tti2[jj[goodpair]]
+            spots["LOCATION"][metrology_index1][i1] = location
+            spots["PINHOLE_ID"][metrology_index1][i1] = metrology_table["PINHOLE_ID"][metrology_index2][i2]
+            matched[i1] += 1
+            if np.sum(matched>0)==x1.size : # all matched
+                print("all pinholes matched for fiducial",location,"; pinholes=",spots["PINHOLE_ID"][metrology_index1])
+                break
+            
+        
+        """ 
+        #for pair in dist2<1e-5
+        #print(dist2)
+        
+        # get from this the translation
+        dx = np.median(ttx1-ttx2[jj])
+        dy = np.median(tty1-tty2[jj])
+
+        
+        import matplotlib.pyplot as plt
+        plt.plot(x1,y1,"o",c="blue")
+        plt.plot(x2+dx,y2+dy,"x",c="red")
+        plt.show()
+        
+        
+        import matplotlib.pyplot as plt
+        
+        for i,j in enumerate(jj) :
+            plt.plot(x1,y1,"o",c="blue")
+            plt.plot(x2,y2,"o",c="red")
+
+            i1=i
+            i2=j
+            print("R: ",tr1[i1],tr2[i2])
+            print("C: ",tc1[i1],tc2[i2])
+            #print("S: ",ts1[i1],ts2[i2])
+            print("dist2=",dist2[i,jj])
+            plt.plot(ttx1[i1],tty1[i1],"-",c="blue",alpha=0.7)
+            plt.plot(ttx2[i2],tty2[i2],"-",c="red",alpha=0.7)
+            plt.plot(ttx1[i1][0],tty1[i1][0],"x",c="k")
+            plt.plot(ttx2[i2][0],tty2[i2][0],"x",c="k")
+            for k in range(3) :
+                plt.plot([ ttx1[i1,k], ttx2[i2,k] ] , [ tty1[i1,k], tty2[i2,k] ] ,"-",c="gray")
+            plt.show()
+        
+        
+        
+
+        for i1 in range(len(tri1)) :
+            i2 = np,a
+        print(tri1)
+        sys.exit(12)
+        
+        
         xy_metro = np.array([metrology_table["XPIX"][metrology_index2]+dx,metrology_table["YPIX"][metrology_index2]+dy]).T
         metrology_tree = KDTree(xy_metro)
         xy_meas  = np.array([spots["XPIX"][metrology_index1],spots["YPIX"][metrology_index1]]).T
@@ -122,7 +248,7 @@ def findfiducials(spots,input_transform=None,separation=7.) :
             distances,matched_indices = metrology_tree.query(xy_meas,k=1)
 
         spots["LOCATION"][metrology_index1] = metrology_table["LOCATION"][index2]
-        spots["DOTID"][metrology_index1] = metrology_table["DOTID"][metrology_index2][matched_indices]
-        
+        spots["PINHOLE_ID"][metrology_index1] = metrology_table["PINHOLE_ID"][metrology_index2][matched_indices]
+        """
     
     return spots
