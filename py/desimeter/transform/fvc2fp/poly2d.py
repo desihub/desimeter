@@ -140,8 +140,8 @@ class FVCFP_Polynomial(FVC2FP_Base):
 
         # now match
 
-        spots_identifier = np.array(spots["LOCATION"][selection]*100 + spots["DOTID"][selection])
-        metro_identifier = np.array(self.metrology_table["LOCATION"]*100 + self.metrology_table["DOTID"])
+        spots_identifier = np.array(spots["LOCATION"][selection]*100 + spots["PINHOLE_ID"][selection])
+        metro_identifier = np.array(self.metrology_table["LOCATION"]*100 + self.metrology_table["PINHOLE_ID"])
     
         tmpid = { f : i for i,f in enumerate(metro_identifier) } # dictionary of indices
     
@@ -153,10 +153,10 @@ class FVCFP_Polynomial(FVC2FP_Base):
                spots_indices.append(i)
                metro_indices.append(tmpid[f])
             else :
-                log.warning("cannot find metrology for LOCATION={} DOTID={}".format(int(f//100),int(f%100)))
+                log.warning("cannot find metrology for LOCATION={} PINHOLE_ID={}".format(int(f//100),int(f%100)))
     
-        xfp = self.metrology_table["XFP"][metro_indices]
-        yfp = self.metrology_table["YFP"][metro_indices]
+        xfp = self.metrology_table["X_FP"][metro_indices]
+        yfp = self.metrology_table["Y_FP"][metro_indices]
         xpix = xpix[spots_indices]
         ypix = ypix[spots_indices]
         xerr = xerr[spots_indices]
@@ -194,8 +194,8 @@ class FVCFP_Polynomial(FVC2FP_Base):
         #---
         # check goodness of fit metrics
         
-        xfp = self.metrology_table["XFP"][metro_indices]
-        yfp = self.metrology_table["YFP"][metro_indices]        
+        xfp = self.metrology_table["X_FP"][metro_indices]
+        yfp = self.metrology_table["Y_FP"][metro_indices]        
         xfp_meas, yfp_meas = self.fvc2fp(spots["XPIX"], spots["YPIX"])
         
         dist = np.sqrt((xfp_meas[selection]-xfp)**2 + (yfp_meas[selection]-yfp)**2)
@@ -204,12 +204,12 @@ class FVCFP_Polynomial(FVC2FP_Base):
             1000*np.mean(dist),1000*np.median(dist)))
 
         if update_spots:
-            spots["XFP"] = xfp_meas
-            spots["YFP"] = yfp_meas
-            spots["XMETRO"] = np.zeros(xfp_meas.size)
-            spots["YMETRO"] = np.zeros(xfp_meas.size)
-            spots["XMETRO"][selection] = xfp
-            spots["YMETRO"][selection] = yfp
+            spots["X_FP"] = xfp_meas
+            spots["Y_FP"] = yfp_meas
+            spots["X_FP_METRO"] = np.zeros(xfp_meas.size)
+            spots["Y_FP_METRO"] = np.zeros(xfp_meas.size)
+            spots["X_FP_METRO"][selection] = xfp
+            spots["Y_FP_METRO"][selection] = yfp
 
 
     def fvc2fp(self, xpix, ypix):

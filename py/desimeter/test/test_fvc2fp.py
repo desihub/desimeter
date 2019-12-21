@@ -36,12 +36,12 @@ class TestFVC2FP(unittest.TestCase):
         #- Fitting with a lower degree polynomial
         tx.fit(spots, degree=2)
         
-        #- Updating the spots should update XFP,YFP but not XPIX,YPIX
+        #- Updating the spots should update X_FP,Y_FP but not XPIX,YPIX
         tx.fit(spots, update_spots=True)
         self.assertTrue(np.all(spots['XPIX'] == spots_orig['XPIX']))
         self.assertTrue(np.all(spots['YPIX'] == spots_orig['YPIX']))
-        self.assertFalse(np.all(spots['XFP'] == spots_orig['XFP']))
-        self.assertFalse(np.all(spots['YFP'] == spots_orig['YFP']))
+        self.assertFalse(np.all(spots['X_FP'] == spots_orig['X_FP']))
+        self.assertFalse(np.all(spots['Y_FP'] == spots_orig['Y_FP']))
 
     def test_transform(self):
         tx = FVCFP_Polynomial()
@@ -49,9 +49,9 @@ class TestFVC2FP(unittest.TestCase):
         tx.fit(spots, update_spots=True)
 
         #- Transform FVC -> FP should be close to the FP metrology
-        ii = (spots['XMETRO']>0) & (spots['YMETRO']>0)
-        dx = spots['XFP'][ii] - spots['XMETRO'][ii]
-        dy = spots['YFP'][ii] - spots['YMETRO'][ii]
+        ii = (spots['X_FP_METRO']>0) & (spots['Y_FP_METRO']>0)
+        dx = spots['X_FP'][ii] - spots['X_FP_METRO'][ii]
+        dy = spots['Y_FP'][ii] - spots['Y_FP_METRO'][ii]
         dr = np.sqrt(dx**2 + dy**2)
         self.assertLess(np.std(dr), 0.02)  #- RMS < 20 microns
         self.assertLess(np.std(dr), 0.03)  #- median < 30 microns
