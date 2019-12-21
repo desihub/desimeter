@@ -41,6 +41,8 @@ filename = resource_filename('desimeter',"data/fp-metrology.csv")
 metrology = Table.read(filename,format="csv")
 selection=(metrology["DEVICE_TYPE"]=="FIF")|(metrology["DEVICE_TYPE"]=="GIF")
 a.scatter(metrology["X_FP"][selection],metrology["Y_FP"][selection],marker="o",edgecolors="gray",alpha=1.,facecolors="none",label="all FIF and GIF metrology")
+selection=((metrology["DEVICE_TYPE"]=="FIF")|(metrology["DEVICE_TYPE"]=="GIF"))&(metrology["PINHOLE_ID"]==4)
+a.scatter(metrology["X_FP"][selection],metrology["Y_FP"][selection],marker="o",edgecolors="black",alpha=1.,facecolors="none",label="central pinhole #4")
 
 a.plot(x,y,".",color="purple",label="matched measured spots")
 a.scatter(xm,ym,marker="o",edgecolors="orange",facecolors="none",label="matched metrology")
