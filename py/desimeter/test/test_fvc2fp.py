@@ -142,12 +142,12 @@ class _TestFVC2FP(object):
         self.assertTrue(np.allclose(x1, x2))
         self.assertTrue(np.allclose(y1, y2))        
 
-# class TestPoly2d(_TestFVC2FP, unittest.TestCase):
-#     @classmethod
-#     def setUpClass(cls):
-#         cls.spotfile = resource_filename('desimeter', 'test/data/test-spots.csv')
-#         cls.tempdir = tempfile.mkdtemp()
-#         cls.TransformClass = FVCFP_Polynomial
+class TestPoly2d(_TestFVC2FP, unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.spotfile = resource_filename('desimeter', 'test/data/test-spots.csv')
+        cls.tempdir = tempfile.mkdtemp()
+        cls.TransformClass = FVCFP_Polynomial
 
 class TestZhaoBurge(_TestFVC2FP, unittest.TestCase):
     @classmethod

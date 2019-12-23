@@ -178,13 +178,15 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         dx = (metrology['X_FP'] - xfp_fidmeas)
         dy = (metrology['Y_FP'] - yfp_fidmeas)
         dr = np.sqrt(dx**2 + dy**2)
-        log.info('Mean and median distance = {:.1f}, {:.1f} um'.format(
-            1000*np.mean(dr), 1000*np.median(dr)))
+        log.info('Mean, median, RMS distance = {:.1f}, {:.1f}, {:.1f} um'.format(
+            1000*np.mean(dr), 1000*np.median(dr), 1000*np.sqrt(np.mean(dr**2))))
 
         if update_spots:
             xfp_meas, yfp_meas = self.fvc2fp(spots['XPIX'], spots['YPIX'])
             spots["X_FP"] = xfp_meas
             spots["Y_FP"] = yfp_meas
+
+            #- TODO: update the metrology
             # spots["X_FP_METRO"] = np.zeros(xfp_meas.size)
             # spots["Y_FP_METRO"] = np.zeros(xfp_meas.size)
             # spots["X_FP_METRO"][selection] = xfp
