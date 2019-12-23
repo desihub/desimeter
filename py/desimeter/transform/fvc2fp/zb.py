@@ -161,7 +161,7 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         
         #- Get reduced coordinates
         rxpix, rypix = _reduce_xyfvc(fidspots['XPIX'], fidspots['YPIX'])
-        rxfp, ryfp = _reduce_xyfvc(metrology['X_FP'], metrology['Y_FP'])
+        rxfp, ryfp = _reduce_xyfp(metrology['X_FP'], metrology['Y_FP'])
         
         #- Perform fit        
         scale, rotation, offset_x, offset_y, zbcoeffs = \
@@ -179,7 +179,7 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         dy = (metrology['Y_FP'] - yfp_fidmeas)
         dr = np.sqrt(dx**2 + dy**2)
         log.info('Mean and median distance = {:.1f}, {:.1f} um'.format(
-            np.mean(dr), np.median(dr)))
+            1000*np.mean(dr), 1000*np.median(dr)))
 
         if update_spots:
             xfp_meas, yfp_meas = self.fvc2fp(spots['XPIX'], spots['YPIX'])
@@ -207,7 +207,17 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         rxfp, ryfp = _reduce_xyfp(xfp, yfp)
         
         #- first undo Zhao-Burge terms
-        dx, dy = getZhaoBurgeXY(self.zbcoeffs, rxfp, ryfp)
+        #- Iteratively find the correction, since we aren't interested
+        #- in the correction at rxfp,ryfp but rather the correction at
+        #- a different rx,ry that when applies becomes rxfp, ryfp
+        dx = dy = 0.0
+        for i in range(20):
+            dx2, dy2 = getZhaoBurgeXY(self.zbcoeffs, rxfp-dx, ryfp-dy)
+            dmax = max(np.max(np.abs(dx2-dx)), np.max(np.abs(dy2-dy)))
+            dx, dy = dx2, dy2
+            if dmax < 1e-12:
+                break
+
         rxfp -= dx
         ryfp -= dy
 
@@ -218,8 +228,8 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         rxfp /= self.scale
         ryfp /= self.scale
 
-        xx = (rxfp*np.cos(-rotation) - ryfp*np.sin(-self.rotation))
-        yy = (rxfp*np.sin(-rotation) + ryfp*np.cos(-self.rotation))
+        xx = (rxfp*np.cos(-self.rotation) - ryfp*np.sin(-self.rotation))
+        yy = (rxfp*np.sin(-self.rotation) + ryfp*np.cos(-self.rotation))
         
         xpix, ypix = _expand_xyfvc(xx, yy)
 
