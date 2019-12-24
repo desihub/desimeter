@@ -186,11 +186,30 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
             spots["X_FP"] = xfp_meas
             spots["Y_FP"] = yfp_meas
 
-            #- TODO: update the metrology
-            # spots["X_FP_METRO"] = np.zeros(xfp_meas.size)
-            # spots["Y_FP_METRO"] = np.zeros(xfp_meas.size)
-            # spots["X_FP_METRO"][selection] = xfp
-            # spots["Y_FP_METRO"][selection] = yfp
+            #- the metrology table is in a different order than the original
+            #- spots table, which is also a superset of the fidicual spots
+            #- matched to the metrology, so find the sorting of the metrology
+            #- that will match the order that they appear in the spots table
+            iifid = (spots['LOCATION']>0) & (spots['PINHOLE_ID']>0)
+            fidspots_pinloc = (spots['LOCATION']*10 + spots['PINHOLE_ID'])[iifid]
+            metro_pinloc = metrology['LOCATION']*10 + metrology['PINHOLE_ID']
+
+            ii = np.argsort(np.argsort(fidspots_pinloc))
+            jj = np.argsort(metro_pinloc)
+            kk = jj[ii]
+
+            #- Check that we got that dizzying array of argsorts right
+            assert np.all(spots['LOCATION'][iifid] == metrology['LOCATION'][kk])
+            assert np.all(spots['PINHOLE_ID'][iifid] == metrology['PINHOLE_ID'][kk])
+            
+            #- Update the spots table with metrology columns
+            #- TODO: used masked arrays in addition to default=0
+            spots["X_FP_METRO"] = np.zeros(len(spots))
+            spots["Y_FP_METRO"] = np.zeros(len(spots))
+            spots["Z_FP_METRO"] = np.zeros(len(spots))
+            spots["X_FP_METRO"][iifid] = metrology['X_FP'][kk]
+            spots["Y_FP_METRO"][iifid] = metrology['Y_FP'][kk]
+            spots["Z_FP_METRO"][iifid] = metrology['Z_FP'][kk]
 
     def fvc2fp(self, xpix, ypix, xerr=None, yerr=None):
         """

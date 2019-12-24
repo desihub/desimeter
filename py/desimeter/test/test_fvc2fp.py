@@ -43,12 +43,26 @@ class _TestFVC2FP(object):
             yep = np.all(spots[colname] == spots_orig[colname])
             self.assertTrue(yep, 'Column {} changed values'.format(colname))
 
+        if 'X_FP_METRO' in spots.colnames:
+            spots.remove_column('X_FP_METRO')
+
+        if 'Y_FP_METRO' in spots.colnames:
+            spots.remove_column('Y_FP_METRO')
+
         #- Updating the spots should update X_FP,Y_FP but not XPIX,YPIX
         tx.fit(spots, update_spots=True)
         self.assertTrue(np.all(spots['XPIX'] == spots_orig['XPIX']))
         self.assertTrue(np.all(spots['YPIX'] == spots_orig['YPIX']))
         self.assertFalse(np.all(spots['X_FP'] == spots_orig['X_FP']))
         self.assertFalse(np.all(spots['Y_FP'] == spots_orig['Y_FP']))
+
+        self.assertIn('X_FP_METRO', spots.colnames)
+        self.assertIn('Y_FP_METRO', spots.colnames)
+        ii = spots['PINHOLE_ID'] > 0
+        dx = (spots['X_FP'] - spots['X_FP_METRO'])[ii]
+        dy = (spots['Y_FP'] - spots['Y_FP_METRO'])[ii]
+        dr = np.sqrt(dx**2 + dy**2)
+        self.assertLess(np.median(dr), 0.050)
 
     def test_transform(self):
         tx = self.TransformClass()
@@ -67,8 +81,7 @@ class _TestFVC2FP(object):
 
         #- test roundtrip with close cuts in FVC pixel space
         dr = np.sqrt((xpix - xpix_new)**2 + (ypix - ypix_new)**2)
-        self.assertLess(np.std(dr), 0.05)
-        self.assertLess(np.std(dr), 0.10)
+        self.assertLess(np.median(dr), 0.10)
         self.assertLess(np.max(dr), 0.20)
 
         #- Transform FVC -> FP should be close to the FP metrology
@@ -76,9 +89,8 @@ class _TestFVC2FP(object):
         dx = spots['X_FP'][ii] - spots['X_FP_METRO'][ii]
         dy = spots['Y_FP'][ii] - spots['Y_FP_METRO'][ii]
         dr = np.sqrt(dx**2 + dy**2)
-        self.assertLess(np.std(dr), 0.02)  #- RMS < 20 microns
-        self.assertLess(np.std(dr), 0.03)  #- median < 30 microns
-        self.assertLess(np.max(dr), 0.10)  #- worst outlier < 100 microns
+        self.assertLess(np.median(dr), 0.05)  #- median < 50 microns
+        self.assertLess(np.max(dr), 0.10)     #- worst outlier < 100 microns
 
 
     def test_fit_transforms(self):
