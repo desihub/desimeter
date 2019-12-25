@@ -65,12 +65,12 @@ def fit_scale_rotation_offset(x, y, xp, yp, fitzb=False):
     def func(params, x, y, xp, yp, fitzb):
         scale, rotation, offset_x, offset_y = params[0:4]
         xx, yy = transform(x, y, scale, rotation, offset_x, offset_y)
-        
+
         if fitzb:
             c, zbx, zby = fitZhaoBurge(xx, yy, xp, yp)
             xx += zbx
             yy += zby
-        
+
         dr2 = np.sum((xx-xp)**2 + (yy-yp)**2)
         return dr2
 
@@ -102,7 +102,7 @@ def fitZhaoBurge(x, y, xp, yp):
     c = np.linalg.solve(A, b)
 
     zbx, zby = getZhaoBurgeXY(c, x, y)
-    
+
     return c, zbx, zby
 
 #-------------------------------------------------------------------------
@@ -117,7 +117,7 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         params['offset_y'] = self.offset_y
         params['zbcoeffs'] = list(self.zbcoeffs)
         return json.dumps(params)
-    
+
     @classmethod
     def fromjson(cls, jsonstring):
         tx = cls()
@@ -129,7 +129,7 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         tx.offset_y = params['offset_y']
         tx.zbcoeffs = np.asarray(params['zbcoeffs'])
         return tx
-    
+
     def fit(self, spots, metrology=None, update_spots=False):
         """TODO: document"""
         log = get_logger()
@@ -152,26 +152,26 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         metro_pinloc = self.metrology['LOCATION']*10 + self.metrology['PINHOLE_ID']
         jj = np.in1d(metro_pinloc, fidspots_pinloc)
         metrology = self.metrology[jj]
-        
+
         #- Sort so that they match each other
         fidspots.sort(keys=('LOCATION', 'PINHOLE_ID'))
         metrology.sort(keys=('LOCATION', 'PINHOLE_ID'))
         assert np.all(fidspots['LOCATION'] == metrology['LOCATION'])
         assert np.all(fidspots['PINHOLE_ID'] == metrology['PINHOLE_ID'])
-        
+
         #- Get reduced coordinates
         rxpix, rypix = _reduce_xyfvc(fidspots['XPIX'], fidspots['YPIX'])
         rxfp, ryfp = _reduce_xyfp(metrology['X_FP'], metrology['Y_FP'])
-        
-        #- Perform fit        
+
+        #- Perform fit
         scale, rotation, offset_x, offset_y, zbcoeffs = \
             fit_scale_rotation_offset(rxpix, rypix, rxfp, ryfp, fitzb=True)
-                
+
         self.scale = scale
         self.rotation = rotation
         self.offset_x = offset_x
-        self.offset_y = offset_y      
-        self.zbcoeffs = zbcoeffs      
+        self.offset_y = offset_y
+        self.zbcoeffs = zbcoeffs
 
         #- Goodness of fit
         xfp_fidmeas, yfp_fidmeas = self.fvc2fp(fidspots['XPIX'], fidspots['YPIX'])
@@ -201,7 +201,7 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
             #- Check that we got that dizzying array of argsorts right
             assert np.all(spots['LOCATION'][iifid] == metrology['LOCATION'][kk])
             assert np.all(spots['PINHOLE_ID'][iifid] == metrology['PINHOLE_ID'][kk])
-            
+
             #- Update the spots table with metrology columns
             #- TODO: used masked arrays in addition to default=0
             spots["X_FP_METRO"] = np.zeros(len(spots))
@@ -226,7 +226,7 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         Converts focal plane x,y -> fiber view camera pixel x,y
         """
         rxfp, ryfp = _reduce_xyfp(xfp, yfp)
-        
+
         #- first undo Zhao-Burge terms
         #- Iteratively find the correction, since we aren't interested
         #- in the correction at rxfp,ryfp but rather the correction at
@@ -245,13 +245,13 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         #- Then apply inverse scale, roation, offset
         rxfp -= self.offset_x
         ryfp -= self.offset_y
-        
+
         rxfp /= self.scale
         ryfp /= self.scale
 
         xx = (rxfp*np.cos(-self.rotation) - ryfp*np.sin(-self.rotation))
         yy = (rxfp*np.sin(-self.rotation) + ryfp*np.cos(-self.rotation))
-        
+
         xpix, ypix = _expand_xyfvc(xx, yy)
 
         return xpix, ypix

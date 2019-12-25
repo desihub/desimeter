@@ -141,18 +141,18 @@ class _TestFVC2FP(object):
         t1.fit(spots)
         filename = os.path.join(self.tempdir, 'blat.json')
         t1.write_jsonfile(filename)
-        
+
         t2 = self.TransformClass.read_jsonfile(filename)
-        
+
         #- Compare transforms
         nspots = 20
         xpix = np.random.uniform(500, 5500, nspots)
         ypix = np.random.uniform(500, 5500, nspots)
         x1, y1 = t1.fvc2fp(xpix, ypix)
         x2, y2 = t2.fvc2fp(xpix, ypix)
-        
+
         self.assertTrue(np.allclose(x1, x2))
-        self.assertTrue(np.allclose(y1, y2))        
+        self.assertTrue(np.allclose(y1, y2))
 
 class TestPoly2d(_TestFVC2FP, unittest.TestCase):
     @classmethod
@@ -167,7 +167,7 @@ class TestZhaoBurge(_TestFVC2FP, unittest.TestCase):
         cls.spotfile = resource_filename('desimeter', 'test/data/test-spots.csv')
         cls.tempdir = tempfile.mkdtemp()
         cls.TransformClass = FVCFP_ZhaoBurge
-    
+
     def test_reduce_expand(self):
         from desimeter.transform.fvc2fp.zb import _reduce_xyfvc, _expand_xyfvc
         x1, y1 = np.random.uniform(2000,4000, size=(2,100))
@@ -186,7 +186,7 @@ class TestZhaoBurge(_TestFVC2FP, unittest.TestCase):
         self.assertTrue(np.all(np.abs(ry)<1))
         self.assertTrue(np.allclose(x1, x2))
         self.assertTrue(np.allclose(y1, y2))
-        
+
 if __name__ == '__main__':
     unittest.main()
 
