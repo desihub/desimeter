@@ -79,7 +79,7 @@ class _TestFVC2FP(object):
         xfp, yfp = tx.fvc2fp(xpix, ypix)
         xpix_new, ypix_new = tx.fp2fvc(xfp, yfp)
 
-        #- test roundtrip with close cuts in FVC pixel space
+        #- test roundtrip with loose cuts in FVC pixel space
         dr = np.sqrt((xpix - xpix_new)**2 + (ypix - ypix_new)**2)
         self.assertLess(np.median(dr), 0.10)
         self.assertLess(np.max(dr), 0.20)

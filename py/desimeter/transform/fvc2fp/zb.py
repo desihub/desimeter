@@ -50,8 +50,10 @@ def transform(x, y, scale, rotation, offset_x, offset_y, zbcoeffs=None):
     """
     TODO: document
     """
-    xx = (x*np.cos(rotation) - y*np.sin(rotation))*scale + offset_x
-    yy = (x*np.sin(rotation) + y*np.cos(rotation))*scale + offset_y
+    x = x + offset_x
+    y = y + offset_y
+    xx = (x*np.cos(rotation) - y*np.sin(rotation))*scale # + offset_x
+    yy = (x*np.sin(rotation) + y*np.cos(rotation))*scale # + offset_y
 
     if zbcoeffs is not None:
         dx, dy = getZhaoBurgeXY(zbcoeffs, xx, yy)
@@ -243,14 +245,14 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         ryfp -= dy
 
         #- Then apply inverse scale, roation, offset
-        rxfp -= self.offset_x
-        ryfp -= self.offset_y
-
         rxfp /= self.scale
         ryfp /= self.scale
 
         xx = (rxfp*np.cos(-self.rotation) - ryfp*np.sin(-self.rotation))
         yy = (rxfp*np.sin(-self.rotation) + ryfp*np.cos(-self.rotation))
+
+        xx -= self.offset_x
+        yy -= self.offset_y
 
         xpix, ypix = _expand_xyfvc(xx, yy)
 
