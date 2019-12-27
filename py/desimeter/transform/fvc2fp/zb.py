@@ -63,6 +63,12 @@ def transform(x, y, scale, rotation, offset_x, offset_y, zbcoeffs=None):
     return xx, yy
 
 def fit_scale_rotation_offset(x, y, xp, yp, fitzb=False):
+    """
+    Fit scale, rotation, offset plus optional Zhao-Burge corrections
+    for x,y -> xp,yp.
+
+    TODO: document details
+    """
 
     def func(params, x, y, xp, yp, fitzb):
         scale, rotation, offset_x, offset_y = params[0:4]
@@ -81,6 +87,8 @@ def fit_scale_rotation_offset(x, y, xp, yp, fitzb=False):
 
     scale, rotation, offset_x, offset_y = p.x
     if fitzb:
+        #- including ZB in every iteration is ~10x better than fitting
+        #- scale,rotation,offset, then separately fitting ZB
         xx, yy = transform(x, y, scale, rotation, offset_x, offset_y)
         zbcoeffs, zbx, zby = fitZhaoBurge(xx, yy, xp, yp)
         return scale, rotation, offset_x, offset_y, zbcoeffs
