@@ -121,6 +121,7 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
     def tojson(self):
         params = dict()
         params['method'] = 'Zhao-Burge'
+        params['version'] = '1'
         params['scale'] = self.scale
         params['rotation'] = self.rotation
         params['offset_x'] = self.offset_x
@@ -133,6 +134,7 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         tx = cls()
         params = json.loads(jsonstring)
         assert params['method'] == 'Zhao-Burge'
+        assert params['version'] == '1'
         tx.scale = params['scale']
         tx.rotation = params['rotation']
         tx.offset_x = params['offset_x']
