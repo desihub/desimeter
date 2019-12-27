@@ -28,16 +28,16 @@ class FVC2FP_Base(object):
         with open(filename, 'w') as fx:
             fx.write(self.tojson())
 
-    def fit(spots, metrology=None):
+    def fit(self, spots, metrology=None, update_spots=False):
         raise NotImplementedError
 
-    def fvc2fp(xpix, ypix, xerr=None, yerr=None):
+    def fvc2fp(self, xpix, ypix, xerr=None, yerr=None):
         """
         Converts fiber view camera pixel x,y -> focal plane x,y
         """
         raise NotImplmentedError
 
-    def fpxy2fvc(xfp, yfp):
+    def fpxy2fvc(self, xfp, yfp):
         """
         Converts focal plane x,y -> fiber view camera pixel x,y
         """

@@ -4,14 +4,7 @@
 #-------------------IMPORT ZONE-----------------------
 
 import numpy as np
-import matplotlib
 import time
-matplotlib.use("TkAgg")   # explicit backend, has default margins
-import matplotlib.pyplot as plt
-print("Current backend is ", matplotlib.get_backend())
-from scipy.optimize import curve_fit
-
-
 
 #-----------ZERNIKE NORMALIZED EDGE=1 PACKAGE-----------
 #-----------Using BORN-WOLF {n,m} definitions-----------
@@ -180,6 +173,23 @@ def normalizeArea(noll):
   
 def getZ(noll, x, y):
     return normalizeArea(noll) * getZernFuncXY(convertNolltoBW(noll), x, y)
+
+def getZhaoBurgeXY(coeffs, x, y):
+    """
+    Args:
+        coeffs: array of coefficients
+        x,y : locations at which to evaluate
+
+    returns dx, dy arrays
+    """
+    dx = np.zeros(len(x))
+    dy = np.zeros(len(y))
+    for i, c in enumerate(coeffs):
+        zbx, zby, name = getZhaoBurgeTerm(i, x, y)
+        dx += c*zbx
+        dy += c*zby
+
+    return dx, dy
 
 def getZhaoBurgeTerm(whichparm, x, y):
     # Cartesian input x,y; cartesian output x, y, and label.
