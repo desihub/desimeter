@@ -64,8 +64,7 @@ def findfiducials(spots,input_transform=None,separation=7.) :
     global metrology_pinholes_table
     global metrology_fiducials_table
     log = get_logger()
-    log.info("findfiducials...")
-
+    
     log.debug("load input tranformation we will use to go from FP to FVC pixels")
     if input_transform is None :
         input_transform = resource_filename('desimeter',"data/default-fvc2fp.json")
@@ -211,5 +210,8 @@ def findfiducials(spots,input_transform=None,separation=7.) :
                 #for kk1,kk2 in zip(k1,k2) : plt.plot([ x1[kk1],x2[kk2] ],[ y1[kk1],y2[kk2] ],"--",c="gray") 
                 #plt.show()
                 break
-
+            
+    n_matched_pinholes  = np.sum(spots["PINHOLE_ID"]>0)
+    n_matched_fiducials = np.sum(spots["PINHOLE_ID"]==4)
+    log.info("matched {} pinholes from {} fiducials".format(n_matched_pinholes,n_matched_fiducials))
     return spots

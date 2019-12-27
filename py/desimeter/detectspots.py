@@ -123,7 +123,7 @@ def fitcentroid(stamp,noise=10.) :
     #return fitcentroid_barycenter(stamp)
 
 
-def detectspots(fvcimage,threshold=500,nsig=7) :
+def detectspots(fvcimage,threshold=500,nsig=7,psf_sigma=1.) :
     """
     Detect spots in a fiber view image and measure their centroids and flux
     Args:
@@ -144,10 +144,8 @@ def detectspots(fvcimage,threshold=500,nsig=7) :
     
 
     # find peaks = local maximum above threshold
-    log.info("gaussian convolve...")
-    convolved_image=gaussian_convolve(fvcimage)
-    log.info("done")
-
+    log.info("gaussian convolve with sigma = {:2.1f} pixels".format(psf_sigma))
+    convolved_image=gaussian_convolve(fvcimage,psf_sigma)
     
     # measure pedestal and rms
     # look the values of a random subsample of the image
@@ -187,7 +185,7 @@ def detectspots(fvcimage,threshold=500,nsig=7) :
         log.error("no spot found")
         raise RuntimeError("no spot found")
     else :
-        log.info("found {} peak".format(npeak))
+        log.info("found {} peaks".format(npeak))
                  
     xpix=np.zeros(npeak)
     ypix=np.zeros(npeak)
@@ -218,7 +216,7 @@ def detectspots(fvcimage,threshold=500,nsig=7) :
             
         log.debug("{} x={} y={} counts={}".format(j,xpix[j],ypix[j],counts[j]))
     
-    log.warning("Would need some cleaning here for multiple detections of same spot")
+    #log.warning("Would need some cleaning here for multiple detections of same spot")
 
     table = Table([xpix,ypix,xerr,yerr,counts],names=("XPIX","YPIX","XERR","YERR","COUNTS"))
     return table
