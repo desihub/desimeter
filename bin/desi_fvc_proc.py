@@ -13,7 +13,8 @@ from astropy.table import Table
 from desiutil.log import get_logger
 from desimeter.detectspots import detectspots
 from desimeter.findfiducials import findfiducials
-from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
+#from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
+from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""FVC image processing""")
@@ -51,7 +52,8 @@ else :
 
 spots = findfiducials(spots,input_transform=args.input_transform)
 
-tx = FVCFP_Polynomial()
+#tx = FVCFP_Polynomial()
+tx = FVCFP_ZhaoBurge()
 tx.fit(spots, update_spots=True)
 # spots = fit_fvc2fp(spots)
 
