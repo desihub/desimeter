@@ -144,13 +144,13 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
             self.metrology = Table.read(filename,format="csv")
 
         #- Trim spots to just fiducial spots (not posioners, not unmatchs spots)
-        ii = (spots['LOCATION']>0) & (spots['PINHOLE_ID']>0)
+        ii = np.where((spots['LOCATION']>0) & (spots['PINHOLE_ID']>0))[0]
         fidspots = spots[ii]
 
         #- trim metrology to just the ones that have spots
         fidspots_pinloc = fidspots['LOCATION']*10 + fidspots['PINHOLE_ID']
         metro_pinloc = self.metrology['LOCATION']*10 + self.metrology['PINHOLE_ID']
-        jj = np.in1d(metro_pinloc, fidspots_pinloc)
+        jj = np.where(np.in1d(metro_pinloc, fidspots_pinloc))[0]
         metrology = self.metrology[jj]
         
         #- Sort so that they match each other
@@ -185,12 +185,15 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
             xfp_meas, yfp_meas = self.fvc2fp(spots['XPIX'], spots['YPIX'])
             spots["X_FP"] = xfp_meas
             spots["Y_FP"] = yfp_meas
-
-            #- TODO: update the metrology
-            # spots["X_FP_METRO"] = np.zeros(xfp_meas.size)
-            # spots["Y_FP_METRO"] = np.zeros(xfp_meas.size)
-            # spots["X_FP_METRO"][selection] = xfp
-            # spots["Y_FP_METRO"][selection] = yfp
+            spots["X_FP_METRO"] = np.zeros(xfp_meas.size)
+            spots["Y_FP_METRO"] = np.zeros(xfp_meas.size)
+            kk=spots[ii].argsort(keys=('LOCATION', 'PINHOLE_ID'))
+            ii=ii[kk]
+            pp=self.metrology[jj].argsort(keys=('LOCATION', 'PINHOLE_ID'))
+            jj=jj[pp]
+            metrology.sort(keys=('LOCATION', 'PINHOLE_ID'))
+            spots["X_FP_METRO"][ii] = self.metrology['X_FP'][jj]
+            spots["Y_FP_METRO"][ii] = self.metrology['Y_FP'][jj]
 
     def fvc2fp(self, xpix, ypix, xerr=None, yerr=None):
         """

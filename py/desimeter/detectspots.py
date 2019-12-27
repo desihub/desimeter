@@ -123,15 +123,15 @@ def fitcentroid(stamp,noise=10.) :
     #return fitcentroid_barycenter(stamp)
 
 
-def detectspots(fvcimage,threshold=None) :
+def detectspots(fvcimage,threshold=500,nsig=7) :
     """
     Detect spots in a fiber view image and measure their centroids and flux
     Args:
         fvcimage : 2D numpy array
 
     Optional:
-        threshold : float, use this threshold in counts/pixel to do a first
-                    detection of peaks
+       threshold : float, use max of this threshold in counts/pixel and nsig*rms to do a first
+                    detection of peaks 
     returns astropy.Table with spots, columns are xpix,ypix,xerr,yerr,counts
     """
 
@@ -172,8 +172,9 @@ def detectspots(fvcimage,threshold=None) :
     #plt.show()
     
     if threshold is None :
-        threshold=7*rms
-    
+        threshold=nsig*rms
+    else :
+        threhold=max(threshold,nsig*rms)
     
     peaks=np.zeros((n0,n1))
     peaks[1:-1,1:-1]=(convolved_image[1:-1,1:-1]>convolved_image[:-2,1:-1])*(convolved_image[1:-1,1:-1]>convolved_image[2:,1:-1\

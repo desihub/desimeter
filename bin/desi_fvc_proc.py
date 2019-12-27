@@ -13,7 +13,8 @@ from astropy.table import Table
 from desiutil.log import get_logger
 from desimeter.detectspots import detectspots
 from desimeter.findfiducials import findfiducials
-from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
+#from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
+from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""FVC image processing""")
@@ -26,7 +27,9 @@ parser.add_argument('--extname', type = str, default = 'F0000', required = False
 parser.add_argument('--output-transform', type = str, default = None, required = False,
                     help = 'write transformation to this json file')
 parser.add_argument('--input-transform', type = str, default = None, required = False,
-                    help = 'use this json file as input for the match, default is data/default-fvc2fp.json')
+                    help = 'use this json file as input for the match, defaut is data/default-fvc2fp.json')
+parser.add_argument('--threshold', type = float, default = 500., required = False,
+                    help = "threshold for spots detection")
 
 args  = parser.parse_args()
 log   = get_logger()
@@ -40,7 +43,7 @@ if filename.find(".fits")>0 :
         else:
             image = fx[args.extname].read().astype(float)
 
-    spots = detectspots(image)
+    spots = detectspots(image,threshold=args.threshold,nsig=7)
 elif filename.find(".csv")>0 :
     log.info("read CSV spots table")
     spots = Table.read(filename,format="csv")
@@ -51,7 +54,9 @@ else :
 
 spots = findfiducials(spots,input_transform=args.input_transform)
 
-tx = FVCFP_Polynomial()
+#tx = FVCFP_Polynomial()
+tx = FVCFP_ZhaoBurge()
+
 tx.fit(spots, update_spots=True)
 # spots = fit_fvc2fp(spots)
 
