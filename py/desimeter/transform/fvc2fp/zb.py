@@ -156,13 +156,13 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
             self.metrology = Table.read(filename,format="csv")
 
         #- Trim spots to just fiducial spots (not posioners, not unmatchs spots)
-        ii = np.where((spots['LOCATION']>0) & (spots['PINHOLE_ID']>0))[0]
+        ii = (spots['LOCATION']>0) & (spots['PINHOLE_ID']>0)
         fidspots = spots[ii]
 
         #- trim metrology to just the ones that have spots
         fidspots_pinloc = fidspots['LOCATION']*10 + fidspots['PINHOLE_ID']
         metro_pinloc = self.metrology['LOCATION']*10 + self.metrology['PINHOLE_ID']
-        jj = np.where(np.in1d(metro_pinloc, fidspots_pinloc))[0]
+        jj = np.in1d(metro_pinloc, fidspots_pinloc)
         metrology = self.metrology[jj]
 
         #- Sort so that they match each other
