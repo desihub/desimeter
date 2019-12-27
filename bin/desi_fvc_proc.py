@@ -56,7 +56,6 @@ spots = findfiducials(spots,input_transform=args.input_transform)
 
 #tx = FVCFP_Polynomial()
 tx = FVCFP_ZhaoBurge()
-
 tx.fit(spots, update_spots=True)
 # spots = fit_fvc2fp(spots)
 

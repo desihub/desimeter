@@ -43,12 +43,26 @@ class _TestFVC2FP(object):
             yep = np.all(spots[colname] == spots_orig[colname])
             self.assertTrue(yep, 'Column {} changed values'.format(colname))
 
+        if 'X_FP_METRO' in spots.colnames:
+            spots.remove_column('X_FP_METRO')
+
+        if 'Y_FP_METRO' in spots.colnames:
+            spots.remove_column('Y_FP_METRO')
+
         #- Updating the spots should update X_FP,Y_FP but not XPIX,YPIX
         tx.fit(spots, update_spots=True)
         self.assertTrue(np.all(spots['XPIX'] == spots_orig['XPIX']))
         self.assertTrue(np.all(spots['YPIX'] == spots_orig['YPIX']))
         self.assertFalse(np.all(spots['X_FP'] == spots_orig['X_FP']))
         self.assertFalse(np.all(spots['Y_FP'] == spots_orig['Y_FP']))
+
+        self.assertIn('X_FP_METRO', spots.colnames)
+        self.assertIn('Y_FP_METRO', spots.colnames)
+        ii = spots['PINHOLE_ID'] > 0
+        dx = (spots['X_FP'] - spots['X_FP_METRO'])[ii]
+        dy = (spots['Y_FP'] - spots['Y_FP_METRO'])[ii]
+        dr = np.sqrt(dx**2 + dy**2)
+        self.assertLess(np.median(dr), 0.050)
 
     def test_transform(self):
         tx = self.TransformClass()
@@ -65,10 +79,9 @@ class _TestFVC2FP(object):
         xfp, yfp = tx.fvc2fp(xpix, ypix)
         xpix_new, ypix_new = tx.fp2fvc(xfp, yfp)
 
-        #- test roundtrip with close cuts in FVC pixel space
+        #- test roundtrip with loose cuts in FVC pixel space
         dr = np.sqrt((xpix - xpix_new)**2 + (ypix - ypix_new)**2)
-        self.assertLess(np.std(dr), 0.05)
-        self.assertLess(np.std(dr), 0.10)
+        self.assertLess(np.median(dr), 0.10)
         self.assertLess(np.max(dr), 0.20)
 
         #- Transform FVC -> FP should be close to the FP metrology
@@ -76,9 +89,8 @@ class _TestFVC2FP(object):
         dx = spots['X_FP'][ii] - spots['X_FP_METRO'][ii]
         dy = spots['Y_FP'][ii] - spots['Y_FP_METRO'][ii]
         dr = np.sqrt(dx**2 + dy**2)
-        self.assertLess(np.std(dr), 0.02)  #- RMS < 20 microns
-        self.assertLess(np.std(dr), 0.03)  #- median < 30 microns
-        self.assertLess(np.max(dr), 0.10)  #- worst outlier < 100 microns
+        self.assertLess(np.median(dr), 0.05)  #- median < 50 microns
+        self.assertLess(np.max(dr), 0.10)     #- worst outlier < 100 microns
 
 
     def test_fit_transforms(self):
@@ -129,18 +141,18 @@ class _TestFVC2FP(object):
         t1.fit(spots)
         filename = os.path.join(self.tempdir, 'blat.json')
         t1.write_jsonfile(filename)
-        
+
         t2 = self.TransformClass.read_jsonfile(filename)
-        
+
         #- Compare transforms
         nspots = 20
         xpix = np.random.uniform(500, 5500, nspots)
         ypix = np.random.uniform(500, 5500, nspots)
         x1, y1 = t1.fvc2fp(xpix, ypix)
         x2, y2 = t2.fvc2fp(xpix, ypix)
-        
+
         self.assertTrue(np.allclose(x1, x2))
-        self.assertTrue(np.allclose(y1, y2))        
+        self.assertTrue(np.allclose(y1, y2))
 
 class TestPoly2d(_TestFVC2FP, unittest.TestCase):
     @classmethod
@@ -155,7 +167,7 @@ class TestZhaoBurge(_TestFVC2FP, unittest.TestCase):
         cls.spotfile = resource_filename('desimeter', 'test/data/test-spots.csv')
         cls.tempdir = tempfile.mkdtemp()
         cls.TransformClass = FVCFP_ZhaoBurge
-    
+
     def test_reduce_expand(self):
         from desimeter.transform.fvc2fp.zb import _reduce_xyfvc, _expand_xyfvc
         x1, y1 = np.random.uniform(2000,4000, size=(2,100))
@@ -174,7 +186,7 @@ class TestZhaoBurge(_TestFVC2FP, unittest.TestCase):
         self.assertTrue(np.all(np.abs(ry)<1))
         self.assertTrue(np.allclose(x1, x2))
         self.assertTrue(np.allclose(y1, y2))
-        
+
 if __name__ == '__main__':
     unittest.main()
 
