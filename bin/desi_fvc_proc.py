@@ -27,7 +27,9 @@ parser.add_argument('--extname', type = str, default = 'F0000', required = False
 parser.add_argument('--output-transform', type = str, default = None, required = False,
                     help = 'write transformation to this json file')
 parser.add_argument('--input-transform', type = str, default = None, required = False,
-                    help = 'use this json file as input for the match, default is data/default-fvc2fp.json')
+                    help = 'use this json file as input for the match, defaut is data/default-fvc2fp.json')
+parser.add_argument('--threshold', type = float, default = 500., required = False,
+                    help = "threshold for spots detection")
 
 args  = parser.parse_args()
 log   = get_logger()
@@ -41,7 +43,7 @@ if filename.find(".fits")>0 :
         else:
             image = fx[args.extname].read().astype(float)
 
-    spots = detectspots(image)
+    spots = detectspots(image,threshold=args.threshold,nsig=7)
 elif filename.find(".csv")>0 :
     log.info("read CSV spots table")
     spots = Table.read(filename,format="csv")

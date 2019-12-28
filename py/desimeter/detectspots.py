@@ -123,15 +123,15 @@ def fitcentroid(stamp,noise=10.) :
     #return fitcentroid_barycenter(stamp)
 
 
-def detectspots(fvcimage,threshold=None) :
+def detectspots(fvcimage,threshold=500,nsig=7,psf_sigma=1.) :
     """
     Detect spots in a fiber view image and measure their centroids and flux
     Args:
         fvcimage : 2D numpy array
 
     Optional:
-        threshold : float, use this threshold in counts/pixel to do a first
-                    detection of peaks
+       threshold : float, use max of this threshold in counts/pixel and nsig*rms to do a first
+                    detection of peaks 
     returns astropy.Table with spots, columns are xpix,ypix,xerr,yerr,counts
     """
 
@@ -144,10 +144,8 @@ def detectspots(fvcimage,threshold=None) :
     
 
     # find peaks = local maximum above threshold
-    log.info("gaussian convolve...")
-    convolved_image=gaussian_convolve(fvcimage)
-    log.info("done")
-
+    log.info("gaussian convolve with sigma = {:2.1f} pixels".format(psf_sigma))
+    convolved_image=gaussian_convolve(fvcimage,psf_sigma)
     
     # measure pedestal and rms
     # look the values of a random subsample of the image
@@ -172,8 +170,9 @@ def detectspots(fvcimage,threshold=None) :
     #plt.show()
     
     if threshold is None :
-        threshold=7*rms
-    
+        threshold=nsig*rms
+    else :
+        threhold=max(threshold,nsig*rms)
     
     peaks=np.zeros((n0,n1))
     peaks[1:-1,1:-1]=(convolved_image[1:-1,1:-1]>convolved_image[:-2,1:-1])*(convolved_image[1:-1,1:-1]>convolved_image[2:,1:-1\
@@ -186,7 +185,7 @@ def detectspots(fvcimage,threshold=None) :
         log.error("no spot found")
         raise RuntimeError("no spot found")
     else :
-        log.info("found {} peak".format(npeak))
+        log.info("found {} peaks".format(npeak))
                  
     xpix=np.zeros(npeak)
     ypix=np.zeros(npeak)
@@ -217,7 +216,7 @@ def detectspots(fvcimage,threshold=None) :
             
         log.debug("{} x={} y={} counts={}".format(j,xpix[j],ypix[j],counts[j]))
     
-    log.warning("Would need some cleaning here for multiple detections of same spot")
+    #log.warning("Would need some cleaning here for multiple detections of same spot")
 
     table = Table([xpix,ypix,xerr,yerr,counts],names=("XPIX","YPIX","XERR","YERR","COUNTS"))
     return table
