@@ -5,7 +5,8 @@ desimeter
 Introduction
 ------------
 
-This package contains scripts and packages for coordinates transformations in DESI. It's all in python.
+This package contains scripts and data for coordinates transformations in DESI. It's all in python, and runs on a laptop.
+
 It comprises
 
 * spots detection (based on a 2D FFT convolution of the input FVC image by Gaussian).
