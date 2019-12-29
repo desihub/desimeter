@@ -8,8 +8,6 @@ from scipy.spatial import cKDTree as KDTree
 from astropy.table import Table
 
 from desimeter import detectspots
-from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
-from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
 
 class TestDetectSpots(unittest.TestCase):
     
