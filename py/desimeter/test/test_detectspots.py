@@ -10,7 +10,7 @@ from astropy.table import Table
 from desimeter import detectspots
 
 class TestDetectSpots(unittest.TestCase):
-    
+
     @classmethod
     def setUpClass(cls):
         '''
@@ -20,7 +20,7 @@ class TestDetectSpots(unittest.TestCase):
         cls.spots = spots = Table.read(cls.spotfile)
         np.random.seed(1)
         cls.img = np.random.normal(loc=1000.0, scale=35, size=(6000, 6000))
-        
+
         spot = np.zeros((15,15))
         spot[7,7] = 1.0
         spot = detectspots.gaussian_convolve(spot)
@@ -47,11 +47,10 @@ class TestDetectSpots(unittest.TestCase):
 
         #- all spots were matched
         self.assertEqual(len(set(indices)), len(indices))
-        
+
         #- loose check on distances because original image wasn't constructed
         #- very exactly either; just check if we matched the right spot
         self.assertLess(np.max(distances), 0.02)
 
 if __name__ == '__main__':
     unittest.main()
-        

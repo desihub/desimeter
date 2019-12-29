@@ -10,7 +10,7 @@ from astropy.table import Table
 from desimeter.findfiducials import findfiducials
 
 class TestFindFiducials(unittest.TestCase):
-    
+
     @classmethod
     def setUpClass(cls):
         '''
@@ -53,4 +53,3 @@ class TestFindFiducials(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-        
