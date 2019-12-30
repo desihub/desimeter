@@ -10,7 +10,7 @@ import numpy as np
 from astropy.table import Table,Column
 
 # from desimodel.focalplane.geometry import qs2xy,xy2qs
-from desiutil.log import get_logger
+from desimeter.log import get_logger
 
 from .base import FVC2FP_Base
 

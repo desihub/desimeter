@@ -10,7 +10,7 @@ import fitsio
 from pkg_resources import resource_filename
 
 from astropy.table import Table
-from desiutil.log import get_logger
+from desimeter.log import get_logger
 from desimeter.detectspots import detectspots
 from desimeter.findfiducials import findfiducials
 #from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial

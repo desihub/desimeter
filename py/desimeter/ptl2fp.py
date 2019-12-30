@@ -3,7 +3,7 @@ Utility functions to fit and apply coordinates transformation from PTL (petal lo
 """
 
 import numpy as np
-from desiutil.log import get_logger
+from desimeter.log import get_logger
 from astropy.table import Table,Column
 from pkg_resources import resource_filename
 

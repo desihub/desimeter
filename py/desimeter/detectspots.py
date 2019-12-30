@@ -4,7 +4,7 @@ Utility functions to detect spots in fiber view camera image
 """
 import sys
 import numpy as np
-from desiutil.log import get_logger
+from desimeter.log import get_logger
 from astropy.table import Table
 from scipy.signal import fftconvolve
 from scipy.special import erf
