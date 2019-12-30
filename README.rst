@@ -23,9 +23,16 @@ It does not yet include
 Script Examples
 ---------------
 
-Here is an example::
+These examples use a fiber view camera (FVC) image taken during PSF stability
+tests, available at NERSC at::
+     /global/project/projectdirs/desi/cmx/psfstability/thetaphi-20191113/data/fvc/fvc.20191113120837.fits
 
-    desi_fvc_proc -i fvc.20191125125304.fits  -o spots.csv
+They also work on FVC images written by ICS as part of platemaker acquisition
+sequences by using the images in the ``F0000``, ``F0001``, etc FITS extensions.
+
+Here is an example fitting FVC spots and matching to fiducials::
+
+    desi_fvc_proc -i fvc.20191113120837.fits  -o spots.csv
 
 Plot of the residuals with respect to the metrology::
 
@@ -37,13 +44,6 @@ Plot of the metrology data ::
 
 Code examples
 -------------
-
-These examples use a fiber view camera (FVC) image taken during PSF stability
-tests, available at NERSC at::
-     /global/project/projectdirs/desi/cmx/psfstability/thetaphi-20191113/data/fvc/fvc.20191113120837.fits
-
-They also work on FVC images written by ICS as part of platemaker acquisition
-sequences by using the images in the ``F0000``, ``F0001``, etc. FITS extensions.
 
 Detect spots and match fiducials::
 
