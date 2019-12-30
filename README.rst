@@ -30,16 +30,33 @@ Plot of the metrology data ::
 
     plot_metrology
 
-Code transform examples
------------------------
+Code examples
+-------------
 
-Loading spots and fitting a FVC -> FP transform::
+Detect spots and match fiducials::
+
+    import fitsio
+    from desimeter.detectspots import detectspots
+    from desimeter.findfiducials import findfiducials
+    image = fitsio.read('fvc.20191113120837.fits')
+    spots = detectspots(image)
+    spots = findfiducials(spots)
+    spots.write('spots.csv', overwrite=True)
+
+Load spots and fit a FVC -> FP transform::
 
     from astropy.table import Table
-    from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
+    from desimeter.transform import fvc2fp
     spots = Table.read('spots.csv')
-    tx = FVCFP_ZhaoBurge()
-    tx.fit(spots)
+    tx = fvc2fp.fit(spots, update_spots=True)
+
+Check consistency with fiducial metrology (PINHOLE_ID>0)
+
+    ii = spots['PINHOLE_ID'] > 0
+    dr2 = (spots['X_FP'] - spots['X_FP_METRO'])**2 + \
+         (spots['Y_FP'] - spots['Y_FP'])**2
+    rms = np.sqrt(np.mean(dr2[ii]))
+    print('1D RMS = {:.1f} um'.format(1000*rms))
 
 Save that transform for later use::
 
