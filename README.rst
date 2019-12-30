@@ -64,7 +64,7 @@ Load spots and fit a FVC -> FP transform::
     tx = fvc2fp.fit(spots, update_spots=True)
     print(spots.colnames)
 
-Check consistency with fiducial metrology (PINHOLE_ID>0)
+Check consistency with fiducial metrology (PINHOLE_ID>0)::
 
     ii = spots['PINHOLE_ID'] > 0
     dr2 = (spots['X_FP'] - spots['X_FP_METRO'])**2 + \
