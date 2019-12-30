@@ -38,6 +38,11 @@ Plot of the metrology data ::
 Code examples
 -------------
 
+These examples use a fiber view camera (FVC) image taken during PSF stability
+tests, available at NERSC at `/global/project/projectdirs/desi/cmx/psfstability/thetaphi-20191113/data/fvc/fvc.20191113120837.fits`.
+They also work on FVC images written by ICS as part of platemaker acquisition
+sequences by using the images in the `F0000`, `F0001`, etc. FITS extensions.
+
 Detect spots and match fiducials::
 
     import fitsio
