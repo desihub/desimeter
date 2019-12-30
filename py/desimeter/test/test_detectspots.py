@@ -52,5 +52,9 @@ class TestDetectSpots(unittest.TestCase):
         #- very exactly either; just check if we matched the right spot
         self.assertLess(np.max(distances), 0.02)
 
+    def test_uint(self):
+        #- Should also work with uint data (from raw FVC images)
+        spots = detectspots.detectspots(self.img.astype(np.uint16))
+
 if __name__ == '__main__':
     unittest.main()

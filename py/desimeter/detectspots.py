@@ -161,8 +161,8 @@ def detectspots(fvcimage,threshold=500,nsig=7,psf_sigma=1.) :
     mval=np.mean(vals[ok])
     rms=np.std(vals[ok])
     log.info("pedestal={:4.2f} rms={:4.2f}".format(mval,rms))
-    # remove mean
-    fvcimage -= mval
+    # remove mean; if fvcimage was integer input, this will cast to float64
+    fvcimage = fvcimage - mval
     convolved_image      -= mval
     
     #import matplotlib.pyplot as plt
