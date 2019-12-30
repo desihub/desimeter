@@ -2,7 +2,6 @@ import os
 import logging
 
 #- subset of desiutil.log.get_logger, to avoid desiutil dependency
-#- adapted from https://docs.python.org/3/howto/logging.html#configuring-logging
 
 _loggers = dict()
 def get_logger(level=None):
@@ -26,6 +25,9 @@ def get_logger(level=None):
     if level not in _loggers:
         logger = logging.getLogger('desimeter.'+level)
         logger.setLevel(loglevel)
+
+        #- handler and formatter code adapted from
+        #- https://docs.python.org/3/howto/logging.html#configuring-logging
 
         # create console handler and set level to debug
         ch = logging.StreamHandler()
