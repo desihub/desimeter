@@ -10,8 +10,10 @@ import tempfile
 import numpy as np
 from astropy.table import Table
 
+from desimeter.transform.fvc2fp.base import FVC2FP_Base
 from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
 from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
+from desimeter.transform.fvc2fp import read_jsonfile, fit
 
 class _TestFVC2FP(object):
     
@@ -154,6 +156,11 @@ class _TestFVC2FP(object):
         self.assertTrue(np.allclose(x1, x2))
         self.assertTrue(np.allclose(y1, y2))
 
+        #- Confirm default reader recognizes this
+        t3 = read_jsonfile(filename)
+        self.assertEqual(type(t3), type(t1))
+
+
 class TestPoly2d(_TestFVC2FP, unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -187,7 +194,13 @@ class TestZhaoBurge(_TestFVC2FP, unittest.TestCase):
         self.assertTrue(np.allclose(x1, x2))
         self.assertTrue(np.allclose(y1, y2))
 
+class TestDefaultFit(unittest.TestCase):
+    def test_fit(self):
+        spotfile = resource_filename('desimeter', 'test/data/test-spots.csv')
+        spots = Table.read(spotfile)
+        tx = fit(spots)
+        self.assertTrue(isinstance(tx, FVC2FP_Base))
+
 if __name__ == '__main__':
     unittest.main()
-
 
