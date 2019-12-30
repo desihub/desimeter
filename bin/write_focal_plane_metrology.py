@@ -5,7 +5,7 @@ import argparse
 import sys,os
 import numpy as np
 import yaml
-from desiutil.log import get_logger
+from desimeter.log import get_logger
 from pkg_resources import resource_filename
 from astropy.table import Table
 from desimeter.ptl2fp import apply_ptl2fp
