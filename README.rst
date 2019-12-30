@@ -20,15 +20,15 @@ Script Examples
 
 Here is an example::
 
-    desi_fvc_proc.py -i fvc.20191125125304.fits  -o out.csv
+    desi_fvc_proc -i fvc.20191125125304.fits  -o spots.csv
 
 Plot of the residuals with respect to the metrology::
 
-    plot_fvc_residuals.py -i out.csv
+    plot_fvc_residuals -i out.csv
 
 Plot of the metrology data ::
 
-    plot_metrology.py
+    plot_metrology
 
 Code transform examples
 -----------------------
@@ -36,9 +36,9 @@ Code transform examples
 Loading spots and fitting a FVC -> FP transform::
 
     from astropy.table import Table
-    from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
+    from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
     spots = Table.read('spots.csv')
-    tx = FVCFP_Polynomial()
+    tx = FVCFP_ZhaoBurge()
     tx.fit(spots)
 
 Save that transform for later use::
@@ -47,7 +47,7 @@ Save that transform for later use::
 
 Read it back in and do transforms between FVC and FP::
 
-    t2 = FVCFP_Polynomial.read_jsonfile('fvc2fp.json')
+    t2 = FVCFP_ZhaoBurge.read_jsonfile('fvc2fp.json')
 
     import numpy as np
     xpix, ypix = np.random.uniform(1000,5000, size=(2,50))

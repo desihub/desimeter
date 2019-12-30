@@ -3,9 +3,8 @@
 #
 # -*- coding: utf-8 -*-
 """
-Tools for DESI.
+Tools for DESI coordinate measurements and transforms
 """
 
-# help with 2to3 support.
-from __future__ import absolute_import, division, print_function
+from ._version import __version__
 
