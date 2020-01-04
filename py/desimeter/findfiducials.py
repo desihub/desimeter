@@ -271,6 +271,8 @@ def findfiducials(spots,input_transform=None,separation=7.) :
             plt.show()
             sys.exit(12)
             """
+    spots["PETAL_LOC"]=spots["LOCATION"]//1000
+    spots["DEVICE_LOC"]=spots["LOCATION"]%1000
     
     n_matched_pinholes  = np.sum(spots["PINHOLE_ID"]>0)
     n_matched_fiducials = np.sum(spots["PINHOLE_ID"]==4)
