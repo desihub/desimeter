@@ -107,6 +107,12 @@ for k in ["EXP_Q_0","EXP_S_0","PETAL_LOC","DEVICE_LOC","LOCATION"] :
         if k not in spots.keys() : spots[k] = np.zeros(len(spots))
         spots[k][selection]=expected_pos[k][indices]
 
+# for spots with metrology X_FP_EXP=X_FP_METRO
+selection = (spots["X_FP_METRO"]!=0)
+spots["X_FP_EXP"][selection]=spots["X_FP_METRO"][selection]
+selection = (spots["Y_FP_METRO"]!=0)
+spots["Y_FP_EXP"][selection]=spots["Y_FP_METRO"][selection]
+
 # write transfo
 if args.output_transform is not None :
     if not args.output_transform.endswith(".json") :
