@@ -12,6 +12,8 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
                                      description="""Plot FVC spots, showing residuals with metrology""")
 parser.add_argument('-i','--infile', type = str, default = None, required = True,
                     help = 'path to a FVC spots table in CSV format (with X_FP,Y_FP,X_FP_METRO,Y_FP_METRO columns)')
+parser.add_argument('--expected', action = "store_true",
+                    help = 'compare with expected location (X_FP_EXP,Y_FP_EXP) instead of (X_FP_METRO,Y_FP_METRO)')
 
 args  = parser.parse_args()
 
@@ -23,11 +25,24 @@ filename = args.infile
     
 table=Table.read(filename,format="csv")
 
-ii = np.where((table["LOCATION"]>0)&(table["X_FP_METRO"]!=0))[0]
-x = table["X_FP"][ii]
-y = table["Y_FP"][ii]
-xm = table["X_FP_METRO"][ii]
-ym = table["Y_FP_METRO"][ii]
+if args.expected :
+    ii = np.where((table["LOCATION"]>0)&(table["X_FP_EXP"]!=0))[0]
+    if ii.size == 0 :
+        print("empty selection")
+        sys.exit(12)
+    x = table["X_FP"][ii]
+    y = table["Y_FP"][ii]
+    xm = table["X_FP_EXP"][ii]
+    ym = table["Y_FP_EXP"][ii]
+else :
+    ii = np.where((table["LOCATION"]>0)&(table["X_FP_METRO"]!=0))[0]
+    if ii.size == 0 :
+        print("empty selection")
+        sys.exit(12)
+    x = table["X_FP"][ii]
+    y = table["Y_FP"][ii]
+    xm = table["X_FP_METRO"][ii]
+    ym = table["Y_FP_METRO"][ii]
 
 fig = plt.figure(figsize=(6,6))
 
@@ -36,23 +51,32 @@ a.set_title(os.path.basename(filename))
 
 a.plot(table["X_FP"],table["Y_FP"],".",alpha=0.5,label="all spots")
 
-# plotting all of FIF and GIF
-filename = resource_filename('desimeter',"data/fp-metrology.csv")
-metrology = Table.read(filename,format="csv")
-selection=(metrology["DEVICE_TYPE"]=="FIF")|(metrology["DEVICE_TYPE"]=="GIF")
-a.scatter(metrology["X_FP"][selection],metrology["Y_FP"][selection],marker="o",edgecolors="gray",alpha=1.,facecolors="none",label="all FIF and GIF metrology")
-selection=((metrology["DEVICE_TYPE"]=="FIF")|(metrology["DEVICE_TYPE"]=="GIF"))&(metrology["PINHOLE_ID"]==4)
-a.scatter(metrology["X_FP"][selection],metrology["Y_FP"][selection],marker="o",edgecolors="black",alpha=1.,facecolors="none",label="central pinhole #4")
+if not args.expected : # plotting match to fiducials 
+    # plotting all of FIF and GIF
+    filename = resource_filename('desimeter',"data/fp-metrology.csv")
+    metrology = Table.read(filename,format="csv")
+    selection=(metrology["DEVICE_TYPE"]=="FIF")|(metrology["DEVICE_TYPE"]=="GIF")
+    a.scatter(metrology["X_FP"][selection],metrology["Y_FP"][selection],marker="o",edgecolors="gray",alpha=1.,facecolors="none",label="all FIF and GIF metrology")
+    selection=((metrology["DEVICE_TYPE"]=="FIF")|(metrology["DEVICE_TYPE"]=="GIF"))&(metrology["PINHOLE_ID"]==4)
+    a.scatter(metrology["X_FP"][selection],metrology["Y_FP"][selection],marker="o",edgecolors="black",alpha=1.,facecolors="none",label="central pinhole #4")
 
 a.plot(x,y,".",color="purple",label="matched measured spots")
-a.scatter(xm,ym,marker="o",edgecolors="orange",facecolors="none",label="matched metrology")
-
+if args.expected :
+    label = "matched expected positions"
+    marker = "."
+else :
+    label = "matched metrology"
+    marker = "o"
+a.scatter(xm,ym,marker=marker,edgecolors="orange",facecolors="none",label=label)
+    
 dx=xm-x
 dy=ym-y
 
 
 jj=np.where((np.abs(dx)>0.1)|(np.abs(dy)>0.1))[0]
-if jj.size > 0 : # sadly
+if jj.size>100 :
+    print("a lot of large residuals:",jj.size)
+elif jj.size > 0 : # sadly
     print("Large residuals")
     for j in jj :
         i=ii[j]

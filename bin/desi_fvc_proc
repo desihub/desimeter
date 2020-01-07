@@ -13,8 +13,9 @@ from astropy.table import Table
 from desimeter.log import get_logger
 from desimeter.detectspots import detectspots
 from desimeter.findfiducials import findfiducials
-#from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
 from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
+from desimeter.match import match
+from desimeter.transform.xy2qs import qs2xy
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""FVC image processing""")
@@ -30,6 +31,10 @@ parser.add_argument('--input-transform', type = str, default = None, required = 
                     help = 'use this json file as input for the match, defaut is data/default-fvc2fp.json')
 parser.add_argument('--threshold', type = float, default = 500., required = False,
                     help = "threshold for spots detection")
+parser.add_argument('--expected-positions', type = str, default = None, required = False,
+                    help = 'path to fits file or CSV file with fibers expected position (table column EXP_Q and EXP_S')
+parser.add_argument('--hdu-for-expected-positions', type = str, default = "DATA", required = False,
+                    help = 'specify HDU in expected position fits file')
 
 args  = parser.parse_args()
 log   = get_logger()
@@ -54,17 +59,69 @@ else :
 
 spots = findfiducials(spots,input_transform=args.input_transform)
 
-#tx = FVCFP_Polynomial()
 tx = FVCFP_ZhaoBurge()
 tx.fit(spots, update_spots=True)
-# spots = fit_fvc2fp(spots)
 
+if args.expected_positions is not None :
+    log.info("reading expected positions in {}".format(args.expected_positions))
+    expected_pos = Table.read(args.expected_positions) # auto-magically guess format
+    if not "X_FP_EXP" in expected_pos.keys() :
+        if "EXP_Q_0" in  expected_pos.keys() :
+            log.info("EXP_Q_0,EXP_S_0 -> X_FP,Y_FP")
+            x,y = qs2xy(q=expected_pos["EXP_Q_0"],s=expected_pos["EXP_S_0"])
+            expected_pos["X_FP"] = x
+            expected_pos["Y_FP"] = y
+        else :
+            log.error("No EXP_Q_0 nor X_FP in expected positions file {}".format(args.expected_positions))
+else :
+    log.info("since no input expected positions, use metrology to match the fibers to the positioner centers")
+    filename = resource_filename('desimeter',"data/fp-metrology.csv")
+    if not os.path.isfile(filename) :
+        log.error("cannot find {}".format(filename))
+        raise IOError("cannot find {}".format(filename))
+    log.info("reading metrology in {}".format(filename)) 
+    expected_pos = Table.read(filename,format="csv")
+    
+if not "LOCATION" in expected_pos.keys() :
+    # add useful location keyword
+    expected_pos["LOCATION"] = np.array(expected_pos["PETAL_LOC"])*1000+np.array(expected_pos["DEVICE_LOC"])
+
+if "PINHOLE_ID" in expected_pos.dtype.names :
+    # exclude pinhole because here we want to match fibers
+    ii = np.where(expected_pos["PINHOLE_ID"]==0)[0]
+    expected_pos = expected_pos[:][ii]
+
+# select spots that are not already matched
+selection  = (spots["LOCATION"]==0)
+# match
+indices,distances = match(expected_pos["X_FP"],expected_pos["Y_FP"],spots["X_FP"][selection],spots["Y_FP"][selection])
+for maxdist in [0.1,1,5.] :
+    log.info("Number of match < {}mm = {}/{}".format(maxdist,np.sum(distances<maxdist),len(expected_pos)))
+
+# add columns after matching fibers
+for k1,k2 in zip(["X_FP","Y_FP"],["X_FP_EXP","Y_FP_EXP"]) :
+    if k2 not in spots.keys() : spots[k2] = np.zeros(len(spots))
+    spots[k2][selection]=expected_pos[k1][indices]
+for k in ["EXP_Q_0","EXP_S_0","PETAL_LOC","DEVICE_LOC","LOCATION"] :
+    if k in expected_pos.keys() :
+        if k not in spots.keys() : spots[k] = np.zeros(len(spots))
+        spots[k][selection]=expected_pos[k][indices]
+
+# for spots with metrology X_FP_EXP=X_FP_METRO
+selection = (spots["X_FP_METRO"]!=0)
+spots["X_FP_EXP"][selection]=spots["X_FP_METRO"][selection]
+selection = (spots["Y_FP_METRO"]!=0)
+spots["Y_FP_EXP"][selection]=spots["Y_FP_METRO"][selection]
+
+# write transfo
 if args.output_transform is not None :
     if not args.output_transform.endswith(".json") :
         print("error, can only write json files, so please choose an output filename end ing with .json")
     else :
         tx.write_jsonfile(args.output_transform)
         print("wrote transform in {}".format(args.output_transform))
+
+# write spots
 spots.write(args.outfile,format="csv",overwrite=True)
 print("wrote {}".format(args.outfile))
 
