@@ -1,12 +1,12 @@
 """
-Test FVC <-> FP transformation code
+Test RA Dec <-> Tangent plane transformation code
 """
 
 
 import unittest
 
 import numpy as np
-import desimeter.transform.radec2tan.radec2tan as radec2tan
+import desimeter.transform.radec2tan as radec2tan
 
 
 class TestRADEC2TAN(unittest.TestCase):
