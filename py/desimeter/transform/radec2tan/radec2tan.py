@@ -232,10 +232,7 @@ def rotation_matrix(axis,theta) :
     return ct*np.eye(axis.size)+st*uxx+(1-ct)*uut
 
 def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, aberration = False, polar_misalignment = False, use_astropy = False) :
-    """
-
-    """
-
+    
     log = get_logger()
     
     # precession
