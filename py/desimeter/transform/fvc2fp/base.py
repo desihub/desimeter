@@ -37,7 +37,7 @@ class FVC2FP_Base(object):
         """
         raise NotImplmentedError
 
-    def fpxy2fvc(self, xfp, yfp):
+    def fp2fvc(self, xfp, yfp):
         """
         Converts focal plane x,y -> fiber view camera pixel x,y
         """
