@@ -41,7 +41,10 @@ class TestRADEC2TAN(unittest.TestCase):
         # check we can convert to float
         x = float(x)
         y = float(y)
-
+        # check sign
+        assert(x<0) # because dra>0
+        assert(y>0) # because ddec>0
+        
         npt = 12
         ra  = cra + np.linspace(1,1.,npt)
         dec = cdec + np.linspace(-1,1.,npt)
