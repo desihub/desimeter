@@ -78,7 +78,8 @@ def getNorm(xyz):
 def getNormalized(xyz):
     return xyz/getNorm(xyz)
 
-def getLONLAT(xyz): # Convert xyz into its spherical angles
+def getLONLAT(xyz):
+    """Convert xyz into its spherical angles"""
     xyz = getNormalized(xyz)  # usually unnecessary
     return  arctan2d(xyz[1],xyz[0]) , arcsind(xyz[2])  # degrees
 
@@ -114,14 +115,16 @@ def eclip2radec(lon,lat):  # same epoch
     equatorial_xyz = np.dot(refX(-OBLIQ), ecliptic_xyz)  # roll frame counterclockwise by obliq
     return getLONLAT(equatorial_xyz)
 
-def precess(ra, dec, years) :
-    # see DESI-4957
-    # Equator and zero longitude point glide westward at 0.0139 deg/year, so..
-    # Star ecliptic longitudes increase +0.0139 deg/year from combined lunar and solar torques on the Earth.
-    # To precess any sta'’s {RA,DEC}:
-    # 1. Convert to ecliptic coordinates {elon, elat}
-    # 2. Add 0.0139 deg * number of years to elon
-    # 3. Convert back to {RA,DEC}
+def apply_precession(ra, dec, years) :
+    """
+    see DESI-4957
+    Equator and zero longitude point glide westward at 0.0139 deg/year, so..
+    Star ecliptic longitudes increase +0.0139 deg/year from combined lunar and solar torques on the Earth.
+    To precess any sta'’s {RA,DEC}:
+    1. Convert to ecliptic coordinates {elon, elat}
+    2. Add 0.0139 deg * number of years to elon
+    3. Convert back to {RA,DEC}
+    """
     deltaELON = 360.* (years / PRECESSION_PERIOD_IN_YEARS) # degrees
     lon,lat=radec2eclip(ra,dec)
     xyz_ecliptic  = getXYZ(lon,lat)
@@ -129,7 +132,17 @@ def precess(ra, dec, years) :
     lon,lat = getLONLAT(xyz_precessed)
     return eclip2radec(lon,lat)
 
-def precess_from_icrs(ra, dec, mjd, use_astropy = False) :
+def apply_precession_from_icrs(ra, dec, mjd, use_astropy = False) :
+    """ apply precession from ICRS to the date of observation given in MJD
+
+    Args:
+        ra: float or 1D np.array RA in degrees
+        dec: float or 1D np.array dec in degrees
+        
+    Returns: alt, az 
+        alt: float or 1D np.array refracted altitude in degrees
+
+    """
     if use_astropy : #  using astropy
         from astropy.coordinates import SkyCoord,FK5,GCRS
         import astropy.time
@@ -141,15 +154,102 @@ def precess_from_icrs(ra, dec, mjd, use_astropy = False) :
     else :
         # precession    
         years = (mjd-ICRS_MJD)/DAYS_PER_YEAR
-        ra2, dec2 = precess(ra, dec, years)
+        ra2, dec2 = apply_precession(ra, dec, years)
     return ra2,dec2
 
+def radec2eclip(ra_equ,dec_equ) :
+    xyz_equ = getXYZ(ra_equ,dec_equ)
+    xyz_ecl = np.dot(refX(OBLIQ), xyz_equ)  # roll frame clockwise
+    return getLONLAT(xyz_ecl)
+
+def eclip2radec(ra_eclip,dec_eclip) : 
+    xyz_eclip = getXYZ(ra_eclip,dec_eclip)
+    xyz_equ   = np.dot(refX(-OBLIQ), xyz_eclip)  # roll frame counterclockwise by obliq
+    return getLONLAT(xyz_equ)
+
+def getSunLon(mjd):  # Given JD.fff, returns sun ecliptic longitude degrees
+    # https://en.wikipedia.org/wiki/Position_of_the_Sun
+    #days = jd - 2451545.0  # days from Greenwich noon 2000 Jan 01
+    days = mjd - 51544.5 # (MJD = JD - 2400000.5)
+    mean = 280.460 + 0.9856474*days
+    anom = 357.528 + 0.9856003*days
+    elon = mean + 1.915*sind(anom) + 0.020*sind(2*anom)
+    return put360(elon);
+
+def compute_aberration(ra_eclip,dec_eclip, mjd, magnif):
+    # Given target ecliptic lonlat, and JD,
+    # returns the fully aberrated & magnified LonLat.
+    speed     = 0.99365E-4 # Meeus p.151 in radians
+    apexlon   = getSunLon(mjd) - 90.
+    if type(ra_eclip)==float :
+        apexXYZ   = getXYZ(apexlon,0.)
+    else :
+        apexXYZ   = getXYZ(apexlon*np.ones(ra_eclip.shape), np.zeros(ra_eclip.shape))
+    targetXYZ = getXYZ(ra_eclip,dec_eclip)
+
+    if len(targetXYZ.shape) > 1 :
+        VxT   = np.zeros(targetXYZ.shape)
+        TxVxT = np.zeros(targetXYZ.shape)
+        for i in range(targetXYZ.shape[1]) :
+            VxT[:,i]=np.cross(apexXYZ[:,i], targetXYZ[:,i])
+            TxVxT[:,i]=np.cross(targetXYZ[:,i],VxT[:,i])
+    else :
+       VxT       = np.cross(apexXYZ, targetXYZ)
+       TxVxT     = np.cross(targetXYZ, VxT)
+    
+    aberXYZ   = speed * TxVxT
+    plotXYZ   = targetXYZ + magnif * aberXYZ
+    # DANGER with getNormalized(): use only one triplet per call.
+    return getLONLAT(getNormalized(plotXYZ))
+
+def apply_aberration(ra,dec,mjd, use_astropy = False) :
+    """ apply aberration given date in MJD
+
+    Args:
+        ra: float or 1D np.array RA in degrees
+        dec: float or 1D np.array dec in degrees
+        mjd: float, mjd
+
+    Returns: alt, az 
+        alt: float or 1D np.array refracted altitude in degrees
+
+    """
+    if use_astropy :
+        from astropy.coordinates import SkyCoord,FK5,GCRS
+        import astropy.time
+
+        gcrs=GCRS(obstime=astropy.time.Time(mjd,format="mjd")) # precession? + aberration
+        fk5_J2000=FK5(equinox="J2000")
+        fk5=FK5(equinox=astropy.time.Time(mjd,format="mjd")) # precession
+        c1 = SkyCoord(ra,dec, frame='icrs', unit='deg')
+        c2 = c1.transform_to(gcrs)
+        ra_equ  = c2.ra.value
+        dec_equ =  c2.dec.value 
+    else :
+        ra_eclip,dec_eclip = radec2eclip(ra,dec)
+        ra_eclip,dec_eclip = compute_aberration(ra_eclip,dec_eclip, mjd, 1.)
+        ra_equ,dec_equ     = eclip2radec(ra_eclip,dec_eclip)
+
+    return ra_equ,dec_equ
+    
 def apply_refraction(alt) :
+    """ apply refraction
+
+    Args:
+        alt: float or 1D np.array altitude in degrees outside of atmosphere
+        
+    Returns: alt, az 
+        alt: float or 1D np.array refracted altitude in degrees
+
+    """
+    
     return alt + REFRACTION_AT_30DEG_ELEVATION/3600.*tand(30.)/tand(alt)  # deg , refraction per point in field
 
 def compute_polar_misalignment_rotation_matrix() :
-    # define a rotation matrix to move the polar axis to the north
-    # vector product
+    """ 
+    compute a rotation matrix to move the polar axis to the north
+    vector product
+    """
     ha1,dec1=altaz2hadec(alt=LATITUDE-ME_ARCSEC/3600.,az=MA_ARCSEC/3600.)
     xyz1=getXYZ(ha1,dec1)
     ha2,dec2=altaz2hadec(alt=LATITUDE,az=0.)
@@ -165,7 +265,17 @@ def compute_polar_misalignment_rotation_matrix() :
     return polar_misalignment_rotation
 
 def hadec2altaz(ha,dec) :
+    """
+     Convert HA,Dec to Altitude , Azimuth at Kitt Peak elevation
     
+    Args:
+        ha: float or 1D np.array hour angle in degrees
+        dec: float or 1D np.array declination in degrees
+        
+    Returns: alt, az 
+        alt: float or 1D np.array altitude in degrees
+        az: float or 1D np.array azimuth in degrees
+    """
     cha  = cosd(ha)
     sha  = sind(ha)
     cdec = cosd(dec)
@@ -181,6 +291,17 @@ def hadec2altaz(ha,dec) :
     return alt,az
 
 def altaz2hadec(alt,az) : 
+    """
+     Convert Altitude, Azimuth to HA, Dec at Kitt Peak elevation
+    
+    Args:
+        alt: float or 1D np.array altitude in degrees
+        az: float or 1D np.array azimuth in degrees
+        
+    Returns: ha, dec 
+        ha: float or 1D np.array Hour Angle in degrees
+        dec: float or 1D np.array Hour Angle in degrees
+    """
     calt = cosd(alt)
     salt = sind(alt)
     caz  = cosd(az)
@@ -192,17 +313,23 @@ def altaz2hadec(alt,az) :
     return ha,dec
 
 
-def hadec2xy(ha,dec,cha,cdec) :
+def hadec2xy(ha,dec,tel_ha,tel_dec) :
     """
-    dec is up (y>0)
-    ra is left (x<0)
-    ha is right (x>0) (ha=lst-ra)
+     Convert HA,Dec to tangent plane x,y given a telescope pointing tel_ha, tel_dec
+    
+    Args:
+        ha: float or 1D np.array Hour Angle in degrees
+        dec: float or 1D np.array Hour Angle in degrees (same size as ha)
+        tel_ha: float; telescope pointing Hour Angle in degrees
+        tel_dec: float; telescope pointing Dec in degrees
+
+    Returns: x y float or 1D np.array
     """
     xyz = getXYZ(ha,dec)
-    ch= cosd(cha)
-    sh= sind(cha)
-    sd= sind(cdec)
-    cd= cosd(cdec)
+    ch= cosd(tel_ha)
+    sh= sind(tel_ha)
+    sd= sind(tel_dec)
+    cd= cosd(tel_dec)
     rh=np.array([[ch,sh,0],[-sh,ch,0],[0,0,1]]) # rotation about HA axis
     rd=np.array([[sd,0,-cd],[0,1,0],[+cd,0,sd]]) # rotation about Dec axis
     tmp = rd.dot(rh.dot(xyz))
@@ -211,11 +338,22 @@ def hadec2xy(ha,dec,cha,cdec) :
     return x,y
     
 
-def xy2hadec(x,y,cha,cdec) :
-    ch= cosd(cha)
-    sh= sind(cha)
-    sd= sind(cdec)
-    cd= cosd(cdec)
+def xy2hadec(x,y,tel_ha,tel_dec) :
+    """ 
+    Convert tangent plane x,y to HA,Dec given a telescope pointing tel_ha, tel_dec
+    
+    Args:
+        x: float or 1D np.array with tangent plane coord.
+        y: float or 1D np.array with tangent plane coord.
+        tel_ha: float; telescope pointing Hour Angle in degrees
+        tel_dec: float; telescope pointing Dec in degrees
+
+    Returns: HA, Dec  float or 1D np.array in degrees
+    """
+    ch= cosd(tel_ha)
+    sh= sind(tel_ha)
+    sd= sind(tel_dec)
+    cd= cosd(tel_dec)
     rh=np.array([[ch,-sh,0],[sh,ch,0],[0,0,1]])
     rd=np.array([[sd,0,cd],[0,1,0],[-cd,0,sd]])
     z = np.sqrt(1-x**2-y**2)
@@ -231,16 +369,40 @@ def rotation_matrix(axis,theta) :
     uxx=np.array([[0,-u[2],u[1]],[u[2],0,-u[0]],[-u[1],u[0],0]])
     return ct*np.eye(axis.size)+st*uxx+(1-ct)*uut
 
-def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, aberration = False, polar_misalignment = False, use_astropy = False) :
+def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, aberration = False, polar_misalignment = False, use_astropy = False) :
+    """
+    Convert ICRS coordinates to tangent plane coordinates
+
+    Args:
+        ra: float or 1D np.array with RA in degrees
+        dec: float or 1D np.array with RA in degrees
+        tel_ra: float, in degrees, telescope pointing RA
+        tel_dec: float, in degrees, telescope pointing Dec
+        mjd: float, Modified Julian Date of observation, in days
+        lst_deg: float, local sidereal time, in degrees
+        hexrot_deg: float, hexapod rotation angle, in degrees
     
+    Returns x_tan,y_tan , tangent plane coordinates:
+        x_tan = sin(theta)*cos(phi) : float on np.array (same shape as input ra,dec)
+        y_tan = sin(theta)*sin(phi) : float on np.array (same shape as input ra,dec)
+        
+        where theta,phi are polar coordinates. theta=0 for along the telescope
+        pointing. phi=0 for a star with the same Dec as the telescope
+        pointing but a larger HA (or smaller RA).
+  
+    Optional arguments:
+        aberration: boolean; compute aberration if True
+        polar_misalignment: boolean; compute polar misalignment if True
+        use_astropy: boolean; use astropy coordinates for precession and aberration if True
+    """
     log = get_logger()
     
-    # precession
-    ra,dec = precess_from_icrs(ra, dec, mjd, use_astropy)
+    if precession :
+        ra,dec = apply_precession_from_icrs(ra, dec, mjd, use_astropy)
 
     
     if aberration :
-        log.warning("aberration not implemented")
+        ra,dec = apply_aberration(ra,dec,mjd, use_astropy)
 
     # ha,dec
     ha    = lst_deg - ra
@@ -274,5 +436,5 @@ def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, aberration = False, 
     shex = sind(hexrot_deg)
     
     
-    return chex*x+shex*y , -shex*x+chex*y
+    return chex*x-shex*y , +shex*x+chex*y
     

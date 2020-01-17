@@ -20,11 +20,6 @@ class TestRADEC2TAN(unittest.TestCase):
         y1 = np.random.uniform(size=3)-0.5
         ha1,dec1 = radec2tan.xy2hadec(x1,y1,cha,cdec)
         x2,y2 = radec2tan.hadec2xy(ha1,dec1,cha,cdec)
-        print("x1=",x1)
-        print("y1=",y1)
-        print("x2=",x2)
-        print("y2=",y2)
-
         assert(np.all(np.abs(x1-x2)<1e-6))
         assert(np.all(np.abs(y1-y2)<1e-6))
 
@@ -86,6 +81,45 @@ class TestRADEC2TAN(unittest.TestCase):
                 y2 -= np.mean(y2)
                 angle =  np.mean(radec2tan.arcsind((x1*y2-x2*y1)/np.sqrt((x1**2+y1**2)*(x2**2+y2**2))))
                 print("HA = {} , Dec = {}, mean rotation angle ={} deg ".format(cha,cdec,angle))
+        
+    def test_precession(self):
+        ra = 12.
+        dec = 24.
+        mjd = 58864.3
+        ra2,dec2 = radec2tan.apply_precession_from_icrs(ra, dec, mjd, use_astropy = False)
+        ra2b,dec2b = radec2tan.apply_precession_from_icrs(ra, dec, mjd, use_astropy = True)
+        print("precession this code dRA= {:4.1f} arcsec , dDec= {:4.1f} arcsec".format((ra2-ra)*3600.,(dec2-dec)*3600.))
+        print("precession astropy   dRA= {:4.1f} arcsec , dDec= {:4.1f} arcsec".format((ra2b-ra)*3600.,(dec2b-dec)*3600.))
+        assert(np.abs(ra2-ra2b)<1.) # we care only about the relative variation of this in the focal plane
+        assert(np.abs(dec2-dec2b)<1.) # we care only about the relative variation of this in the focal plane
+
+        # test 1D
+        ra = ra*np.ones(4)
+        dec = dec*np.ones(4)
+        ra2,dec2 = radec2tan.apply_precession_from_icrs(ra, dec, mjd, use_astropy = False)
+        ra2b,dec2b = radec2tan.apply_precession_from_icrs(ra, dec, mjd, use_astropy = True)
+        print("precession this code dRA= {} arcsec , dDec= {} arcsec".format((ra2-ra)*3600.,(dec2-dec)*3600.))
+        print("precession astropy   dRA= {} arcsec , dDec= {} arcsec".format((ra2b-ra)*3600.,(dec2b-dec)*3600.))
+        
+    def test_aberration(self):
+        ra = 12.
+        dec = 24.
+        mjd = 58864.3
+        ra2,dec2 = radec2tan.apply_aberration(ra, dec, mjd, use_astropy = False)
+        ra2b,dec2b = radec2tan.apply_aberration(ra, dec, mjd, use_astropy = True)
+        print("aberration this code dRA= {:4.1f} arcsec , dDec= {:4.1f} arcsec".format((ra2-ra)*3600.,(dec2-dec)*3600.))
+        print("aberration astropy   dRA= {:4.1f} arcsec , dDec= {:4.1f} arcsec".format((ra2b-ra)*3600.,(dec2b-dec)*3600.))
+        assert(np.abs(ra2-ra2b)<1.) # we care only about the relative variation of this in the focal plane
+        assert(np.abs(dec2-dec2b)<1.) # we care only about the relative variation of this in the focal plane
+
+        # test 1D
+        ra = ra*np.ones(4)
+        dec = dec*np.ones(4)
+        ra2,dec2 = radec2tan.apply_aberration(ra, dec, mjd, use_astropy = False)
+        ra2b,dec2b = radec2tan.apply_aberration(ra, dec, mjd, use_astropy = True)
+        print("aberration this code dRA= {} arcsec , dDec= {} arcsec".format((ra2-ra)*3600.,(dec2-dec)*3600.))
+        print("aberration astropy   dRA= {} arcsec , dDec= {} arcsec".format((ra2b-ra)*3600.,(dec2b-dec)*3600.))
+        
         
         
         
