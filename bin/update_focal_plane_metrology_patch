@@ -8,7 +8,7 @@ import yaml
 from desimeter.log import get_logger
 from pkg_resources import resource_filename
 from astropy.table import Table
-from desimeter.ptl2fp import apply_ptl2fp
+from desimeter.transform.ptl2fp import apply_ptl2fp
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Use one or several fitted metrology to update the coordinates of pinholes in the metrology patch data file""")
