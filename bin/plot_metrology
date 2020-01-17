@@ -22,7 +22,21 @@ selection=(spots['DEVICE_TYPE']=="FIF")
 plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",label="FIF")
 selection=(spots['DEVICE_TYPE']=="GIF")
 plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",label="GIF")
-    
+
+first=True
+for petal in np.unique(spots['PETAL_LOC']) :
+    selection=(spots['DEVICE_TYPE']=="GFA")&(spots['PETAL_LOC']==petal)
+    if np.sum(selection)>0 :
+        x=np.array(spots["X_FP"][selection])
+        y=np.array(spots["Y_FP"][selection])
+        x=np.append(x,[x[0]])
+        y=np.append(y,[y[0]])
+        if first :
+            label = "GFA CCD"
+            first = False
+        else :
+            label = None
+        plt.plot(x,y,"-",label=label,color="k")
 plt.legend()
 plt.show()
 
