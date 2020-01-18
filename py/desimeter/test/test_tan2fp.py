@@ -9,10 +9,10 @@ from desimeter.transform.tan2fp.echo22 import (
 class TestTan2FP(unittest.TestCase):
 
     def test_signs(self):
-        #- phi=0 is aligned with +RA = +xtan = -xfp
+        #- phi=0 is aligned with -RA = +HA = +xtan = +xfp
         #- phi=90 is aligned with +dec = +ytan = +yfp
         xfp, yfp = tan2fp(0.01, 0.0)
-        self.assertLess(xfp, 0.0)
+        self.assertGreater(xfp, 0.0)
         self.assertAlmostEqual(yfp, 0.0)
 
         xfp, yfp = tan2fp(0.00, 0.01)
@@ -20,7 +20,7 @@ class TestTan2FP(unittest.TestCase):
         self.assertAlmostEqual(xfp, 0.0)
 
         xtan, ytan = fp2tan(100, 0)
-        self.assertLess(xtan, 0.0)
+        self.assertGreater(xtan, 0.0)
         self.assertAlmostEqual(ytan, 0.0)
 
         xtan, ytan = fp2tan(0, 100)

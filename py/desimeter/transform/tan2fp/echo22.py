@@ -25,7 +25,7 @@ def tan2fp(xtan, ytan):
     rtan = np.sqrt(xtan**2 + ytan**2)
     theta = np.degrees(np.arcsin(rtan))
     r = theta2radius(theta)
-    x = -r*np.cos(phi)          
+    x = r*np.cos(phi)          
     y = r*np.sin(phi)
     return x, y
 
@@ -38,8 +38,8 @@ def fp2tan(xfp, yfp):
 
     return xtan, ytan where xtan=sin(theta)*cos(phi), ytan=sin(theta)*sin(phi)
     """
-    #- phi=0 aligned with +xtan = +RA = -xfp
-    phi = np.arctan2(yfp, -xfp)
+    #- phi=0 aligned with +xtan = -RA = +HA = +xfp
+    phi = np.arctan2(yfp, xfp)
     r = np.sqrt(xfp**2 + yfp**2)
     theta = radius2theta(r)
     
