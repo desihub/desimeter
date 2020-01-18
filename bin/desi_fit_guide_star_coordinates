@@ -1,0 +1,161 @@
+#!/usr/bin/env python
+
+
+import argparse
+import sys,os
+import time
+import numpy as np
+import matplotlib.pyplot as plt
+from pkg_resources import resource_filename
+from astropy.table import Table
+import astropy.io.fits as pyfits
+
+from desimeter.log import get_logger
+
+from desimeter.transform.tan2fp import tan2fp,fp2tan
+from desimeter.transform.radec2tan import tan2radec,radec2tan
+from desimeter.transform.gfa2fp import gfa2fp
+from desimeter.time import mjd2lst
+
+   
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="""FVC image processing""")
+parser.add_argument('-i','--infile', type = str, default = None, required = True,
+                    help = 'path to a GFA catalog file, fits or csv, like ""')
+parser.add_argument('-o','--outfile', type = str, default = None, required = True,
+                    help = 'path to output json file with transformation parameters')
+parser.add_argument('--fits-header', type = str, default = None, required = True,
+                    help = 'path to file with fits header to read time and sky coordinates')
+parser.add_argument('--plot', action = "store_true",
+                    help = 'plot the stars')
+
+args  = parser.parse_args()
+log   = get_logger()
+
+table = Table.read(args.infile)
+
+if ( not  "xcentroid" in table.dtype.names ) or ( not "ra_gaia" in table.dtype.names ) :
+    log.error("I can only deal with Aaron's catalogs with columns xcentroid,ycentroid,ra_gaia,dec_gaia, sorry")
+    sys.exit(12)
+
+header  = pyfits.open(args.fits_header)[1].header
+tel_ra  = header["TARGTRA"]
+tel_dec = header["TARGTDEC"]
+hexpos_arcsec = float(header["FOCUS"].split(",")[5])
+hexpos_deg    = hexpos_arcsec/3600.
+    
+# selection stars for which we have a good match
+dra  = (table["ra"]-table["ra_gaia"])*np.cos(table["dec_gaia"]/180*np.pi)*3600. # arcsec
+ddec = (table["dec"]-table["dec_gaia"])*3600. # arcsec
+dr = np.sqrt(dra**2+ddec**2)
+selection = (dr<2) # arcsec
+if np.sum(selection)==0 :
+    print("no star is matched with sufficient precision!")
+    sys.exit(12)
+
+x_gfa  = table["xcentroid"][selection]
+y_gfa  = table["ycentroid"][selection]
+ra_gaia  = table["ra_gaia"][selection]
+dec_gaia = table["dec_gaia"][selection]
+
+# MJD and LST are needed for sky transform
+mjd    = np.mean(table["mjd_obs"])
+lst    = mjd2lst(mjd)
+
+# loop on petals to apply gfa2fp transform
+petals = np.unique(table["petal_loc"][selection])
+x_fp = np.zeros(x_gfa.shape)
+y_fp = np.zeros(y_gfa.shape)
+for petal in petals :
+    
+    ii = (table["petal_loc"][selection]==petal)
+    try :
+        x,y = gfa2fp(petal,x_gfa[ii],y_gfa[ii])
+        x_fp[ii]  = x
+        y_fp[ii]  = y
+    except KeyError as e :
+        print("missing metrology")
+        pass
+    
+# keep only petal data for which we have the metrology        
+selection = (x_fp!=0)
+x_gfa    = x_gfa[selection]
+y_gfa    = y_gfa[selection]
+x_fp     = x_fp[selection]
+y_fp     = y_fp[selection]
+ra_gaia  = ra_gaia[selection]
+dec_gaia = dec_gaia[selection]
+
+x_tan_meas,y_tan_meas = fp2tan(x_fp,y_fp)
+
+
+# first estimate of telescope pointing
+# using spherical coordinates in case the offset is large
+dra=0.
+ddec=0.
+for i in range(4) :
+    ra_meas , dec_meas = tan2radec(x_tan_meas,y_tan_meas,tel_ra,tel_dec,mjd=mjd,lst_deg=lst,hexrot_deg = hexpos_deg)
+    tmp_dra  = np.median(ra_meas - ra_gaia)
+    tmp_ddec = np.median(dec_meas - dec_gaia)
+    tel_ra -= tmp_dra
+    tel_dec -= tmp_ddec
+    dra += tmp_dra
+    ddec += tmp_ddec
+print("First estimate of telescope pointing offset dRA={:3.2f} arcsec, dDec={:3.2f} arcsec".format(dra*3600.,ddec*3600.))
+
+# now that we know approximatly where the telescope is pointing to,
+# we transform GAIA coordinates to the tangent plane
+x_tan_gaia,y_tan_gaia = radec2tan(ra_gaia,dec_gaia,tel_ra,tel_dec,mjd=mjd,lst_deg=lst,hexrot_deg = hexpos_deg)
+
+
+# linear fit with 6 parameter: 2 for pointing adjustment, 3 for dilatation (2 scales and a major axis orientation) + 1 rotation angle
+# we perform a simple linear fit for each coordinate separatly
+# and then recombine the parameters to match the definition above
+nstars=x_tan_gaia.size
+H=np.zeros((3,nstars))
+H[0] = 1.
+H[1] = x_tan_gaia
+H[2] = y_tan_gaia
+A = H.dot(H.T)
+Ai = np.linalg.inv(A)
+ax = Ai.dot(np.sum(x_tan_meas*H,axis=1))
+x_tan_gaia_bis = ax[0] + ax[1]*x_tan_gaia + ax[2]*y_tan_gaia
+ay = Ai.dot(np.sum(y_tan_meas*H,axis=1))
+y_tan_gaia_bis = ay[0] + ay[1]*x_tan_gaia + ay[2]*y_tan_gaia
+
+dr = np.sqrt( (x_tan_gaia_bis-x_tan_meas)**2 + (y_tan_gaia_bis-y_tan_meas)**2 )*(180*3600)/np.pi
+print("Mean coord. residual = {:3.2f} arcsec".format(np.mean(dr)))
+
+# interpret this back into telescope tilt , rotation, dilatation
+# increasing gaia stars x means telescope is more to the left so tel_ra should be increased
+# increasing gaia stars y means telescope is more to the bottom so tel_dec should be decreased
+# tangent plane coordinates are in rad
+dra  = ax[0]*180./np.pi 
+ddec =  ay[0]*180./np.pi
+tel_ra += dra
+tel_dec += ddec
+
+# dilatation and rotation (a bit more complicated)
+# NEED TO DO BETTER THAN THIS
+# ...
+scalex=np.sqrt(ax[1]**2+ax[2]**2)
+scaley=np.sqrt(ay[1]**2+ay[2]**2)
+anglex=np.arctan2(ax[2]/scalex,ax[1]/scalex)*180/np.pi
+angley=np.arctan2(-ay[1]/scaley,ay[2]/scaley)*180/np.pi
+print("anglex=",anglex)
+print("angley=",angley)
+print("Pointing correction dRA={:3.2f} arcsec, dDec={:3.2f} arcsec".format(dra*3600.,ddec*3600.))
+
+
+if args.plot :
+    
+    plt.figure("tangent_plane")
+    a = plt.subplot(1,1,1)
+    a.set_title("Tangent plane")
+    plt.plot(x_tan_meas,y_tan_meas,"o",label="Measured star coordinates")
+    plt.plot(x_tan_gaia_bis,y_tan_gaia_bis,"x",label="GAIA coordinates")
+    plt.xlabel("x_tan (rad)")
+    plt.ylabel("y_tan (rad)")
+    plt.legend()
+    plt.show()
+
