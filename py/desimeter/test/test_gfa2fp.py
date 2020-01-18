@@ -29,6 +29,12 @@ class TestTan2FP(unittest.TestCase):
             yfp = np.asarray(metrology['Y_FP'][ii])
             
             xgfa, ygfa = fp2gfa(p, xfp, yfp)
+            
+            if p == 0:
+                #--- DEBUG ---
+                import IPython
+                IPython.embed()
+                #--- DEBUG ---
 
     def test_scale_rotation_offset(self):
         x1 = np.array([1.0, 2.0, 3.0, 4.0])
