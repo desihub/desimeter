@@ -11,6 +11,15 @@ from desimeter.log import get_logger
 _gfa_transforms = None
 
 def gfa2fp(petal_loc, xgfa, ygfa):
+    """
+    Transforms from GFA pixel coordinates to focal plane mm
+
+    Args:
+        petal_loc (int): Petal location 0-9
+        xgfa, ygfa: GFA pixel coordinates, (0,0) is corner pixel center
+
+    Returns CS5 xfp, yfp in mm
+    """
     global _gfa_transforms
     if _gfa_transforms is None:
         metrology = io.load_metrology()
@@ -26,6 +35,15 @@ def gfa2fp(petal_loc, xgfa, ygfa):
     return xfp, yfp
 
 def fp2gfa(petal_loc, xfp, yfp):
+    """
+    Transforms from focal plane mm to GFA pixel coordinates
+
+    Args:
+        petal_loc (int): Petal location 0-9
+        xfp, yfp: CS5 focal plane mm
+
+    Returns xgfa, ygfa pixel coordinates with (0,0) as center of corner pixel
+    """
     global _gfa_transforms
     if _gfa_transforms is None:
         metrology = io.load_metrology()
@@ -45,7 +63,7 @@ def fp2gfa(petal_loc, xfp, yfp):
 def apply_scale_rotation_offset(x, y, scale=1.0, rotation=0.0, xoffset=0.0, yoffset=0.0, ):
     """
     Convenience wrapper to return x,y transformed by offset, scale, rotation
-    
+
     Args:
         x, y (float, 1D array, or list): inputs to transform
         xoffset, yoffset (float): offsets in same units as x,y
@@ -73,7 +91,7 @@ def apply_scale_rotation_offset(x, y, scale=1.0, rotation=0.0, xoffset=0.0, yoff
 def undo_scale_rotation_offset(x, y, scale=1.0, rotation=0.0, xoffset=0.0, yoffset=0.0):
     """
     Applies opposite transform of `apply_scale_rotation_offset``
-    
+
     Args:
         x, y (float, 1D array, or list): inputs to transform
         xoffset, yoffset (float): offsets in same units as x,y
@@ -100,9 +118,18 @@ def undo_scale_rotation_offset(x, y, scale=1.0, rotation=0.0, xoffset=0.0, yoffs
 
 def fit_scale_rotation_offset(x1, y1, x2, y2, p0=None):
     """
-    TODO: document
-    
-    p0: starting guess (scale, rotation, xoffset, yoffset)
+    Fits scale, rotation, offsets to transform (x1,y1) -> (x2,y2)
+
+    Args:
+        x1, y1: arrays of coordinates
+        x2, y2: arrays of coordinates
+
+    Options:
+        p0: starting guess (scale, rotation, xoffset, yoffset)
+
+    Returns dict(scale, rotation, xoffset, yoffset)
+
+    See `apply_scale_rotation_offset` for order of operations
     """
     def fn(params, x1, y1, x2, y2):
         scale, rot, xoff, yoff = params
@@ -126,7 +153,9 @@ def fit_scale_rotation_offset(x1, y1, x2, y2, p0=None):
 
 def fit_gfa2fp(metrology):
     """
-    TODO: document
+    Fit GFA pix -> FP mm scale, rotation, xyoffsets for each GFA
+
+    Returns dict keyed by PETAL_LOC, with dictionaries of transform coeffs.
     """
     #- HARDCODE: GFA pixel dimensions
     nx, ny = 2048, 1032
