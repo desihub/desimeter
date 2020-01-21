@@ -27,6 +27,7 @@ fm = FieldModel()
 header  = pyfits.open(args.fits_header)[1].header
 fm.ra  = header["TARGTRA"]
 fm.dec = header["TARGTDEC"]
+fm.expid = header["EXPID"]
 fm.hexrot_deg = float(header["FOCUS"].split(",")[5])/3600.
 
 catalog = fm.read_guide_stars_catalog(args.infile)

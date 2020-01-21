@@ -26,7 +26,8 @@ class FieldModel(object):
         self.sxx = 1.
         self.syy = 1.
         self.sxy = 0.
-        self.fieldrot_deg = 0.
+        self.fieldrot_zp_deg = 0. # zero point of field rotation (should be constant across exposures)
+        self.fieldrot_deg = 0. # rotation of field as defined in DESI-5190, to compare to fiberassign FIELDROT 
         self.expid  = 0
         self.nstars = 0
         self.rms_arcsec = 0.
@@ -44,6 +45,7 @@ class FieldModel(object):
         params['sxx'] = self.sxx
         params['syy'] = self.syy
         params['sxy'] = self.sxy
+        params['fieldrot_zp_deg'] = self.fieldrot_zp_deg        
         params['fieldrot_deg'] = self.fieldrot_deg        
         params['expid']=self.expid
         params['nstars'] = self.nstars
@@ -65,6 +67,7 @@ class FieldModel(object):
         tx.sxx = params['sxx']
         tx.syy = params['syy']
         tx.sxy = params['sxy']
+        tx.fieldrot_zp_deg = params['fieldrot_zp_deg']
         tx.fieldrot_deg = params['fieldrot_deg']
         tx.expid = params['expid']
         tx.nstars = params['nstars']
@@ -167,7 +170,7 @@ class FieldModel(object):
         
         # save params to this
         log.info("RMS coord. residual = {:3.2f} arcsec".format(correction.rms_arcsec))
-        log.info("Rotation angle={:4.3f} deg".format(correction.fieldrot_deg))
+        log.info("Rotation angle (field rot ZP) ={:4.3f} deg".format(correction.rot_deg))
         log.info("Pointing correction dHA={:3.2f} arcsec, dDec={:3.2f} arcsec".format(correction.dha*3600.,correction.ddec*3600.))
         log.info("Scales sxx={:5.4f} syy={:5.4f} sxy={:5.4f}".format(correction.sxx,correction.syy,correction.sxy))
 
@@ -175,10 +178,31 @@ class FieldModel(object):
         self.sxx = correction.sxx
         self.syy = correction.syy
         self.sxy = correction.sxy
-        self.fieldrot_deg = correction.fieldrot_deg
+        self.fieldrot_zp_deg = correction.rot_deg
         self.nstars = correction.nstars
         self.rms_arcsec = correction.rms_arcsec
-    
+
+        # I now derive the field rotation
+        self.fieldrot_deg = self.compute_fieldrot()
+
+
+    def compute_fieldrot(self) :
+
+        # cross of side length 1 degree in tangent plane
+        phi = np.arange(4)*np.pi/2.
+        x1 = np.append(0.,np.pi/180.*np.cos(phi))
+        y1 = np.append(0.,np.pi/180.*np.sin(phi))
+
+        # convert to sky 
+        xfp,yfp = tan2fp(x1,y1)
+        ra,dec  = self.fp2radec(xfp,yfp)
+        
+        # vanilla transformation from ha,dec to tangent plane
+        ha      = self.lst - ra
+        x2,y2   = hadec2xy(ha,dec,ha[0],dec[0])
+
+        return  180./np.pi*np.mean((y1[1:]*x2[1:]-x1[1:]*y2[1:])/np.sqrt((x1[1:]**2+y1[1:]**2)*(x2[1:]**2+y2[1:]**2)))
+            
     # tangent plane correction from the instrument to the sky
     def tancorr_inst2sky(self,x_tan,y_tan) :
         t2t = TanCorr()
@@ -189,7 +213,7 @@ class FieldModel(object):
         t2t.syy = self.syy
         t2t.sxy = self.sxy
         # rotation params
-        t2t.fieldrot_deg = self.fieldrot_deg
+        t2t.rot_deg = self.fieldrot_zp_deg
         return t2t.apply(x_tan,y_tan)
 
     # tangent plane correction from the sky to the instrument
@@ -203,7 +227,7 @@ class FieldModel(object):
         t2t.syy = self.syy
         t2t.sxy = self.sxy
         # rotation params
-        t2t.fieldrot_deg = self.fieldrot_deg
+        t2t.rot_deg = self.fieldrot_zp_deg
         return t2t.apply_inverse(x_tan,y_tan)
         
     def all_gfa2fp(self,x_gfa,y_gfa,petal_loc) :
@@ -247,7 +271,7 @@ class TanCorr(object):
         self.sxx = 1.
         self.syy = 1.
         self.sxy = 0.
-        self.fieldrot_deg = 0.
+        self.rot_deg = 0.
         self.nstars = 0
         self.rms_arcsec = 0.
     
@@ -260,7 +284,7 @@ class TanCorr(object):
         params['sxx'] = self.sxx
         params['syy'] = self.syy
         params['sxy'] = self.sxy
-        params['fieldrot_deg'] = self.fieldrot_deg        
+        params['rot_deg'] = self.rot_deg        
         params['nstars'] = self.nstars
         params['rms_arcsec'] = self.rms_arcsec        
         return json.dumps(params)
@@ -276,7 +300,7 @@ class TanCorr(object):
         tx.sxx = params['sxx']
         tx.syy = params['syy']
         tx.sxy = params['sxy']
-        tx.fieldrot_deg = params['fieldrot_deg']
+        tx.rot_deg = params['rot_deg']
         tx.nstars = params['nstars']
         tx.rms_arcsec = params['rms_arcsec']        
         return tx
@@ -352,7 +376,7 @@ class TanCorr(object):
         sa=(ay[1]-ax[2])/sxx_p_syy
         ca=(ax[1]+ay[2])/sxx_p_syy
 
-        self.fieldrot_deg = np.arctan2(sa,ca)*180/np.pi
+        self.rot_deg = np.arctan2(sa,ca)*180/np.pi
 
         sxy = sa*ax[1]+ca*ay[1] - sxx_p_syy*ca*sa
         sxx =(ax[1]-sxy*sa)/ca
@@ -364,8 +388,8 @@ class TanCorr(object):
 
     def apply(self,x,y) :
         scale_matrix = np.array([[self.sxx,self.sxy],[self.sxy,self.syy]])
-        ca=np.cos(self.fieldrot_deg/180*np.pi)
-        sa=np.sin(self.fieldrot_deg/180*np.pi)
+        ca=np.cos(self.rot_deg/180*np.pi)
+        sa=np.sin(self.rot_deg/180*np.pi)
         rot_matrix = np.array([[ca,-sa],[sa,ca]])
         ha,dec  = xy2hadec(x,y,0,0)
         x1t,y1t = hadec2xy(ha,dec,self.dha,self.ddec)
@@ -377,8 +401,8 @@ class TanCorr(object):
         det = self.sxx*self.syy - self.sxy**2
         scale_matrix = np.array([[self.syy,-self.sxy],[-self.sxy,self.sxx]])/det
         
-        ca=np.cos(self.fieldrot_deg/180*np.pi)
-        sa=np.sin(self.fieldrot_deg/180*np.pi)
+        ca=np.cos(self.rot_deg/180*np.pi)
+        sa=np.sin(self.rot_deg/180*np.pi)
         rot_matrix = np.array([[ca,sa],[-sa,ca]])
         ha,dec  = xy2hadec(x,y,0,0)
         x1t,y1t = hadec2xy(ha,dec,self.dha,self.ddec)
