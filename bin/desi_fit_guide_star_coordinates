@@ -1,22 +1,12 @@
 #!/usr/bin/env python
 
-
 import argparse
 import sys,os
-import time
 import numpy as np
-import matplotlib.pyplot as plt
-from pkg_resources import resource_filename
-from astropy.table import Table
 import astropy.io.fits as pyfits
-import json
 
 from desimeter.log import get_logger
-from desimeter.guidestars import GuideStarsCorr
-
-from desimeter.transform.tan2fp import tan2fp,fp2tan
-from desimeter.transform.radec2tan import tan2radec,radec2tan
-from desimeter.transform.gfa2fp import gfa2fp
+from desimeter.fieldmodel import FieldModel
 from desimeter.time import mjd2lst
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -33,105 +23,22 @@ parser.add_argument('--plot', action = "store_true",
 args  = parser.parse_args()
 log   = get_logger()
 
-table = Table.read(args.infile)
-
-if ( not  "xcentroid" in table.dtype.names ) or ( not "ra_gaia" in table.dtype.names ) :
-    log.error("I can only deal with Aaron's catalogs with columns xcentroid,ycentroid,ra_gaia,dec_gaia, sorry")
-    sys.exit(12)
+fm = FieldModel()
 
 header  = pyfits.open(args.fits_header)[1].header
-tel_ra  = header["TARGTRA"]
-tel_dec = header["TARGTDEC"]
-hexpos_arcsec = float(header["FOCUS"].split(",")[5])
-hexpos_deg    = hexpos_arcsec/3600.
-    
-# selection stars for which we have a good match
-dra  = (table["ra"]-table["ra_gaia"])*np.cos(table["dec_gaia"]/180*np.pi)*3600. # arcsec
-ddec = (table["dec"]-table["dec_gaia"])*3600. # arcsec
-dr = np.sqrt(dra**2+ddec**2)
-selection = (dr<2) # arcsec
-if np.sum(selection)==0 :
-    print("no star is matched with sufficient precision!")
-    sys.exit(12)
+fm.ra  = header["TARGTRA"]
+fm.dec = header["TARGTDEC"]
+fm.hexrot_deg = float(header["FOCUS"].split(",")[5])/3600.
 
-x_gfa  = table["xcentroid"][selection]
-y_gfa  = table["ycentroid"][selection]
-ra_gaia  = table["ra_gaia"][selection]
-dec_gaia = table["dec_gaia"][selection]
+catalog = fm.read_guide_stars_catalog(args.infile)
 
 # MJD and LST are needed for sky transform
-mjd    = np.mean(table["mjd_obs"])
-lst    = mjd2lst(mjd)
+fm.mjd    = np.mean(catalog["mjd_obs"])
+fm.lst    = mjd2lst(fm.mjd)
 
-# loop on petals to apply gfa2fp transform
-petals = np.unique(table["petal_loc"][selection])
-x_fp = np.zeros(x_gfa.shape)
-y_fp = np.zeros(y_gfa.shape)
-for petal in petals :
-    
-    ii = (table["petal_loc"][selection]==petal)
-    try :
-        x,y = gfa2fp(petal,x_gfa[ii],y_gfa[ii])
-        x_fp[ii]  = x
-        y_fp[ii]  = y
-    except KeyError as e :
-        print("missing metrology")
-        pass
-    
-# keep only petal data for which we have the metrology        
-selection = (x_fp!=0)
-x_gfa    = x_gfa[selection]
-y_gfa    = y_gfa[selection]
-x_fp     = x_fp[selection]
-y_fp     = y_fp[selection]
-ra_gaia  = ra_gaia[selection]
-dec_gaia = dec_gaia[selection]
-
-# transform focal plane to tangent plane
-x_tan_meas,y_tan_meas = fp2tan(x_fp,y_fp)
-
-# we transform GAIA coordinates to the tangent plane
-x_tan_gaia,y_tan_gaia = radec2tan(ra_gaia,dec_gaia,tel_ra,tel_dec,mjd=mjd,lst_deg=lst,hexrot_deg = hexpos_deg)
-
-# now that we have both sets of coordinates, we fit a transformation from one to the other
-corr = GuideStarsCorr()
-corr.fit(x_tan_meas,y_tan_meas,x_tan_gaia,y_tan_gaia)
-
-print("RMS coord. residual = {:3.2f} arcsec".format(corr.rms_arcsec))
-print("Rotation angle={:4.3f} deg".format(corr.fieldrot_deg))
-print("Pointing correction dHA={:3.2f} arcsec, dDec={:3.2f} arcsec".format(corr.dha*3600.,corr.ddec*3600.))
-print("Scales sxx={:5.4f} syy={:5.4f} sxy={:5.4f}".format(corr.sxx,corr.syy,corr.sxy))
+fm.fit_tancorr(catalog)
 
 # save it
 with open(args.outfile, 'w') as file:
-    file.write(corr.tojson())
+    file.write(fm.tojson())
 print("wrote",args.outfile)
-
-# testing io
-#corr2 = GuideStarsCorr()
-#with open(args.outfile, 'r') as file:
-#    corr2 = GuideStarsCorr.fromjson(file.read())
-#corr2.fit(x_tan_meas,y_tan_meas,x_tan_gaia,y_tan_gaia)
-#x2,y2 = corr2.apply(x_tan_meas,y_tan_meas)
-#dr = np.sqrt( np.mean ( (x2-x_tan_gaia)**2 + (y2-y_tan_gaia)**2 ) )
-#print("corr2 rms={} arcsec".format(dr*3600.*180./np.pi))
-
-
-if args.plot :    
-    plt.figure("tangent_plane")
-    a = plt.subplot(1,1,1)
-    a.set_title("Tangent plane")
-
-    x2,y2 = corr.apply(x_tan_meas,y_tan_meas)
-    
-    # checking once more
-    dr = np.sqrt( np.mean ( (x2-x_tan_gaia)**2 + (y2-y_tan_gaia)**2 ) )
-    print("rms={} arcsec".format(dr*3600.*180./np.pi))
-    
-    plt.plot(x2,y2,"o",label="Corrected measured star coordinates")
-    plt.plot(x_tan_gaia,y_tan_gaia,"x",label="GAIA coordinates")        
-    plt.xlabel("x_tan (rad)")
-    plt.ylabel("y_tan (rad)")
-    plt.legend()
-    plt.show()
-
