@@ -12,6 +12,7 @@ import astropy.io.fits as pyfits
 import json
 
 from desimeter.log import get_logger
+from desimeter.guidestars import GuideStarsCorr
 
 from desimeter.transform.tan2fp import tan2fp,fp2tan
 from desimeter.transform.radec2tan import tan2radec,radec2tan
@@ -89,106 +90,46 @@ dec_gaia = dec_gaia[selection]
 # transform focal plane to tangent plane
 x_tan_meas,y_tan_meas = fp2tan(x_fp,y_fp)
 
-# first estimate of telescope pointing
-# using spherical coordinates in case the offset is large
-dra=0.
-ddec=0.
-for i in range(4) :
-    ra_meas , dec_meas = tan2radec(x_tan_meas,y_tan_meas,tel_ra,tel_dec,mjd=mjd,lst_deg=lst,hexrot_deg = hexpos_deg)
-    tmp_dra  = np.median(ra_meas - ra_gaia)
-    tmp_ddec = np.median(dec_meas - dec_gaia)
-    tel_ra -= tmp_dra
-    tel_dec -= tmp_ddec
-    dra += tmp_dra
-    ddec += tmp_ddec
-print("First estimate of telescope pointing offset dRA={:3.2f} arcsec, dDec={:3.2f} arcsec".format(dra*3600.,ddec*3600.))
-
-# now that we know approximatly where the telescope is pointing to,
 # we transform GAIA coordinates to the tangent plane
 x_tan_gaia,y_tan_gaia = radec2tan(ra_gaia,dec_gaia,tel_ra,tel_dec,mjd=mjd,lst_deg=lst,hexrot_deg = hexpos_deg)
 
-# linear fit with 6 parameter: 2 for pointing adjustment, 3 for dilatation (2 scales and a major axis orientation) + 1 rotation angle
-# we perform a simple linear fit for each coordinate separately
-# and then recombine the parameters to match the definition above
-nstars=x_tan_gaia.size
-H=np.zeros((3,nstars))
-H[0] = 1.
-H[1] = x_tan_gaia
-H[2] = y_tan_gaia
-A = H.dot(H.T)
-Ai = np.linalg.inv(A)
-ax = Ai.dot(np.sum(x_tan_meas*H,axis=1))
-x_tan_gaia_bis = ax[0] + ax[1]*x_tan_gaia + ax[2]*y_tan_gaia
-ay = Ai.dot(np.sum(y_tan_meas*H,axis=1))
-y_tan_gaia_bis = ay[0] + ay[1]*x_tan_gaia + ay[2]*y_tan_gaia
+# now that we have both sets of coordinates, we fit a transformation from one to the other
+corr = GuideStarsCorr()
+corr.fit(x_tan_meas,y_tan_meas,x_tan_gaia,y_tan_gaia)
 
-rms_arcsec = np.sqrt( np.mean( (x_tan_gaia_bis-x_tan_meas)**2 + (y_tan_gaia_bis-y_tan_meas)**2 ) )*(180*3600)/np.pi
-print("RMS coord. residual = {:3.2f} arcsec".format(rms_arcsec))
+print("RMS coord. residual = {:3.2f} arcsec".format(corr.rms_arcsec))
+print("Rotation angle={:4.3f} deg".format(corr.fieldrot_deg))
+print("Pointing correction dHA={:3.2f} arcsec, dDec={:3.2f} arcsec".format(corr.dha*3600.,corr.ddec*3600.))
+print("Scales sxx={:5.4f} syy={:5.4f} sxy={:5.4f}".format(corr.sxx,corr.syy,corr.sxy))
 
-# interpret this back into telescope pointing offset, field rotation, dilatation
-
-# pointing offset
-# increasing gaia stars x means telescope is more to the left so tel_ra should be increased
-# increasing gaia stars y means telescope is more to the bottom so tel_dec should be decreased
-# tangent plane coordinates are in rad
-dra  = ax[0]*180./np.pi/np.cos(tel_dec/180*np.pi) 
-ddec = -ay[0]*180./np.pi
-tel_ra += dra
-tel_dec += ddec
-
-# dilatation and rotation
-# |ax1 ax2| |sxx sxy| |ca  -sa|
-# |ay1 ay2|=|syx syy|*|sa   ca|
-# ax1=sxx*ca+sxy*sa ; ax2=-sxx*sa+sxy*ca
-# ay1=syx*ca+syy*sa ; ay2=-syx*sa+syy*ca
-# ax1+ay2 = (sxx+syy)*ca
-# ay1-ax2 = (sxx+syy)*sa
-
-sxx_p_syy = np.sqrt( (ax[1]+ay[2])**2+(ay[1]-ax[2])**2 )
-sa=(ay[1]-ax[2])/sxx_p_syy
-ca=(ax[1]+ay[2])/sxx_p_syy
-angle = np.arctan2(sa,ca)*180/np.pi
-sxy = sa*ax[1]+ca*ay[1] - sxx_p_syy*ca*sa
-sxx = (ax[1]-sxy*sa)/ca
-syy = (ay[1]-sxy*ca)/sa
-scale_matrix = np.array([[sxx,sxy],[sxy,syy]])
-rot_matrix = np.array([[ca,-sa],[sa,ca]])
-#debugging:
-#mat1 = scale_matrix.dot(rot_matrix)
-#mat2 = np.array([ax[1:3],ay[1:3]])
-#print("0?={}".format(mat1-mat2))
-
-print("Scale matrix={}".format(scale_matrix))
-print("Rotation angle={:4.3f} deg".format(angle))
-print("Pointing correction dRA={:3.2f} arcsec, dDec={:3.2f} arcsec".format(dra*3600.,ddec*3600.))
-
-# test this
-# x_tan_gaia,y_tan_gaia = radec2tan(ra_gaia,dec_gaia,tel_ra,tel_dec,mjd=mjd,lst_deg=lst,hexrot_deg = hexpos_deg)
-# xy=scale_matrix.dot(rot_matrix.dot(np.array([x_tan_gaia,y_tan_gaia])))
-# dr = np.sqrt( (xy[0]-x_tan_meas)**2 + (xy[1]-y_tan_meas)**2 )*(180*3600)/np.pi
-# print("Mean coord. residual = {:3.2f} arcsec".format(np.mean(dr)))
-
-# save result as json file
-results=dict()
-results["sxx"]=sxx
-results["syy"]=syy
-results["sxy"]=sxy
-results["tel_ra"]=tel_ra
-results["tel_dec"]=tel_dec
-results["fieldrot_deg"]=angle
-results["nstars"]=nstars
-results["rms_arcsec"]=rms_arcsec
-
+# save it
 with open(args.outfile, 'w') as file:
-  json.dump(results, file)
+    file.write(corr.tojson())
 print("wrote",args.outfile)
+
+# testing io
+#corr2 = GuideStarsCorr()
+#with open(args.outfile, 'r') as file:
+#    corr2 = GuideStarsCorr.fromjson(file.read())
+#corr2.fit(x_tan_meas,y_tan_meas,x_tan_gaia,y_tan_gaia)
+#x2,y2 = corr2.apply(x_tan_meas,y_tan_meas)
+#dr = np.sqrt( np.mean ( (x2-x_tan_gaia)**2 + (y2-y_tan_gaia)**2 ) )
+#print("corr2 rms={} arcsec".format(dr*3600.*180./np.pi))
+
 
 if args.plot :    
     plt.figure("tangent_plane")
     a = plt.subplot(1,1,1)
     a.set_title("Tangent plane")
-    plt.plot(x_tan_meas,y_tan_meas,"o",label="Measured star coordinates")
-    plt.plot(x_tan_gaia_bis,y_tan_gaia_bis,"x",label="GAIA coordinates")        
+
+    x2,y2 = corr.apply(x_tan_meas,y_tan_meas)
+    
+    # checking once more
+    dr = np.sqrt( np.mean ( (x2-x_tan_gaia)**2 + (y2-y_tan_gaia)**2 ) )
+    print("rms={} arcsec".format(dr*3600.*180./np.pi))
+    
+    plt.plot(x2,y2,"o",label="Corrected measured star coordinates")
+    plt.plot(x_tan_gaia,y_tan_gaia,"x",label="GAIA coordinates")        
     plt.xlabel("x_tan (rad)")
     plt.ylabel("y_tan (rad)")
     plt.legend()
