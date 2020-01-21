@@ -17,7 +17,8 @@ parser.add_argument('-o','--outfile', type = str, default = None, required = Tru
                     help = 'path to output json file with transformation parameters')
 parser.add_argument('--fits-header', type = str, default = None, required = True,
                     help = 'path to file with fits header to read time and sky coordinates')
-
+parser.add_argument('--plot', action = 'store_true')
+                    
 args  = parser.parse_args()
 log   = get_logger()
 
@@ -40,3 +41,28 @@ fm.fit_tancorr(catalog)
 with open(args.outfile, 'w') as file:
     file.write(fm.tojson())
 print("wrote",args.outfile)
+
+
+if args.plot :
+    import matplotlib.pyplot as plt
+    from desimeter.transform.tan2fp import fp2tan
+    from desimeter.transform.radec2tan import tan2radec,radec2tan
+    t=catalog
+    xgfa=t["xcentroid"]
+    ygfa=t["ycentroid"]
+    pet=t["petal_loc"]
+    xfp,yfp = fm.all_gfa2fp(xgfa,ygfa,pet)
+    xtan,ytan = fp2tan(xfp,yfp)
+    ra2,dec2=fm.fp2radec(xfp,yfp)
+
+    ra=t["ra_gaia"]
+    dec=t["dec_gaia"]
+    
+    plt.figure("sky")
+    plt.plot(-ra,dec,"o",label="GAIA")
+    plt.plot(-ra2,dec2,"x",label="Measurements")
+    plt.xlabel("-RA (deg)")
+    plt.ylabel("Dec (deg)")
+    plt.legend()
+    plt.show()
+    

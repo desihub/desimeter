@@ -133,7 +133,7 @@ class FieldModel(object):
         elif self.lst is None :
             log.warning("Compute LST from MJD={}".format(self.mjd))
             self.lst = mjd2lst(self.mjd)
-
+        log.info("Use LST={}".format(self.lst))
             
         # first transfo: gfa2fp
         x_fp,y_fp = self.all_gfa2fp(x_gfa,y_gfa,petal_loc=catalog["petal_loc"])
@@ -150,13 +150,21 @@ class FieldModel(object):
         # transform focal plane to tangent plane
         x_tan_meas,y_tan_meas = fp2tan(x_fp,y_fp)
 
-        # we transform GAIA coordinates to the tangent plane
-        x_tan_gaia,y_tan_gaia = radec2tan(ra_gaia,dec_gaia,self.ra,self.dec,mjd=self.mjd,lst_deg=self.lst,hexrot_deg = self.hexrot_deg)
-        
-        # now that we have both sets of coordinates, we fit a transformation from one to the other
         correction = TanCorr()
-        correction.fit(x_tan_meas,y_tan_meas,x_tan_gaia,y_tan_gaia)
 
+        for loop in range(3) : # loop because change of pointing induces a rotation of the field
+            
+            # we transform GAIA coordinates to the tangent plane
+            x_tan_gaia,y_tan_gaia = radec2tan(ra_gaia,dec_gaia,self.ra,self.dec,mjd=self.mjd,lst_deg=self.lst,hexrot_deg = self.hexrot_deg)
+        
+            # now that we have both sets of coordinates, we fit a transformation from one to the other
+            correction.fit(x_tan_meas,y_tan_meas,x_tan_gaia,y_tan_gaia)
+
+            # opposite sign for the telescope offset because I have converted GAIA RA Dec to tangent plane ...
+            self.dec -= correction.ddec
+            self.ra  += correction.dha/np.cos(self.dec*np.pi/180.) # HA = LST-RA
+
+        
         # save params to this
         log.info("RMS coord. residual = {:3.2f} arcsec".format(correction.rms_arcsec))
         log.info("Rotation angle={:4.3f} deg".format(correction.fieldrot_deg))
@@ -164,9 +172,6 @@ class FieldModel(object):
         log.info("Scales sxx={:5.4f} syy={:5.4f} sxy={:5.4f}".format(correction.sxx,correction.syy,correction.sxy))
 
         # now I just copy the correction parameters in this class
-        # we could do something better here
-        self.ra  -= correction.dha # HA = LST-RA
-        self.dec += correction.ddec 
         self.sxx = correction.sxx
         self.syy = correction.syy
         self.sxy = correction.sxy
@@ -329,11 +334,12 @@ class TanCorr(object):
         # increasing gaia stars x means telescope is more to the left so tel_ha should be decreased
         # increasing gaia stars y means telescope is more to the bottom so tel_dec should be decreased
         # tangent plane coordinates are in rad
-        ddha  = -ax[0]*180./np.pi/np.cos(self.ddec/180*np.pi)
+        ddha  = -ax[0]*180./np.pi
         dddec = -ay[0]*180./np.pi
+        
         self.dha  += ddha
         self.ddec += dddec
-        
+                
         # dilatation and rotation
         # |ax1 ax2| |sxx sxy| |ca  -sa|
         # |ay1 ay2|=|syx syy|*|sa   ca|
