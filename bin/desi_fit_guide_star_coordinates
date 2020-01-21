@@ -17,8 +17,6 @@ parser.add_argument('-o','--outfile', type = str, default = None, required = Tru
                     help = 'path to output json file with transformation parameters')
 parser.add_argument('--fits-header', type = str, default = None, required = True,
                     help = 'path to file with fits header to read time and sky coordinates')
-parser.add_argument('--plot', action = "store_true",
-                    help = 'plot the stars')
 
 args  = parser.parse_args()
 log   = get_logger()
