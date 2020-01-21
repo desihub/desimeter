@@ -1,0 +1,68 @@
+#!/usr/bin/env python
+
+import argparse
+import sys,os
+import numpy as np
+import astropy.io.fits as pyfits
+
+from desimeter.log import get_logger
+from desimeter.fieldmodel import FieldModel
+from desimeter.time import mjd2lst
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="""FVC image processing""")
+parser.add_argument('-i','--infile', type = str, default = None, required = True,
+                    help = 'path to a GFA catalog file, fits or csv, like ""')
+parser.add_argument('-o','--outfile', type = str, default = None, required = True,
+                    help = 'path to output json file with transformation parameters')
+parser.add_argument('--fits-header', type = str, default = None, required = True,
+                    help = 'path to file with fits header to read time and sky coordinates')
+parser.add_argument('--plot', action = 'store_true')
+                    
+args  = parser.parse_args()
+log   = get_logger()
+
+fm = FieldModel()
+
+header  = pyfits.open(args.fits_header)[1].header
+fm.ra  = header["TARGTRA"]
+fm.dec = header["TARGTDEC"]
+fm.hexrot_deg = float(header["FOCUS"].split(",")[5])/3600.
+
+catalog = fm.read_guide_stars_catalog(args.infile)
+
+# MJD and LST are needed for sky transform
+fm.mjd    = np.mean(catalog["mjd_obs"])
+fm.lst    = mjd2lst(fm.mjd)
+
+fm.fit_tancorr(catalog)
+
+# save it
+with open(args.outfile, 'w') as file:
+    file.write(fm.tojson())
+print("wrote",args.outfile)
+
+
+if args.plot :
+    import matplotlib.pyplot as plt
+    from desimeter.transform.tan2fp import fp2tan
+    from desimeter.transform.radec2tan import tan2radec,radec2tan
+    t=catalog
+    xgfa=t["xcentroid"]
+    ygfa=t["ycentroid"]
+    pet=t["petal_loc"]
+    xfp,yfp = fm.all_gfa2fp(xgfa,ygfa,pet)
+    xtan,ytan = fp2tan(xfp,yfp)
+    ra2,dec2=fm.fp2radec(xfp,yfp)
+
+    ra=t["ra_gaia"]
+    dec=t["dec_gaia"]
+    
+    plt.figure("sky")
+    plt.plot(-ra,dec,"o",label="GAIA")
+    plt.plot(-ra2,dec2,"x",label="Measurements")
+    plt.xlabel("-RA (deg)")
+    plt.ylabel("Dec (deg)")
+    plt.legend()
+    plt.show()
+    

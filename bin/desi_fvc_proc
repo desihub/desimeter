@@ -36,6 +36,8 @@ parser.add_argument('--expected-positions', type = str, default = None, required
 parser.add_argument('--hdu-for-expected-positions', type = str, default = "DATA", required = False,
                     help = 'specify HDU in expected position fits file')
 
+
+
 args  = parser.parse_args()
 log   = get_logger()
 
