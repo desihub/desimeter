@@ -496,9 +496,6 @@ def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, a
     x,y = hadec2xy(ha,dec,tel_ha,tel_dec)
 
     # hexapod rotation
-    if hexrot_deg != 0 :
-        log.warning("I am not sure of the hexapod rotation angle")
-    
     chex = cosd(hexrot_deg)
     shex = sind(hexrot_deg)
     
@@ -528,9 +525,6 @@ def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = Tr
 
     log = get_logger()
     
-    if hexrot_deg != 0 :
-        log.warning("I am not sure of the hexapod rotation angle")
-   
     # undo hexapod rotation
     chex = cosd(hexrot_deg)
     shex = sind(hexrot_deg)
