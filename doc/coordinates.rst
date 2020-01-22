@@ -97,19 +97,19 @@ We have to do much better than this.
 TAN -> ICRS
 ~~~~~~~~~~~
 
-This transformation includes precession, aberration, refraction, polar mis-alignment, hexapod rotation
-angle.
+This transformation includes precession, aberration, refraction, polar mis-alignment, hexapod rotation angle.
 
  Example::
 
    from desimeter.transform.radec2tan import radec2tan,tan2radec
    ra,dec = radec2tan(x_tan,y_tan,telescope_ra,telescop_dec,mjd,lst,precession=True,aberration=True)
 
-FieldModel
-~~~~~~~~~~
+Field Model
+~~~~~~~~~~~
 
-This is not a transformation from one system to another but rather the combination of the transformations, including a correction based on the location of GFA guide stars. This "field model" is fit to the data
- using the script `desi_fit_guide_star_coordinates`.
+This is not a transformation from one system to another but rather the combination of the transformations,
+including a correction based on the location of GFA guide stars. This "field model" is fit to the data
+using the script `desi_fit_guide_star_coordinates`.
 
 Example::
 
