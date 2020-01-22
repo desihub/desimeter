@@ -19,6 +19,9 @@ It comprises
 * fit of GFA guide stars to adjust telescope pointing, field rotation while absorbing a scaling factor (potentially accounting for thermal dilatation)
 * prediction of fiber sky RA,Dec coordinates
 
+See `desimeter/doc/coordinates.rst` for a definition of the coordinate systems.
+
+  
 Script Examples
 ---------------
 
