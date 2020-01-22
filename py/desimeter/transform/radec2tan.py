@@ -465,10 +465,12 @@ def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, a
     
     if precession :
         ra,dec = apply_precession_from_icrs(ra, dec, mjd, use_astropy)
+        tel_ra,tel_dec = apply_precession_from_icrs(tel_ra, tel_dec, mjd, use_astropy)
 
     
     if aberration :
         ra,dec = apply_aberration(ra,dec,mjd, use_astropy)
+        tel_ra,tel_dec = apply_aberration(tel_ra,tel_dec,mjd, use_astropy)
 
     # ha,dec
     ha    = lst_deg - ra
@@ -530,9 +532,17 @@ def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = Tr
     shex = sind(hexrot_deg)
     x = chex*x_tan+shex*y_tan
     y = -shex*x_tan+chex*y_tan
+
+
+    # need to apply precession ... etc to telescope pointing to interpret the x,y
+    if precession :
+        tel_ra,tel_dec = apply_precession_from_icrs(tel_ra, tel_dec, mjd, use_astropy)
+    if aberration :
+        tel_ra,tel_dec = apply_aberration(tel_ra,tel_dec,mjd, use_astropy)
     
     tel_ha = lst_deg - tel_ra
 
+    
     # we need to apply refraction for the telescope pointing to interpret the x,y
     tel_alt,tel_az = hadec2altaz(tel_ha,tel_dec)
     # apply refraction
@@ -563,6 +573,7 @@ def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = Tr
         
     if aberration :
         ra,dec = undo_aberration(ra,dec,mjd, use_astropy)
+        
     if precession :
         ra,dec = undo_precession_from_icrs(ra, dec, mjd, use_astropy)
 
