@@ -16,6 +16,7 @@ from desimeter.findfiducials import findfiducials
 from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
 from desimeter.match import match
 from desimeter.transform.xy2qs import qs2xy
+from desimeter.fieldmodel import FieldModel
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""FVC image processing""")
@@ -35,6 +36,8 @@ parser.add_argument('--expected-positions', type = str, default = None, required
                     help = 'path to fits file or CSV file with fibers expected position (table column EXP_Q and EXP_S')
 parser.add_argument('--hdu-for-expected-positions', type = str, default = "DATA", required = False,
                     help = 'specify HDU in expected position fits file')
+parser.add_argument('--field-model', type = str, default = None, required = False,
+                    help = 'use this json file as field model to convert fiber coordinates to RA Dec')
 
 
 
@@ -123,6 +126,19 @@ if args.output_transform is not None :
         tx.write_jsonfile(args.output_transform)
         print("wrote transform in {}".format(args.output_transform))
 
+
+if args.field_model is not None :
+    log.info("Reading field model in {}".format(args.field_model))
+    with open(args.field_model) as file :
+        fm = FieldModel.fromjson(file.read())
+    spots["RA"] = np.zeros(len(spots),dtype=float)
+    spots["DEC"] = np.zeros(len(spots),dtype=float)
+    ii=(spots["X_FP"]!=0)&(spots["Y_FP"]!=0)
+    ra,dec = fm.fp2radec(spots["X_FP"][ii],spots["Y_FP"][ii])
+    spots["RA"][ii]  = ra
+    spots["DEC"][ii] = dec
+
+    
 # write spots
 spots.write(args.outfile,format="csv",overwrite=True)
 print("wrote {}".format(args.outfile))
