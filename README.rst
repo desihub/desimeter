@@ -14,11 +14,10 @@ It comprises
 * spots match to existing fiducials.
 * fit of transformation from FVC pixels to focal plane X Y coordinates.
 * metrology data, with all the routines to convert the engineering data in DocDB to the files used to fit the transformation, including a patch that corrects for missing or erroneous metrology, see py/desimeter/data/README.rst for more information on this.
-
-It does not yet include
-
 * matching positioner spots based upon their expected locations.
-* sky RA,dec transforms to/from focal plane coordinates.
+* sky transformations (precession, aberration, refraction, polar mis-alignment)
+* fit of GFA guide stars to adjust telescope pointing, field rotation while absorbing a scaling factor (potentially accounting for thermal dilatation)
+* prediction of fiber sky RA,Dec coordinates
 
 Script Examples
 ---------------
@@ -41,6 +40,14 @@ Plot of the residuals with respect to the metrology::
 Plot of the metrology data ::
 
     plot_metrology
+
+Fit of guide stars (at KPNO), saving the transformation in a json file ::
+  
+     desi_fit_guide_star_coordinates -i /n/home/datasystems/users/ameisner/reduced/realtime/20200119/00042312/gfa-00042312_catalog.fits --fits-header /exposures/desi/20200119/00042312/gfa-00042312.fits.fz -o fp-00042312.json  
+
+Then using it to predict the fiber RA,Dec from a FVC image ::
+
+     desi_fvc_proc -i /exposures/desi/20200119/00042311/fvc-00042311.fits.fz --field-model fp-00042312.json --expected /exposures/desi/20200119/00042311/coordinates-00042311.fits -o fvc-00042311.csv
 
 Code examples
 -------------
@@ -125,6 +132,6 @@ and `desimeter/bin` to `$PATH` instead of installing desimeter.
 Other Notes
 -----------
 
-desimeter is a work in progress and we exepct that class names and module
+desimeter is a work in progress and we expect that class names and module
 organization will change.
 
