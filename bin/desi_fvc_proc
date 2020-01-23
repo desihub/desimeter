@@ -53,17 +53,15 @@ if filename.find(".fits")>0 :
         elif args.extname.strip() != 'last':
             image = fx[args.extname].read().astype(float)
         else:
-            # assumes extension ordering...
-            image = fx[len(fx)-2].read().astype(float)
-            extname = fx[len(fx)-2].get_extname()
-            try:
-                framenum = int(extname[1:])
-            except:
-                raise ValueError(f'unexpected extname: {extname}')
-            if extname[0] != 'F':
-                raise ValueError(f'unexpected extname: {extname}')
-            log.info(f'Using extension {extname}...')
-
+            extnames = [k for k in fx.hdu_map.keys() if isinstance(k, str)]
+            extnames = [e.lower() for e in extnames]
+            extname = None
+            for i in range(len(extnames)):
+                extname0 = f'f{i:04d}'
+                if extname0 in extnames:
+                    extname = extname0
+            image = fx[extname].read().astype(float)
+            log.info(f'using extension {extname}...')
     spots = detectspots(image,threshold=args.threshold,nsig=7)
 elif filename.find(".csv")>0 :
     log.info("read CSV spots table")
