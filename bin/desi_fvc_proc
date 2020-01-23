@@ -25,7 +25,7 @@ parser.add_argument('-i','--infile', type = str, default = None, required = True
 parser.add_argument('-o','--outfile', type = str, default = None, required = True,
                     help = 'path to output CSV ASCII file')
 parser.add_argument('--extname', type = str, default = 'F0000', required = False,
-                    help = 'input EXTNAME to use if more than one HDU')
+                    help = 'input EXTNAME to use if more than one HDU; last for last HDU')
 parser.add_argument('--output-transform', type = str, default = None, required = False,
                     help = 'write transformation to this json file')
 parser.add_argument('--input-transform', type = str, default = None, required = False,
@@ -50,9 +50,18 @@ if filename.find(".fits")>0 :
     with fitsio.FITS(args.infile) as fx:
         if len(fx) == 1:
             image = fx[0].read().astype(float)
-        else:
+        elif args.extname.strip() != 'last':
             image = fx[args.extname].read().astype(float)
-
+        else:
+            extnames = [k for k in fx.hdu_map.keys() if isinstance(k, str)]
+            extnames = [e.lower() for e in extnames]
+            extname = None
+            for i in range(len(extnames)):
+                extname0 = f'f{i:04d}'
+                if extname0 in extnames:
+                    extname = extname0
+            image = fx[extname].read().astype(float)
+            log.info(f'using extension {extname}...')
     spots = detectspots(image,threshold=args.threshold,nsig=7)
 elif filename.find(".csv")>0 :
     log.info("read CSV spots table")
