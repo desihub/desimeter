@@ -72,6 +72,12 @@ else :
 
 
 spots = findfiducials(spots,input_transform=args.input_transform)
+n_matched_pinholes = np.sum(spots['PINHOLE_ID'] > 0)
+n_matched_fiducials = np.sum(spots['PINHOLE_ID'] == 4)
+if n_matched_fiducials < 3:
+    log.error('Fewer than three matched fiducials; exiting early.')
+    sys.exit(13)
+
 
 tx = FVCFP_ZhaoBurge()
 tx.fit(spots, update_spots=True)
