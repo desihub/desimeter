@@ -14,7 +14,7 @@ from desimeter.log import get_logger
 from desimeter.detectspots import detectspots
 from desimeter.findfiducials import findfiducials
 from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
-from desimeter.match import match
+from desimeter.match import match_same_system
 from desimeter.transform.xy2qs import qs2xy
 from desimeter.fieldmodel import FieldModel
 
@@ -114,18 +114,18 @@ if "PINHOLE_ID" in expected_pos.dtype.names :
 # select spots that are not already matched
 selection  = (spots["LOCATION"]==0)
 # match
-indices,distances = match(expected_pos["X_FP"],expected_pos["Y_FP"],spots["X_FP"][selection],spots["Y_FP"][selection])
+indices_of_expected_pos,distances = match_same_system(spots["X_FP"][selection],spots["Y_FP"][selection],expected_pos["X_FP"],expected_pos["Y_FP"])
 for maxdist in [0.1,1,5.] :
     log.info("Number of match < {}mm = {}/{}".format(maxdist,np.sum(distances<maxdist),len(expected_pos)))
 
 # add columns after matching fibers
 for k1,k2 in zip(["X_FP","Y_FP"],["X_FP_EXP","Y_FP_EXP"]) :
     if k2 not in spots.keys() : spots[k2] = np.zeros(len(spots))
-    spots[k2][selection]=expected_pos[k1][indices]
+    spots[k2][selection]=expected_pos[k1][indices_of_expected_pos]
 for k in ["EXP_Q_0","EXP_S_0","PETAL_LOC","DEVICE_LOC","LOCATION"] :
     if k in expected_pos.keys() :
         if k not in spots.keys() : spots[k] = np.zeros(len(spots))
-        spots[k][selection]=expected_pos[k][indices]
+        spots[k][selection]=expected_pos[k][indices_of_expected_pos]
 
 # for spots with metrology X_FP_EXP=X_FP_METRO
 selection = (spots["X_FP_METRO"]!=0)
