@@ -67,56 +67,37 @@ def compute_triangles_with_fixed_orientation(x,y) :
     It would however fail for situations where we don't know the rotation
     """
     
-    tk=[] # indices 
-    tr=[] # max side length ratio
-    tc=[] # cosine of first vertex (after sorting according to side length)
-    
     nn=len(x)
+    ntri=(nn*(nn-1)*(nn-2))//6
+    tk=np.zeros((ntri,3),dtype=int) # indices 
+    txyz=np.zeros((ntri,3),dtype=float) # properties of the shape and orientation of triangles
+        
+    # I can do this ordering once, outside of the loop on triangles, to got faster
+    ordering = np.argsort(x) 
+    x=x[ordering]
+    y=y[ordering]
+    tx=np.zeros(3)
+    ty=np.zeros(3)
+
+    triangle_index=0
     for i in range(nn) :
+        tx[0]=x[i]
+        ty[0]=y[i]
         for j in range(i+1,nn) :
+            tx[1]=x[j]
+            ty[1]=y[j]
             for k in range(j+1,nn) :
                 # x y of vertices
-                ijk=np.array([i,j,k])
-                tx=x[ijk]
-                ty=y[ijk]
-
-                # sorting according to length (square)
-                # is not working well for our case because
-                # a lot of triangles are isosceles
-                #tl2=np.array([(tx[1]-tx[0])**2+(ty[1]-ty[0])**2,(tx[2]-tx[1])**2+(ty[2]-ty[1])**2,(tx[0]-tx[2])**2+(ty[0]-ty[2])**2])
-                #pairs=np.array([[0,1],[1,2],[0,2]])
-                
-                #ii=np.argsort(tl2)
-                #ordering = np.zeros(3).astype(int)
-                #ordering[0] = np.intersect1d(pairs[ii[0]],pairs[ii[2]]) # vertex connected to shortest and longest side  
-                #ordering[1] = np.intersect1d(pairs[ii[0]],pairs[ii[1]]) # vertex connected to shortest and intermediate side  
-                #ordering[2] = np.intersect1d(pairs[ii[1]],pairs[ii[2]]) # vertex connected to intermediate and longest side
-                
-                # I sort the vertices with one arbitrary axis, x, because the rotation
-                # of the field is not large enough to alter this
-                # (in fact I could choose a different ordering per triangle
-                # if differences of tx are too small, but empirically,
-                # I have not find it necessary so far)
-                ordering = np.argsort(tx)                
-                ijk=ijk[ordering]
-                tx=tx[ordering]
-                ty=ty[ordering]
-                
-                #r=np.sqrt(tl2[ii[2]]/tl2[ii[0]]) # ratio of longest to shortest side
+                tx[2]=x[k]
+                ty[2]=y[k]
                 length2=np.array([(tx[1]-tx[0])**2+(ty[1]-ty[0])**2,(tx[2]-tx[1])**2+(ty[2]-ty[1])**2,(tx[0]-tx[2])**2+(ty[0]-ty[2])**2])
                 r=np.sqrt(np.max(length2)/np.min(length2)) # ratio of longest to shortest side
-                
-                c=((tx[1]-tx[0])*(tx[2]-tx[0])+(ty[1]-ty[0])*(ty[2]-ty[0]))/np.sqrt( ((tx[1]-tx[0])**2+(ty[1]-ty[0])**2)*((tx[2]-tx[0])**2+(ty[2]-ty[0])**2)) # cos of angle of first vertex
-
-                # orientation does not help here because many isosceles triangles, so I don't compute that
-                #s=((tx[1]-tx[0])*(ty[2]-ty[0])-(tx[2]-tx[0])*(ty[1]-ty[0]))/np.sqrt( ((tx[1]-tx[0])**2+(ty[1]-ty[0])**2)*((tx[2]-tx[0])**2+(ty[2]-ty[0])**2)) # orientation whether vertices are traversed in a clockwise or counterclock-wise sense
-
-                                
-                tk.append(ijk)
-                tr.append(r)
-                tc.append(c)
-                
-    return np.array(tk),np.array(tr),np.array(tc)
+                tk[triangle_index]=ordering[[i,j,k]]
+                txyz[triangle_index,0]=np.sqrt(np.max(length2)/np.min(length2)) # ratio of longest to shortest side
+                txyz[triangle_index,1]=((tx[1]-tx[0])*(tx[2]-tx[0])+(ty[1]-ty[0])*(ty[2]-ty[0]))/np.sqrt( ((tx[1]-tx[0])**2+(ty[1]-ty[0])**2)*((tx[2]-tx[0])**2+(ty[2]-ty[0])**2)) # cos of angle of first vertex
+                txyz[triangle_index,2]=(tx[1]-tx[0])/np.sqrt((tx[1]-tx[0])**2+(ty[1]-ty[0])**2) # cos of angle of first side
+                triangle_index += 1
+    return tk,txyz
 
 def match_same_system(x1,y1,x2,y2) :
     """
@@ -164,47 +145,35 @@ def match_arbitrary_translation_dilatation(x1,y1,x2,y2) :
     log = get_logger()
     
     # compute all possible triangles in both data sets
-    # 'tk' is index in x,y array of triangle vertices
-    # 'tr' is a side length ratio
-    # 'tc' a vertex cosine
-    tk1,tr1,tc1 = compute_triangles_with_fixed_orientation(x1,y1)
-    tk2,tr2,tc2 = compute_triangles_with_fixed_orientation(x2,y2)
+    # txyz are properties of the shape and orientation of the triangles
+    log.debug("compute triangles")
+    tk1,txyz1 = compute_triangles_with_fixed_orientation(x1,y1)
+    tk2,txyz2 = compute_triangles_with_fixed_orientation(x2,y2)
     
-    # we also need to use the orientation of the triangles ...
-    tdu1 = np.array([x1[tk1[:,1]]-x1[tk1[:,0]],y1[tk1[:,1]]-y1[tk1[:,0]]])
-    tdu1 /= np.sqrt(np.sum(tdu1**2,axis=0))
-    tdu2 = np.array([x2[tk2[:,1]]-x2[tk2[:,0]],y2[tk2[:,1]]-y2[tk2[:,0]]])
-    tdu2 /= np.sqrt(np.sum(tdu2**2,axis=0))
-    cos12 = tdu1.T.dot(tdu2) # cosine between first side of both triangles
-
-    # distance defined as difference of ratio of side length, cosine of primary vertex, and cosine between triangles
-    # the following is the distances between all pairs of triangles
-    dist2 = (tr1[:,None] - tr2.T)**2 + (tc1[:,None] - tc2.T)**2 + (np.abs(cos12)-1)**2
-    matched = np.argmin(dist2,axis=1) # this is the best match
-    dist = np.sqrt(np.min(dist2,axis=1)) # keep distance values
-
+    log.debug("match triangles")
+    # match with kdtree triangles with same shape and orientation
+    tree2=KDTree(txyz2)
+    triangle_distances,triangle_indices_2 = tree2.query(txyz1,k=1)
+    
     # now that we have match of triangles , need to match back catalog entries
-    ranked_pairs = np.argsort(dist)
-
+    ranked_pairs = np.argsort(triangle_distances)
     
     indices_2 = -1*np.ones(x1.size,dtype=int)
     distances = np.zeros(x1.size)
     
     all_matched = False
-        
+    log.debug("match catalogs using pairs of triangles")
     for p in ranked_pairs :
 
         k1=tk1[p] # incides (in x1,y1) of vertices of this triangle (size=3)
-        k2=tk2[matched[p]] # incides (in x2,y2) of vertices of other triangle
-
-        #if dist2[p] > 1.e-2 : break # NEED A BETTER CRITERION THAN THIS
-
+        k2=tk2[triangle_indices_2[p]] # incides (in x2,y2) of vertices of other triangle
+        
         # check unmatched or equal
         if np.any((indices_2[k1]>=0)&(indices_2[k1]!=k2)) :
             log.warning("skip {} <=> {}".format(k1,k2))
             continue
         indices_2[k1]=k2
-        distances[k1]=dist[p]
+        distances[k1]=triangle_distances[p]
         all_matched = (np.sum(indices_2>=0)==x1.size)
         if all_matched :
             log.debug("all matched")

@@ -7,8 +7,7 @@ from desimeter.match import match_same_system,match_arbitrary_translation_dilata
 
 class TestMatch(unittest.TestCase):
 
-    def x1y1x2y2(self) :
-        nn=12
+    def x1y1x2y2(self,nn=12) :
         x1=np.random.uniform(size=nn)-0.5
         y1=np.random.uniform(size=nn)-0.5
         ii=np.arange(nn,dtype=int)
@@ -27,7 +26,7 @@ class TestMatch(unittest.TestCase):
 
     def test_arbitrary_translation_dilatation(self):
         print("Testing match with arbitrary translation and dilatation")
-        x1,y1,x2,y2 = self.x1y1x2y2()
+        x1,y1,x2,y2 = self.x1y1x2y2(nn=30)
         # arb. dilatation
         scale = 12.
         x3 = scale*x2
@@ -35,12 +34,11 @@ class TestMatch(unittest.TestCase):
         # arb. translation
         x3 += 33.
         y3 += 11.
-        indices_2,distances = match_same_system(x1,y1,x2,y2)
+        indices_2,distances = match_arbitrary_translation_dilatation(x1,y1,x3,y3)
         ii2=indices_2[np.arange(x1.size)]
         dist=np.sqrt( (x1-x2[ii2])**2+(y1-y2[ii2])**2 )
         assert(np.all(dist==0.))
-        
-        
+              
 if __name__ == '__main__':
     unittest.main()
     
