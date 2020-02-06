@@ -10,14 +10,13 @@ from pkg_resources import resource_filename
 from scipy.spatial import cKDTree as KDTree
 from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
 from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
-from desimeter.match import match_arbitrary_translation_dilatation
+from desimeter.match import match_same_system,match_arbitrary_translation_dilatation
+from desimeter.simplecorr import SimpleCorr
 
 metrology_pinholes_table = None
 metrology_fiducials_table = None
 
-
-
-def findfiducials(spots,input_transform=None,separation=7.) :
+def findfiducials(spots,input_transform=None,separation=8.) :
     
     
     global metrology_pinholes_table
@@ -26,7 +25,8 @@ def findfiducials(spots,input_transform=None,separation=7.) :
     
     log.debug("load input tranformation we will use to go from FP to FVC pixels")
     if input_transform is None :
-        input_transform = resource_filename('desimeter',"data/default-fvc2fp.json")
+        input_transform = resource_filename('desimeter',"data/single-lens-fvc2fp.json")
+    
     log.info("loading input tranform from {}".format(input_transform))
     try :
         input_tx = FVCFP_ZhaoBurge.read_jsonfile(input_transform)
@@ -56,50 +56,48 @@ def findfiducials(spots,input_transform=None,separation=7.) :
         metrology_fiducials_table = metrology_pinholes_table[:][metrology_pinholes_table["PINHOLE_ID"]==4]
     
     # find fiducials candidates  
-    # select spots with at least two close neighbors (in pixel units)
+    log.info("select spots with at least two close neighbors (in pixel units)")
     xy   = np.array([spots["XPIX"],spots["YPIX"]]).T
     tree = KDTree(xy)
     measured_spots_distances,measured_spots_indices = tree.query(xy,k=4,distance_upper_bound=separation)
     number_of_neighbors = np.sum( measured_spots_distances<separation,axis=1)
     fiducials_candidates_indices = np.where(number_of_neighbors>=3)[0]  # including self, so at least 3 pinholes
     
-    # match candidates to fiducials from metrology 
-    # using nearest neighbor
+    # match candidates to fiducials from metrology
+
+    log.info("first match {} fiducials candidates to metrology ({}) with iterative fit".format(fiducials_candidates_indices.size,len(metrology_fiducials_table)))
+    x1 = spots["XPIX"][fiducials_candidates_indices]
+    y1 = spots["YPIX"][fiducials_candidates_indices]
+    x2 = metrology_fiducials_table["XPIX"] # do I need to do this?
+    y2 = metrology_fiducials_table["YPIX"]
     
-    spots_tree  = KDTree(np.array([spots["XPIX"][fiducials_candidates_indices],spots["YPIX"][fiducials_candidates_indices]]).T)
-    metrology_xy   = np.array([metrology_fiducials_table["XPIX"],metrology_fiducials_table["YPIX"]]).T
-
-    distances,indices = spots_tree.query(metrology_xy,k=1)
-    log.debug("med. distance = {:4.2f} pixels for {} candidates and {} known fiducials".format(np.median(distances),fiducials_candidates_indices.size,metrology_fiducials_table["XPIX"].size))
-
-    for loop in range(2) :
-        # fit offset
-        dx = np.median(metrology_xy[:,0]-spots["XPIX"][fiducials_candidates_indices][indices])
-        dy = np.median(metrology_xy[:,1]-spots["YPIX"][fiducials_candidates_indices][indices])
-        log.debug("offset dx={:3.1f} dy={:3.1f}".format(dx,dy))
+    nloop=20
+    saved_median_distance=0
+    for loop in range(nloop) :
+        indices_2, distances = match_same_system(x1,y1,x2,y2)
+        mdist = np.median(distances)
+        if loop < nloop-1 :
+            maxdistance = max(10,3.*1.4*mdist)
+        else : # final iteration
+            maxdistance = 100 # pixel
+            
+        selection = np.where((indices_2>=0)&(distances<maxdistance))[0]
+        log.info("iter #{} median_dist={} max_dist={} matches={}".format(loop,mdist,maxdistance,selection.size))
         
-        # rematch
-        metrology_xy[:,0] -= dx
-        metrology_xy[:,1] -= dy
-        distances,indices = spots_tree.query(metrology_xy,k=1)
-        log.debug("med. distance = {:4.2f} pixels for {} candidates and {} known fiducials".format(np.median(distances),fiducials_candidates_indices.size,metrology_fiducials_table["XPIX"].size))
+        corr21 = SimpleCorr()
+        corr21.fit(x2[indices_2[selection]],y2[indices_2[selection]],x1[selection],y1[selection])
+        x2,y2 = corr21.apply(x2,y2)
+        if np.abs(saved_median_distance-mdist)<0.0001 : break # no more improvement
+        saved_median_distance = mdist
     
-    maxdistance = 10.
-    selection = np.where(distances<maxdistance)[0]
-    
-    fiducials_candidates_indices     = fiducials_candidates_indices[indices][selection]
+    # use same coord system match (note we now mtach the otherway around)
+    indices_1, distances = match_same_system(x2,y2,x1,y1)
+    maxdistance = 100. # FVC pixels
+    selection = np.where((indices_1>=0)&(distances<maxdistance))[0]
+    fiducials_candidates_indices     = fiducials_candidates_indices[indices_1[selection]]
     matching_known_fiducials_indices = selection
     
     log.debug("mean distance = {:4.2f} pixels for {} matched and {} known fiducials".format(np.mean(distances[distances<maxdistance]),fiducials_candidates_indices.size,metrology_fiducials_table["XPIX"].size))
-        
-    #import matplotlib.pyplot as plt
-    #plt.hist(distances[distances<maxdistance],bins=100)
-    #plt.figure()
-    #plt.plot(spots["XPIX"],spots["YPIX"],".")
-    #plt.plot(spots["XPIX"][fiducials_candidates],spots["YPIX"][fiducials_candidates],"o")
-    #plt.plot(metrology_table["XPIX"]-dx,metrology_table["YPIX"]-dy,"X",color="red")
-    #plt.show()
-
     
     log.debug("now matching pinholes ...")
     
@@ -135,13 +133,13 @@ def findfiducials(spots,input_transform=None,separation=7.) :
         spots["PINHOLE_ID"][pi1[matched]] = pinhole_ids[matched]
         
         if np.sum(pinhole_ids==0) > 0 :
-            log.warning("only matched pinholes {} for {} detected at LOCATION {:04d} xpix~{} ypix~{}".format(pinhole_ids[pinhole_ids>0],x1.size,location,int(np.mean(x1)),int(np.mean(y1))))
+            log.warning("only matched pinholes {} for {} detected at LOCATION {} xpix~{} ypix~{}".format(pinhole_ids[pinhole_ids>0],x1.size,location,int(np.mean(x1)),int(np.mean(y1))))
         
         # check duplicates
         if np.unique(pinhole_ids[pinhole_ids>0]).size != np.sum(pinhole_ids>0) :
             xfp=np.mean(metrology_pinholes_table[pi2]["X_FP"])
             yfp=np.mean(metrology_pinholes_table[pi2]["Y_FP"])
-            log.warning("duplicate(s) pinhole ids in {} at LOCATION={:04d} xpix~{} ypix~{} xfp~{} yfp~{}".format(pinhole_ids,location,int(np.mean(x1)),int(np.mean(y1)),int(xfp),int(yfp)))
+            log.warning("duplicate(s) pinhole ids in {} at LOCATION={} xpix~{} ypix~{} xfp~{} yfp~{}".format(pinhole_ids,location,int(np.mean(x1)),int(np.mean(y1)),int(xfp),int(yfp)))
             bc=np.bincount(pinhole_ids[pinhole_ids>0])
             duplicates = np.where(bc>1)[0]
             for duplicate in duplicates :
