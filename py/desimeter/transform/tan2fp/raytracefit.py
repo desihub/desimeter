@@ -115,18 +115,16 @@ class TAN2FP_RayTraceFit(object) :
             #- Get reduced coordinates
             rxtan, rytan = _reduce_xytan(table['X_TAN'][selection], table['Y_TAN'][selection])
             rxfp, ryfp = _reduce_xyfp(table['X_FP'][selection], table['Y_FP'][selection])
-
-
-            #import matplotlib.pyplot as plt
-            #plt.plot(rxtan, rytan,"o")
-            #plt.plot(rxfp, ryfp,"o")
-            #ii=(rxtan>=0)&(rytan>=0)
-            #plt.plot(rxtan[ii], rytan[ii],"o")
-            #plt.plot(rxfp[ii], ryfp[ii],"o")
             
             
+
+            #################################################################
+            ## CHOICE OF POLYNOMIALS IS HERE
+            ## 
+            polids = np.array([2, 5, 6, 9, 20, 28, 29, 30],dtype=int)
+            #################################################################
             #- Perform fit
-            scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = fit_scale_rotation_offset(rxtan, rytan, rxfp, ryfp, fitzb=True)
+            scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = fit_scale_rotation_offset(rxtan, rytan, rxfp, ryfp, fitzb=True, polids=polids)
         
             self.scale[config] = scale
             self.rotation[config] = rotation
@@ -213,3 +211,22 @@ class TAN2FP_RayTraceFit(object) :
         xtan, ytan = _expand_xytan(xx, yy)
         
         return xtan, ytan
+
+# generic function
+raytracefit_instance = None
+
+def get_raytracefit() :
+    global raytracefit_instance
+    if raytracefit_instance is None :
+        filename = resource_filename('desimeter', 'data/raytrace-tan2fp.json')
+        raytracefit_instance = TAN2FP_RayTraceFit.read_jsonfile(filename=filename)
+    return raytracefit_instance
+
+def tan2fp(xtan, ytan, adc1, adc2):
+    return get_raytracefit().tan2fp(xtan, ytan, adc1, adc2)
+    
+
+def fp2tan(xtan, ytan, adc1, adc2):
+    return get_raytracefit().fp2tan(xtan, ytan, adc1, adc2)
+
+    

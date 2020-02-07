@@ -267,7 +267,7 @@ def transform(x, y, scale, rotation, offset_x, offset_y, zbpolids=None, zbcoeffs
 
     return xx, yy
 
-def fit_scale_rotation_offset(x, y, xp, yp, fitzb=False):
+def fit_scale_rotation_offset(x, y, xp, yp, fitzb=False, polids=None):
     """
     Fit scale, rotation, offset plus optional Zhao-Burge corrections
     for x,y -> xp,yp.
@@ -275,12 +275,12 @@ def fit_scale_rotation_offset(x, y, xp, yp, fitzb=False):
     TODO: document details
     """
 
-    def func(params, x, y, xp, yp, fitzb):
+    def func(params, x, y, xp, yp, fitzb, polids):
         scale, rotation, offset_x, offset_y = params[0:4]
         xx, yy = transform(x, y, scale, rotation, offset_x, offset_y)
 
         if fitzb:
-            polids, coeffs, zbx, zby = fitZhaoBurge(xx, yy, xp, yp)
+            polids, coeffs, zbx, zby = fitZhaoBurge(xx, yy, xp, yp, polids)
             xx += zbx
             yy += zby
 
@@ -288,7 +288,7 @@ def fit_scale_rotation_offset(x, y, xp, yp, fitzb=False):
         return dr2
 
     p0 = np.array([1.0, 0.0, 0.0, 0.0])
-    p = minimize(func, p0, args=(x, y, xp, yp, fitzb)) #, method='Nelder-Mead')
+    p = minimize(func, p0, args=(x, y, xp, yp, fitzb, polids)) #, method='Nelder-Mead')
 
     scale, rotation, offset_x, offset_y = p.x
    
@@ -296,12 +296,12 @@ def fit_scale_rotation_offset(x, y, xp, yp, fitzb=False):
         #- including ZB in every iteration is ~10x better than fitting
         #- scale,rotation,offset, then separately fitting ZB
         xx, yy = transform(x, y, scale, rotation, offset_x, offset_y)
-        zbpolids, zbcoeffs, zbx, zby = fitZhaoBurge(xx, yy, xp, yp)
+        zbpolids, zbcoeffs, zbx, zby = fitZhaoBurge(xx, yy, xp, yp, polids)
         return scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs
     else:
         return scale, rotation, offset_x, offset_y
 
-def fitZhaoBurge(x, y, xp, yp):
+def fitZhaoBurge(x, y, xp, yp, polids=None):
     dx = xp-x
     dy = yp-y
 
@@ -311,8 +311,8 @@ def fitZhaoBurge(x, y, xp, yp):
     # 0 = translation along X
     # 1 = translation along Y
     # 2 = magnification
-    
-    polids = np.array([2, 5,  6,   9,  20,  28, 29,  30],dtype=int)
+    if polids is None :
+        polids = np.array([2, 5,  6,   9,  20,  28, 29,  30],dtype=int)
     
     nzb = polids.size
     H = np.zeros((2*nx, nzb))
