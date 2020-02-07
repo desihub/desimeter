@@ -24,11 +24,14 @@ log   = get_logger()
 
 fm = FieldModel()
 
-header  = pyfits.open(args.fits_header)[1].header
+header  = pyfits.open(args.fits_header)[0].header
 fm.ra  = header["TARGTRA"]
 fm.dec = header["TARGTDEC"]
 fm.expid = header["EXPID"]
 fm.hexrot_deg = float(header["FOCUS"].split(",")[5])/3600.
+
+fm.adc1 = header["ADC1PHI"]
+fm.adc2 = header["ADC2PHI"]
 
 catalog = fm.read_guide_stars_catalog(args.infile)
 
