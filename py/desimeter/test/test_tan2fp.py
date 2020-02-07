@@ -9,6 +9,7 @@ from desimeter.transform.tan2fp.echo22 import tan2fp as echo22_tan2fp
 from desimeter.transform.tan2fp.echo22 import fp2tan as echo22_fp2tan
 from desimeter.transform.tan2fp.raytracefit import tan2fp as raytracefit_tan2fp
 from desimeter.transform.tan2fp.raytracefit import fp2tan as raytracefit_fp2tan
+from desimeter.transform.tan2fp import tan2fp
 
 class TestTan2FP(unittest.TestCase):
 
@@ -127,6 +128,22 @@ class TestTan2FP(unittest.TestCase):
         print("for ADC1={} ADC2={} rms(FP->TAN) = {:4.3f} arcsec".format(adc1,adc2,rms))
         self.assertLess(rms,0.1) # less than 0.1 arcsec
 
-        
+    def test_default_tan2fp(self) :
+        ifilename = resource_filename("desimeter","data/raytrace-tan2fp-4957-v17.csv")
+        table = Table.read(ifilename,format="csv")
+        tmp=np.unique(table["ADC1"])
+        adc1=float(tmp[tmp.size//2]) # one random value of adc1 on grid
+        selection=(table["ADC1"]==adc1)
+        adc2=float(table["ADC2"][selection][0])
+        selection=(table["ADC1"]==adc1)&(table["ADC2"]==adc2)
+        xtan=table["X_TAN"][selection]
+        ytan=table["Y_TAN"][selection]
+        xfp=table["X_FP"][selection]
+        yfp=table["Y_FP"][selection]
+        xfp2,yfp2 = tan2fp(xtan,ytan,adc1,adc2)
+        rms=np.sqrt( np.mean(  (xfp2-xfp)**2 + (yfp2-yfp)**2 ) )
+        print("for ADC1={} ADC2={} rms(TAN->FP) = {:4.3f} microns".format(adc1,adc2,rms*1000.))
+        self.assertLess(rms, 3e-3) # less than 3 um
+    
 if __name__ == '__main__':
     unittest.main()
