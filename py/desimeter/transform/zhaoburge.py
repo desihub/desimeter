@@ -243,3 +243,88 @@ def getZhaoBurgeTerm(polid, x, y):
 
 #---------end of Zhao-Burge evaluator------------------------
 
+
+#- Transformation and fit routines
+
+from scipy.optimize import minimize
+
+#- Tranformation in reduced coordinates space, to be used by minimizer
+def transform(x, y, scale, rotation, offset_x, offset_y, zbpolids=None, zbcoeffs=None):
+    """
+    TODO: document
+    """
+    x = x + offset_x
+    y = y + offset_y
+    xx = (x*np.cos(rotation) - y*np.sin(rotation))*scale # + offset_x
+    yy = (x*np.sin(rotation) + y*np.cos(rotation))*scale # + offset_y
+
+    if zbpolids is not None:
+        if zbcoeffs is None:
+            raise RuntimeError("need none or both zppolids and zbcoeffs")
+        dx, dy = getZhaoBurgeXY(zbpolids,zbcoeffs, xx, yy)
+        xx += dx
+        yy += dy
+
+    return xx, yy
+
+def fit_scale_rotation_offset(x, y, xp, yp, fitzb=False):
+    """
+    Fit scale, rotation, offset plus optional Zhao-Burge corrections
+    for x,y -> xp,yp.
+
+    TODO: document details
+    """
+
+    def func(params, x, y, xp, yp, fitzb):
+        scale, rotation, offset_x, offset_y = params[0:4]
+        xx, yy = transform(x, y, scale, rotation, offset_x, offset_y)
+
+        if fitzb:
+            polids, coeffs, zbx, zby = fitZhaoBurge(xx, yy, xp, yp)
+            xx += zbx
+            yy += zby
+
+        dr2 = np.sum((xx-xp)**2 + (yy-yp)**2)
+        return dr2
+
+    p0 = np.array([1.0, 0.0, 0.0, 0.0])
+    p = minimize(func, p0, args=(x, y, xp, yp, fitzb)) #, method='Nelder-Mead')
+
+    scale, rotation, offset_x, offset_y = p.x
+   
+    if fitzb:
+        #- including ZB in every iteration is ~10x better than fitting
+        #- scale,rotation,offset, then separately fitting ZB
+        xx, yy = transform(x, y, scale, rotation, offset_x, offset_y)
+        zbpolids, zbcoeffs, zbx, zby = fitZhaoBurge(xx, yy, xp, yp)
+        return scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs
+    else:
+        return scale, rotation, offset_x, offset_y
+
+def fitZhaoBurge(x, y, xp, yp):
+    dx = xp-x
+    dy = yp-y
+
+    nx = len(x)
+
+    # here we choose the polynomials
+    # 0 = translation along X
+    # 1 = translation along Y
+    # 2 = magnification
+    
+    polids = np.array([2, 5,  6,   9,  20,  28, 29,  30],dtype=int)
+    
+    nzb = polids.size
+    H = np.zeros((2*nx, nzb))
+    for i,polid in enumerate(polids) :
+        zbx, zby, name = getZhaoBurgeTerm(polid, x, y)
+        H[0:nx, i] = zbx
+        H[nx:, i] = zby
+
+    A = H.T.dot(H)
+    b = H.T.dot(np.concatenate([dx, dy]))
+    coeffs = np.linalg.solve(A, b)
+
+    zbx, zby = getZhaoBurgeXY(polids, coeffs, x, y)
+
+    return polids, coeffs, zbx, zby
