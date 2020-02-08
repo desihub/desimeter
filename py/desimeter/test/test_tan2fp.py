@@ -128,6 +128,18 @@ class TestTan2FP(unittest.TestCase):
         print("for ADC1={} ADC2={} rms(FP->TAN) = {:4.3f} arcsec".format(adc1,adc2,rms))
         self.assertLess(rms,0.1) # less than 0.1 arcsec
 
+    def test_raytracefit_fp2tan_inverse(self) :
+        adc1=12.
+        adc2=48. # quite random values
+        nn=12
+        xtan=np.random.uniform(size=nn)*1./180.*np.pi
+        ytan=np.random.uniform(size=nn)*1./180.*np.pi
+        xfp,yfp = raytracefit_tan2fp(xtan,ytan,adc1,adc2)
+        xtan2,ytan2 = raytracefit_fp2tan(xfp,yfp,adc1,adc2)
+        rms=np.sqrt( np.mean(  (xtan2-xtan)**2 + (ytan2-ytan)**2 ) ) * 180*3600./np.pi # arcsec
+        print("for ADC1={} ADC2={} rms(TAN->FP->TAN) = {:4.3f} arcsec".format(adc1,adc2,rms))
+        self.assertLess(rms,0.1) # less than 0.1 arcsec
+
     def test_default_tan2fp(self) :
         ifilename = resource_filename("desimeter","data/raytrace-tan2fp-4957-v17.csv")
         table = Table.read(ifilename,format="csv")
