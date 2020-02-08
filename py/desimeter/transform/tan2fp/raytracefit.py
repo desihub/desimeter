@@ -151,7 +151,7 @@ class TAN2FP_RayTraceFit(object) :
         dadc_array = self.adc1-self.adc2
         sorted_indices=np.argsort(dadc_array)
         dadc_array = dadc_array[sorted_indices]
-        dadc_arg   =  adc1-adc2
+        dadc_arg   = np.abs(adc1-adc2)
         scale    = np.interp(dadc_arg,dadc_array,self.scale[sorted_indices])
         rotation = np.interp(dadc_arg,dadc_array,self.rotation[sorted_indices])
         offset_x = np.interp(dadc_arg,dadc_array,self.offset_x[sorted_indices])
@@ -166,10 +166,24 @@ class TAN2FP_RayTraceFit(object) :
         Converts tangent plane coordinates xtan,ytan -> focal plane xfp,yfp
         """
         
-        scale,rotation,offset_x,offset_y,zbcoeffs = self.interpolate_coeffs(adc1, adc2)
+        scale,rotation,offset_x,offset_y,zbcoeffs = self.interpolate_coeffs(adc1,adc2)
         
+        mean_adc_rad = (adc1+adc2)/2. *np.pi/180.
+        if (adc1-adc2)<0 : mean_adc_rad += np.pi
+        ca = np.cos(mean_adc_rad)
+        sa = np.sin(mean_adc_rad)
+
         rxtan, rytan = _reduce_xytan(xtan,ytan)
-        rxfp, ryfp   = transform(rxtan, rytan, scale, rotation, offset_x, offset_y, self.zbpolids, zbcoeffs)
+
+        # rotate then derotate to account
+        # for average ADC angle
+        # this leave 20 microns residuals, I don't understand why ...
+        rrxtan = ca*rxtan + sa*rytan
+        rrytan = -sa*rxtan + ca*rytan
+        rrxfp, rryfp   = transform(rrxtan, rrytan, scale, rotation, offset_x, offset_y, self.zbpolids, zbcoeffs)
+        rxfp = ca*rrxfp - sa*rryfp
+        ryfp = sa*rrxfp + ca*rryfp
+
         xfp, yfp     = _expand_xyfp(rxfp, ryfp)
         
         return xfp, yfp
@@ -181,32 +195,46 @@ class TAN2FP_RayTraceFit(object) :
 
         scale,rotation,offset_x,offset_y,zbcoeffs = self.interpolate_coeffs(adc1, adc2)
 
+        
+        mean_adc_rad = (adc1+adc2)/2. *np.pi/180.
+        if (adc1-adc2)<0 : mean_adc_rad += np.pi
+        ca = np.cos(mean_adc_rad)
+        sa = np.sin(mean_adc_rad)
+        
         rxfp, ryfp = _reduce_xyfp(xfp, yfp)
 
+        # average ADC rotation 
+        rrxfp = ca*rxfp + sa*ryfp
+        rryfp = -sa*rxfp + ca*ryfp
+        
         #- first undo Zhao-Burge terms
         #- Iteratively find the correction, since we aren't interested
         #- in the correction at rxfp,ryfp but rather the correction at
         #- a different rx,ry that when applies becomes rxfp, ryfp
         dx = dy = 0.0
         for i in range(20):
-            dx2, dy2 = getZhaoBurgeXY(self.zbpolids, zbcoeffs, rxfp-dx, ryfp-dy)
+            dx2, dy2 = getZhaoBurgeXY(self.zbpolids, zbcoeffs, rrxfp-dx, rryfp-dy)
             dmax = max(np.max(np.abs(dx2-dx)), np.max(np.abs(dy2-dy)))
             dx, dy = dx2, dy2
             if dmax < 1e-12:
                 break
 
-        rxfp -= dx
-        ryfp -= dy
+        rrxfp -= dx
+        rryfp -= dy
 
         #- Then apply inverse scale, roation, offset
-        rxfp /= scale
-        ryfp /= scale
+        rrxfp /= scale
+        rryfp /= scale
 
-        xx = (rxfp*np.cos(-rotation) - ryfp*np.sin(-rotation))
-        yy = (rxfp*np.sin(-rotation) + ryfp*np.cos(-rotation))
+        rxx = (rrxfp*np.cos(-rotation) - rryfp*np.sin(-rotation))
+        ryy = (rrxfp*np.sin(-rotation) + rryfp*np.cos(-rotation))
 
-        xx -= offset_x
-        yy -= offset_y
+        rxx -= offset_x
+        ryy -= offset_y
+
+        # undo average ADC rotation 
+        xx = ca*rxx - sa*ryy
+        yy = +sa*rxx + ca*ryy
 
         xtan, ytan = _expand_xytan(xx, yy)
         
