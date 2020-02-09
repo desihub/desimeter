@@ -9,6 +9,7 @@ from pkg_resources import resource_filename
 import numpy as np
 from astropy.table import Table,Column
 from scipy.optimize import minimize
+from scipy.interpolate import interp1d
 
 # from desimodel.focalplane.geometry import qs2xy,xy2qs
 from desimeter.log import get_logger
@@ -162,13 +163,14 @@ class TAN2FP_RayTraceFit(object) :
         dadc_array = dadc_array[sorted_indices]
         dadc_arg   = (adc2-adc1)
         if dadc_arg < 0 : dadc_arg += 360.
-        scale    = np.interp(dadc_arg,dadc_array,self.scale[sorted_indices])
-        rotation = np.interp(dadc_arg,dadc_array,self.rotation[sorted_indices])
-        offset_x = np.interp(dadc_arg,dadc_array,self.offset_x[sorted_indices])
-        offset_y = np.interp(dadc_arg,dadc_array,self.offset_y[sorted_indices])
+        scale    = interp1d(dadc_array,self.scale[sorted_indices],'cubic')(dadc_arg)
+        rotation = interp1d(dadc_array,self.rotation[sorted_indices],'cubic')(dadc_arg)
+        offset_x = interp1d(dadc_array,self.offset_x[sorted_indices],'cubic')(dadc_arg)
+        offset_y = interp1d(dadc_array,self.offset_y[sorted_indices],'cubic')(dadc_arg)
         zbcoeffs = np.zeros(self.zbcoeffs.shape[1])
         for i in range(self.zbcoeffs.shape[1]) :
-            zbcoeffs[i] = np.interp(dadc_arg,dadc_array,self.zbcoeffs[sorted_indices,i])
+            zbcoeffs[i] = interp1d(dadc_array,self.zbcoeffs[sorted_indices,i],'cubic')(dadc_arg)
+
         return scale,rotation,offset_x,offset_y,zbcoeffs
         
     def tan2fp(self, xtan, ytan, adc1, adc2):
