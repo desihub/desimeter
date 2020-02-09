@@ -42,8 +42,8 @@ def main() :
 
 
     result=[]
-    for adc1 in np.linspace(0.,90.,10) :
-        adc2 = -adc1
+    for adc2 in np.linspace(0.,90.,10) :
+        adc1 = -adc2
         rays=incoming_rays(adc1=adc1,adc2=adc2,dangle=0.1)
         xfp = np.zeros((rays.shape[0]))
         yfp = np.zeros((rays.shape[0]))
@@ -56,11 +56,11 @@ def main() :
         for i in range(len(rays)) :
             result.append([adc1,adc2,xtan[i],ytan[i],xfp[i],yfp[i],wave[i]])
 
-        plt.figure("tan")
-        plt.plot(xtan,ytan,".")
+        #plt.figure("tan")
+        #plt.plot(xtan,ytan,".")
         #plt.figure("fp")
         #plt.plot(xfp,yfp,".")
-        plt.show()
+        #plt.show()
         
     result = np.array(result)
     print(result.shape)

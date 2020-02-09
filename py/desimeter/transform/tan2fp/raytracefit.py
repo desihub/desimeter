@@ -18,7 +18,7 @@ from desimeter.transform.zhaoburge import getZhaoBurgeXY, getZhaoBurgeTerm, tran
 #- Utility transforms to/from reduced [-1,1] coordinates
 def _reduce_xyfp(x, y):
     """
-    Rescale FP xy coordinates [-420,420] -> [-1,1] and flip x axis
+    Rescale FP xy coordinates 
     """
     a =  420.0 #mm
     return x/a, y/a
@@ -32,16 +32,16 @@ def _expand_xyfp(x, y):
 
 def _reduce_xytan(x, y):
     """
-    Rescale tangent plane xy pix coords -> [-1,1]
+    Rescale tangent plane xy pix coords
     """
-    a = 0.028 # = np.sin(1.6/180*np.pi)
+    a = 0.027 
     return x/a, y/a
 
 def _expand_xytan(x, y):
     """
     Undo _redux_xytan() transform
     """
-    a = 0.028 # = np.sin(1.6/180*np.pi)
+    a = 0.027 
     return x*a, y*a
 
 
@@ -121,15 +121,23 @@ class TAN2FP_RayTraceFit(object) :
             #################################################################
             ## CHOICE OF POLYNOMIALS IS HERE
             ## 
-            polids = np.array([2, 5, 6, 9, 20, 28, 29, 30],dtype=int)
+            polids = np.array([2, 5, 6, 9, 20, 27, 28, 29, 30],dtype=int)
             #################################################################
             #- Perform fit
-            scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = fit_scale_rotation_offset(rxtan, rytan, rxfp, ryfp, fitzb=True, polids=polids)
-        
-            self.scale[config] = scale
-            self.rotation[config] = rotation
-            self.offset_x[config] = offset_x
-            self.offset_y[config] = offset_y
+            if 1 : # it's a bit better
+                scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = fit_scale_rotation_offset(rxtan, rytan, rxfp, ryfp, fitzb=True, polids=polids)
+                self.scale[config] = scale
+                self.rotation[config] = rotation
+                self.offset_x[config] = offset_x
+                self.offset_y[config] = offset_y
+            else :
+                zbpolids, zbcoeffs, dx, dy =  fitZhaoBurge(rxtan, rytan, rxfp, ryfp, polids=polids)
+            
+                self.scale[config] = 1
+                self.rotation[config] = 0.
+                self.offset_x[config] = 0.
+                self.offset_y[config] = 0.
+                
             if self.zbpolids is None :
                 self.zbpolids = zbpolids
             else :
@@ -148,10 +156,12 @@ class TAN2FP_RayTraceFit(object) :
 
     def interpolate_coeffs(self,adc1, adc2):
         # interpolate transform parameters
-        dadc_array = self.adc1-self.adc2
+        dadc_array = self.adc2-self.adc1
+        dadc_array[dadc_array<0] += 360.
         sorted_indices=np.argsort(dadc_array)
         dadc_array = dadc_array[sorted_indices]
-        dadc_arg   = np.abs(adc1-adc2)
+        dadc_arg   = (adc2-adc1)
+        if dadc_arg < 0 : dadc_arg += 360.
         scale    = np.interp(dadc_arg,dadc_array,self.scale[sorted_indices])
         rotation = np.interp(dadc_arg,dadc_array,self.rotation[sorted_indices])
         offset_x = np.interp(dadc_arg,dadc_array,self.offset_x[sorted_indices])
@@ -169,7 +179,6 @@ class TAN2FP_RayTraceFit(object) :
         scale,rotation,offset_x,offset_y,zbcoeffs = self.interpolate_coeffs(adc1,adc2)
         
         mean_adc_rad = (adc1+adc2)/2. *np.pi/180.
-        if (adc1-adc2)<0 : mean_adc_rad += np.pi
         ca = np.cos(mean_adc_rad)
         sa = np.sin(mean_adc_rad)
 
@@ -194,10 +203,8 @@ class TAN2FP_RayTraceFit(object) :
         """
 
         scale,rotation,offset_x,offset_y,zbcoeffs = self.interpolate_coeffs(adc1, adc2)
-
         
         mean_adc_rad = (adc1+adc2)/2. *np.pi/180.
-        if (adc1-adc2)<0 : mean_adc_rad += np.pi
         ca = np.cos(mean_adc_rad)
         sa = np.sin(mean_adc_rad)
         
