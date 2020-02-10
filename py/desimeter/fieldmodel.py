@@ -264,7 +264,7 @@ class FieldModel(object):
     def radec2fp(self,ra,dec) :
         x_tan,y_tan = radec2tan(ra,dec,self.ra,self.dec,mjd=self.mjd,lst_deg=self.lst,hexrot_deg = self.hexrot_deg)
         x_tan,y_tan = self.tancorr_sky2inst(x_tan,y_tan) # correction
-        x_fp,y_fp   = tan2fp(x_tan,y_tan)
+        x_fp,y_fp   = tan2fp(x_tan,y_tan,self.adc1,self.adc2)
         return x_fp,y_fp
 
     
