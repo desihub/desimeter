@@ -416,4 +416,50 @@ class TanCorr(object):
         return xy[0],xy[1]
         
         
-        
+def fieldrot(ra,dec,mjd,lst_deg,hexrot_deg=0) :
+    """
+    Computes the field rotation in degrees.
+
+    Args:
+      ra: scalar, float, RA in degrees
+      dec: scalar, float, Dec in degrees
+      mjd: scalar, float, MJD in days
+      lst_deg: scalar, float, LST in degrees (ha = lst_deg - ra)
+    
+    Optional:
+      hexrot_deg: scalar, float, Hexapod rotation in degrees (default=0)
+    
+    Returns:
+      field rotation angle in degrees
+
+    """
+    fm = FieldModel()
+    fm.ra=ra
+    fm.dec=dec
+    fm.mjd=mjd
+    fm.lst=lst_deg
+    fm.adc1=0
+    fm.adc2=0
+    fm.hexrot_deg=hexrot_deg
+    return fm.compute_fieldrot()
+
+def dfieldrotdt(ra,dec,mjd,lst,hexrot_deg=0) :    
+    """
+    Computes the derivative with time of the field rotation in arcsec per minute.
+
+    Args:
+      ra: scalar, float, RA in degrees
+      dec: scalar, float, Dec in degrees
+      mjd: scalar, float, MJD in days
+      lst_deg: scalar, float, LST in degrees (ha = lst_deg - ra)
+    
+    Optional:
+      hexrot_deg: scalar, float, Hexapod rotation in degrees (default=0)
+    
+    Returns:
+      field rotation angle derivative with time in arcsec per minute
+
+    """
+    
+    one_minute_in_degrees = 1./60./24.*360 # 
+    return 3600.*(fieldrot(ra,dec,mjd,lst+one_minute_in_degrees,hexrot_deg) - fieldrot(ra,dec,mjd,lst,hexrot_deg))
