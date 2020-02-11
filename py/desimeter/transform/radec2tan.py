@@ -435,7 +435,7 @@ def rotation_matrix(axis,theta) :
     uxx=np.array([[0,-u[2],u[1]],[u[2],0,-u[0]],[-u[1],u[0],0]])
     return ct*np.eye(axis.size)+st*uxx+(1-ct)*uut
 
-def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, aberration = False, polar_misalignment = False, use_astropy = False) :
+def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, aberration = True, polar_misalignment = True, use_astropy = False) :
     """
     Convert ICRS coordinates to tangent plane coordinates
 
@@ -504,7 +504,7 @@ def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, a
     
     return chex*x-shex*y , +shex*x+chex*y
     
-def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, aberration = False, polar_misalignment = False, use_astropy = False) :
+def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, aberration = True, polar_misalignment = True, use_astropy = False) :
     """
     Convert ICRS coordinates to tangent plane coordinates
 
@@ -566,7 +566,7 @@ def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = Tr
         # inverse matrix
         polar_misalignment_matrix = compute_polar_misalignment_rotation_matrix(me_arcsec=-ME_ARCSEC,ma_arcsec=-MA_ARCSEC)
         ha,dec  = getLONLAT(polar_misalignment_matrix.dot(getXYZ(ha,dec)))
-        ha_tel,dec_tel  = getLONLAT(polar_misalignment_matrix.dot(getXYZ(ha_tel,dec_tel)))
+        tel_ha,tel_dec  = getLONLAT(polar_misalignment_matrix.dot(getXYZ(tel_ha,tel_dec)))
         
     # ra
     ra = lst_deg - ha
