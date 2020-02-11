@@ -99,7 +99,7 @@ def compute_triangles_with_fixed_orientation(x,y) :
                 triangle_index += 1
     return tk,txyz
 
-def match_same_system(x1,y1,x2,y2) :
+def match_same_system(x1,y1,x2,y2,remove_duplicates=True) :
     """
     match two catalogs, assuming the coordinates are in the same coordinate system (no transfo)
     Args:
@@ -112,6 +112,7 @@ def match_same_system(x1,y1,x2,y2) :
         indices_2 : integer numpy array. if ii is a index array for entries in the first catalog, 
                             indices_2[ii] is the index array of best matching entries in the second catalog.
                             (one should compare x1[ii] with x2[indices_2[ii]])
+                            negative indices_2 indicate unmatched entries
         distances : distances between pairs. It can be used to discard bad matches. 
 
     """
@@ -119,6 +120,17 @@ def match_same_system(x1,y1,x2,y2) :
     xy2=np.array([x2,y2]).T
     tree2 = KDTree(xy2)
     distances,indices_2 = tree2.query(xy1,k=1)
+
+    if remove_duplicates :
+        unique_indices_2 = np.unique(indices_2)
+        n_duplicates = np.sum(indices_2>=0)-np.sum(unique_indices_2>=0)
+        if n_duplicates > 0 :
+            for i2 in unique_indices_2 :
+                jj=np.where(indices_2==i2)[0]
+                if jj.size>1 :
+                    kk=np.argsort(distances[jj])
+                    indices_2[jj[kk[1:]]] = -1
+
     return indices_2,distances
 
 def match_arbitrary_translation_dilatation(x1,y1,x2,y2) :
