@@ -48,6 +48,9 @@ class SimpleCorr(object):
         tx.rms = params['rms']        
         return tx
 
+    def __str__(self):
+        return "desimeter.simplecorr.SimpleCorr\n dx= {:7.6f}\n dy= {:7.6f}\n rot_deg= {:5.4f}\n sxx= {:5.4f}\n syy= {:5.4f}\n sxy= {:5.4f}\n nmatch= {:d}\n rms= {:7.6f} \n".format(self.dx,self.dy,self.rot_deg,self.sxx,self.syy,self.sxy,self.nmatch,self.rms)
+
     def fit(self, x1, y1, x2, y2) :
         """
         Adjust tranformation from x1,y1 to x2,y2

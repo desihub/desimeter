@@ -57,18 +57,28 @@ print("wrote",args.outfile)
 
 if args.plot :
     import matplotlib.pyplot as plt
-    from desimeter.transform.tan2fp import fp2tan
-    from desimeter.transform.radec2tan import tan2radec,radec2tan
+
     t=catalog
     xgfa=t["xcentroid"]
     ygfa=t["ycentroid"]
     pet=t["petal_loc"]
+
+    # re-read the model to also test the I/O
+    with open(args.outfile) as file :
+        fm = FieldModel.fromjson(file.read())
+    
     xfp,yfp = fm.all_gfa2fp(xgfa,ygfa,pet)
-    xtan,ytan = fp2tan(xfp,yfp)
     ra2,dec2=fm.fp2radec(xfp,yfp)
 
     ra=t["ra_gaia"]
     dec=t["dec_gaia"]
+
+    ii=(xfp!=0)
+    dy=dec2[ii]-dec[ii]
+    dx=(ra2[ii]-ra[ii])*np.cos(dec[ii]/180*np.pi)
+    dr2=dx**2+dy**2
+    rms=np.sqrt(np.mean(dr2))
+    print("rms (GAIA RA,Dec - Measurement) = {:3.2f} arcsec".format(rms*3600.))
     
     plt.figure("sky")
     plt.plot(-ra,dec,"o",label="GAIA")

@@ -31,6 +31,11 @@ log.info("reading petal metrology")
 filename = resource_filename('desimeter',"data/UMT-DESI-5421.csv")
 log.info(" in {}".format(filename))
 spots = Table.read(filename,format="csv")
+if 'col0' in spots.dtype.names :
+    spots.remove_column('col0')
+
+print("metrology columns:",spots.dtype.names)
+
 
 # force int type
 spots["PETAL_LOC"]=spots["PETAL_LOC"].astype(int)
