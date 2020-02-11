@@ -27,7 +27,6 @@ class TestFindFiducials(unittest.TestCase):
     def tearDownClass(cls):
         pass
 
-    @unittest.expectedFailure
     def test_findfiducials(self):
         spots = self.spots.copy()
         spots.remove_columns(['LOCATION', 'PINHOLE_ID', 'X_FP', 'Y_FP',
