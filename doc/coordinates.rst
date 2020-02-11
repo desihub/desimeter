@@ -83,7 +83,7 @@ as the fit (see the script `desi_fvc_proc`_ ). Two implementations of this
 transform exist in `transform.fvc2fp`_ , but we used by default the Zhao-Burge transform
 implemented in `transform.fvc2fp.zb.py`_ .
 
- Example::
+Example::
 
   from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
   tx = FVCFP_ZhaoBurge()
@@ -96,10 +96,11 @@ FP -> TAN
 
 From the focal surface instruments to the tangent plane. We have two implementations
 for now.
- - `transform.tan2fp.echo22.py`_ It is based on the echo22 design model. Does not account for ADC rotation.
- - `transform.tan2fp.raytracefit.py`_ It is based on a ray tracing model fitted fitted ZB polynomials. It does include ADC rotation and is now the default. More information on this in `raytrace.rst`_ . 
+
+* `transform.tan2fp.echo22.py`_ It is based on the echo22 design model. Does not account for ADC rotation.
+* `transform.tan2fp.raytracefit.py`_ It is based on a ray tracing model fitted fitted ZB polynomials. It does include ADC rotation and is now the default. More information on this in `raytrace.rst`_ . 
  
- Example::
+Example::
 
    from desimeter.transform.tan2fp import fp2tan,tan2fp
    x_tan,y_tan = fp2tan(x_fp,y_fp,adc1=60.,adc2=120.)
@@ -112,7 +113,7 @@ TAN -> ICRS
 This transformation includes precession, aberration, refraction, polar mis-alignment, hexapod rotation angle.
 The code is in `transform.radec2tan.py`_ .
 
- Example::
+Example::
 
    from desimeter.transform.radec2tan import radec2tan,tan2radec
    ra,dec = radec2tan(x_tan,y_tan,telescope_ra,telescop_dec,mjd,lst,precession=True,aberration=True)
@@ -122,7 +123,7 @@ Field Model
 
 This is not a transformation from one system to another but rather the combination of the transformations,
 including a correction based on the location of GFA guide stars. This "field model" is fit to the data
-using the script `desi_fit_guide_star_coordinates`_ . The routines are in `fieldmodel.py`_
+using the script `desi_fit_guide_star_coordinates`_ . The routines are in `fieldmodel.py`_ .
 
 Example::
 
