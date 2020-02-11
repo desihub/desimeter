@@ -54,7 +54,7 @@ Coordinate transformations
 ++++++++++++++++++++++++++
 
 PTL -> FP
----------
+~~~~~~~~~
 
 Solid transformation from PTL to FP composed of a translation and a rotation.
 The transformation coefficients are saved in the yaml file `petal-alignments.yaml`_ . In the current
