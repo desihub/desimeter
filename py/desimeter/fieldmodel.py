@@ -22,6 +22,8 @@ class FieldModel(object):
         self.mjd = None
         self.lst = None
         self.hexrot_deg = None
+        self.adc1 = None
+        self.adc2 = None
         
         self.sxx = 1.
         self.syy = 1.
@@ -41,6 +43,8 @@ class FieldModel(object):
         params['mjd'] = self.mjd
         params['lst'] = self.lst
         params['hexrot_deg'] = self.hexrot_deg
+        params['adc1'] = self.adc1
+        params['adc2'] = self.adc2
         
         params['sxx'] = self.sxx
         params['syy'] = self.syy
@@ -63,6 +67,8 @@ class FieldModel(object):
         tx.mjd = params['mjd']
         tx.lst = params['lst']
         tx.hexrot_deg = params['hexrot_deg']
+        tx.adc1 = params['adc1']
+        tx.adc2 = params['adc2']
         
         tx.sxx = params['sxx']
         tx.syy = params['syy']
@@ -151,7 +157,7 @@ class FieldModel(object):
         dec_gaia = dec_gaia[selection]
 
         # transform focal plane to tangent plane
-        x_tan_meas,y_tan_meas = fp2tan(x_fp,y_fp)
+        x_tan_meas,y_tan_meas = fp2tan(x_fp,y_fp,self.adc1,self.adc2)
 
         correction = TanCorr()
 
@@ -194,7 +200,7 @@ class FieldModel(object):
         y1 = np.append(0.,np.pi/180.*np.sin(phi))
 
         # convert to sky 
-        xfp,yfp = tan2fp(x1,y1)
+        xfp,yfp = tan2fp(x1,y1,self.adc1,self.adc2)
         ra,dec  = self.fp2radec(xfp,yfp)
         
         # vanilla transformation from ha,dec to tangent plane
@@ -250,7 +256,7 @@ class FieldModel(object):
         return x_fp,y_fp
     
     def fp2radec(self,x_fp,y_fp) :
-        x_tan,y_tan = fp2tan(x_fp,y_fp)
+        x_tan,y_tan = fp2tan(x_fp,y_fp,self.adc1,self.adc2)
         x_tan,y_tan = self.tancorr_inst2sky(x_tan,y_tan) # correction
         ra,dec = tan2radec(x_tan,y_tan,self.ra,self.dec,mjd=self.mjd,lst_deg=self.lst,hexrot_deg = self.hexrot_deg)
         return ra,dec
@@ -258,7 +264,7 @@ class FieldModel(object):
     def radec2fp(self,ra,dec) :
         x_tan,y_tan = radec2tan(ra,dec,self.ra,self.dec,mjd=self.mjd,lst_deg=self.lst,hexrot_deg = self.hexrot_deg)
         x_tan,y_tan = self.tancorr_sky2inst(x_tan,y_tan) # correction
-        x_fp,y_fp   = tan2fp(x_tan,y_tan)
+        x_fp,y_fp   = tan2fp(x_tan,y_tan,self.adc1,self.adc2)
         return x_fp,y_fp
 
     

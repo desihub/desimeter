@@ -33,6 +33,8 @@ class TestFieldModel(unittest.TestCase):
         fm.hexrot_deg = 0.
         fm.mjd = 58800.
         fm.lst = mjd2lst(fm.mjd)
+        fm.adc1 = 0.
+        fm.adc2 = 0.
         
         x=np.linspace(0,200.,4) # mm
         y=np.linspace(0,100.,4) # mm
@@ -50,7 +52,9 @@ class TestFieldModel(unittest.TestCase):
         fm.hexrot_deg = 0.
         fm.mjd = 58800.
         fm.lst = mjd2lst(fm.mjd)
-
+        fm.adc1 = 0.
+        fm.adc2 = 0.
+        
         string = fm.tojson()
         print(string)
 

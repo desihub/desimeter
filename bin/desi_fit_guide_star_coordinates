@@ -3,7 +3,7 @@
 import argparse
 import sys,os
 import numpy as np
-import astropy.io.fits as pyfits
+import fitsio
 
 from desimeter.log import get_logger
 from desimeter.fieldmodel import FieldModel
@@ -24,11 +24,22 @@ log   = get_logger()
 
 fm = FieldModel()
 
-header  = pyfits.open(args.fits_header)[1].header
+header  = fitsio.read_header(args.fits_header,0)
+if not "TARGTRA" in header :
+    log.warning("no TARGTRA in header of HDU 0, try HDU 1")
+    header  = fitsio.read_header(args.fits_header,1)
+    if not "TARGTRA" in header :
+        log.error("no TARGTRA in headers of HDU 0 or 1 of file {}".format(args.fits_header))
+        sys.exit(12)
+
+        
 fm.ra  = header["TARGTRA"]
 fm.dec = header["TARGTDEC"]
 fm.expid = header["EXPID"]
-fm.hexrot_deg = float(header["FOCUS"].split(",")[5])/3600.
+fm.hexrot_deg = float(header["FOCUS"][5])/3600.
+
+fm.adc1 = header["ADC1PHI"]
+fm.adc2 = header["ADC2PHI"]
 
 catalog = fm.read_guide_stars_catalog(args.infile)
 

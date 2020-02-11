@@ -9,4 +9,5 @@ given spherical coordinate angles theta (polar), phi (azimuthal)::
 phi=0 is aligned with +xtan = +RA = -xfp in DESI
 """
 
-from .echo22 import tan2fp, fp2tan
+#from .echo22 import tan2fp, fp2tan
+from .raytracefit import tan2fp, fp2tan

@@ -38,6 +38,8 @@ parser.add_argument('--hdu-for-expected-positions', type = str, default = "DATA"
                     help = 'specify HDU in expected position fits file')
 parser.add_argument('--field-model', type = str, default = None, required = False,
                     help = 'use this json file as field model to convert fiber coordinates to RA Dec')
+parser.add_argument('--fvc-psf-sigma', type = float, default = 1., required = False,
+                    help = 'use this PSF sigma for the centroid measurement')
 
 
 
@@ -62,7 +64,7 @@ if filename.find(".fits")>0 :
                     extname = extname0
             image = fx[extname].read().astype(float)
             log.info(f'using extension {extname}...')
-    spots = detectspots(image,threshold=args.threshold,nsig=7)
+    spots = detectspots(image,threshold=args.threshold,nsig=7,psf_sigma=args.fvc_psf_sigma)
 elif filename.find(".csv")>0 :
     log.info("read CSV spots table")
     spots = Table.read(filename,format="csv")

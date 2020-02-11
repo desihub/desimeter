@@ -3,7 +3,7 @@ from pkg_resources import resource_filename
 from collections import Counter
 
 import numpy as np
-from desimeter.fieldmodel import SimpleCorr
+from desimeter.simplecorr import SimpleCorr
         
 class TestCorr(unittest.TestCase):
     

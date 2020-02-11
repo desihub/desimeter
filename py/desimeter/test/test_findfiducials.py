@@ -18,6 +18,7 @@ class TestFindFiducials(unittest.TestCase):
         '''
         cls.spotfile = resource_filename('desimeter', 'test/data/test-spots.csv')
         cls.spots = Table.read(cls.spotfile)
+        cls.input_transform = resource_filename('desimeter',"data/canon-lens-fvc2fp.json")
 
     def setUp(self):
         pass
@@ -30,7 +31,7 @@ class TestFindFiducials(unittest.TestCase):
         spots = self.spots.copy()
         spots.remove_columns(['LOCATION', 'PINHOLE_ID', 'X_FP', 'Y_FP',
                               'X_FP_METRO', 'Y_FP_METRO'])
-        spots = findfiducials(spots)
+        spots = findfiducials(spots, input_transform=self.input_transform)
 
         #- All fiducial locations found
         self.assertTrue(np.all(np.in1d(self.spots['LOCATION'], spots['LOCATION'])))

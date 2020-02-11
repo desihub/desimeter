@@ -1,0 +1,53 @@
+   26  ,  surfaces      DESI-ADC.OPT   South: ADC1 = +-  ADC2 = -+    CBin modifies frame; CBout modifies rays.
+ index ,Type     ,X  ,Y  ,Z           ,Diam ,diam ,Nspi ,Wspi ,pitchY ,tiltX,rollZ,                   ,Curvature             ,Aspher   ,A4              ,A6              ,A8              ,A10             ,
+       ,Retro    ,   ,   ,11001       ,     ,     ,     ,     ,0      ,0    ,     ,                   ,                      ,         ,                ,                ,                ,                ,
+       ,Retro    ,   ,   ,-2000       ,     ,     ,     ,     ,0      ,0    ,     ,                   ,                      ,         ,                ,                ,                ,                ,
+       ,Mirror   ,   ,   ,11124.819   ,3800 ,1500 ,     ,     ,0      ,0    ,     ,-21336             ,-4.68691413573E-05    ,-1.09763 ,                ,                ,                ,                ,
+       ,CBin  HEX, 0 , 0 , 2500.069   ,     ,     ,     ,     ,0      ,0    ,   0 ,                   ,0                     ,         ,                ,                ,                ,                ,
+       ,CBout HEX,   ,   , 2500       ,     ,     ,     ,     ,0      ,0.   ,     ,                   ,0                     ,         ,                ,                ,                ,                ,
+       ,Lens C1f ,   ,   , 2425.007   ,1139 ,     ,     ,     ,0      ,0    ,     ,-1184.9900         ,-8.43888977966E-04    ,         ,                ,                ,                ,                ,
+ C1    ,Lens C1b ,   ,   , 2288.417   ,1139 ,     ,     ,     ,0      ,0    ,     ,-3296.9700         ,-3.03308795652E-04    ,         ,                ,                ,                ,                ,
+       ,Lens C2f ,   ,   , 1813.200   ,850  ,     ,     ,     ,0      ,0    ,     ,-12615.9600        ,-7.92646774403E-05    ,         ,-1.73045520E-10 ,1.53525650E-16  ,3.67541020E-22  ,-9.73764150E-28 ,
+ C2    ,Lens C2b ,   ,   , 1768.480   ,850  ,     ,     ,     ,0      ,0    ,     ,-612.4260          ,-1.63285033620E-03    ,         ,                ,                ,                ,                ,
+       ,CBin     ,   ,   , 1600       ,     ,     ,     ,     ,       ,     ,     ,                   ,-2E-4                 ,         ,                ,                ,                ,                ,
+       ,CBout    ,   ,   , 1600       ,     ,     ,     ,     ,       ,     ,   0 ,                   ,-2E-4                 ,         ,                ,                ,                ,                ,
+       ,Lens A1f ,   ,   , 1577.606   ,799  ,     ,     ,     ,0      ,0    ,     ,-4590.1000         ,-2.17860177338E-04    ,         ,                ,                ,                ,                ,
+ ADC1  ,Lens A1b ,   ,   , 1517.456   ,799  ,     ,     ,     ,0.2465 ,0    ,     ,-1371.0000         ,-7.29394602480E-04    ,         ,                ,                ,                ,                ,
+       ,CBin     ,   ,   , 1501       ,     ,     ,     ,     ,       ,     ,     ,                   ,-7.2E-4               ,         ,                ,                ,                ,                ,
+       ,CBout    ,   ,   , 1501       ,     ,     ,     ,     ,       ,     ,   0 ,                   ,-7.2E-4               ,         ,                ,                ,                ,                ,
+       ,CBin     ,   ,   , 1499       ,     ,     ,     ,     ,       ,     ,     ,                   ,-7.2E-4               ,         ,                ,                ,                ,                ,
+       ,CBout    ,   ,   , 1499       ,     ,     ,     ,     ,       ,     ,   0 ,                   ,-7.2E-4               ,         ,                ,                ,                ,                ,
+       ,Lens A2f ,   ,   , 1492.606   ,804  ,     ,     ,     ,0.2501 ,0    ,     ,-1392.1200         ,-7.18328879694E-04    ,         ,                ,                ,                ,                ,
+ ADC2  ,Lens A2b ,   ,   , 1432.456   ,804  ,     ,     ,     ,0      ,0    ,     ,-1049.5800         ,-9.52762057204E-04    ,         ,                ,                ,                ,                ,
+       ,CBin     ,   ,   , 1400       ,     ,     ,     ,     ,       ,     ,     ,                   ,-9.5E-4               ,         ,                ,                ,                ,                ,
+       ,CBout    ,   ,   , 1400       ,     ,     ,     ,     ,       ,     ,   0 ,                   ,-9.5E-4               ,         ,                ,                ,                ,                ,
+       ,Lens C3f ,   ,   , 1233.199   ,834  ,     ,     ,     ,0      ,0    ,     ,1339.9970          ,7.46270327471E-04     ,         ,1.28761240E-10  ,-2.47239660E-16 ,4.43883190E-22  ,-7.37730760E-27 ,
+ C3    ,Lens C3b ,   ,   , 1153.113   ,834  ,     ,     ,     ,0      ,0    ,     ,1026.2780          ,9.74394852077E-04     ,         ,                ,                ,                ,                ,
+       ,Lens C4f ,   ,   ,  615.927   ,1034 ,     ,     ,     ,0      ,0    ,     ,-934.2000          ,-1.07043459645E-03    ,         ,                ,                ,                ,                ,
+ C4    ,Lens C4b ,   ,   ,  399.007   ,1034 ,     ,     ,     ,0      ,0    ,     ,5185.7900          ,1.92834650073E-04     ,         ,                ,                ,                ,                ,
+       ,FocPlane ,   ,   ,    0.000   ,840  ,     ,     ,     ,0      ,0    ,     ,-4977.993649374310 ,-2.00884145387709E-04 ,         ,-2.96481970E-10 ,3.45230870E-15  ,-1.80419790E-20 ,3.25707820E-26  ,
+       ,         ,   ,   ,            ,     ,     ,     ,     ,       ,     ,     ,                   ,                      ,         ,                ,                ,                ,                ,
+       ,         ,   ,   ,            ,     ,     ,     ,     ,       ,     ,     ,                   ,                      ,         ,                ,                ,                ,                ,
+       ,     nomi,al ,M =,+11124.819  ,     ,     ,     ,     ,       ,     ,     ,                   ,                      ,         ,                ,                ,                ,                ,
+
+
+   Coor,inate Sys,em ,S5 ,hen viewing ,enith, +X=e,st- +,=sout,- +Z=na,ir.
+   Posi,ive Pitch, on,ADC,back makes i, thic,er on,+X (E,st) s,de
+   Posi,ive pitch, on,ADC,front makes ,t thi,ker o, -X (,est) ,ide
+   Ray ,otion vie,-
+   Posi,ive CBout,oll,ahe,d of ADC1 br,ngs b,ttom ,ays (,Y) we,tward (,X) on,ADC1-,thinner
+   Nega,ive CBout,oll,ahe,d of ADC2 pu,hes b,ttom ,ays (,Y) ea,tward (,X) on,ADC2-,thinner
+   Lens,motion vi,w-
+   ADC1,ack  CBou,Rol,=0-,thick=East (,>0)- ,ncrea,ing C,outRo,l moves,thick,edge ,orth.
+   ADC2,ront CBou,Rol,=0-,thick=West (,<0)- ,ncrea,ing C,outRo,l moves,thick,edge ,outh.
+   ADC2,ront CBou,Rol,=0-,thick=West (,<0)- ,egati,e CBo,tRoll,moves t,ick e,ge No,th.
+   Sout,ern targe,s w, wa,t thick edge, Nort,- on ,op (-,) sid,.
+
+Focussi,g with e2,-17,py
+Nominal,ZPM = 111,4.8,9; ,naxis xrms y,ms = ,5um; ,ut yi,es bl,e diam , 100u,
+OffNomi,al    111,4.4,0- ,naxis xrms y,ms = ,2um; ,lue d,am = ,00um; o,hers ,uch l,rger.
+OffNomi,al    111,4.7,9- ,naxis xrms y,ms = ,7um; ,lue d,am = ,iny; NI, is w,rst- ,0um diam.
+OffNomi,al    111,4.7,0- ,naxis xrms y,ms = ,5um; ,lue d,am = ,0um; ot,ers a,e sma,ler.
+OffNomi,al    111,4.7,0- ,naxis xrms y,ms = ,5um; ,lue d,am = ,IR diam,= 70u,- oth,rs smaller- BALANCE,.
+21 Octo,er 2019 a,opt,ng ,PM = 11124.7,0 as ,howin, good,balan,e acros, wave,ength, and across field.
+21 Octo,er 2019 a,opt,ng ,nstead Hexap,d coo,dinat, brea, CBin,+0.069m, shor,ening,system 69um

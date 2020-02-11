@@ -8,13 +8,12 @@ from pkg_resources import resource_filename
 
 import numpy as np
 from astropy.table import Table,Column
-from scipy.optimize import minimize
 
 # from desimodel.focalplane.geometry import qs2xy,xy2qs
 from desimeter.log import get_logger
 
 from .base import FVC2FP_Base
-from desimeter.transform.zhaoburge import getZhaoBurgeXY, getZhaoBurgeTerm
+from desimeter.transform.zhaoburge import getZhaoBurgeXY, getZhaoBurgeTerm, transform, fit_scale_rotation_offset, fitZhaoBurge
 
 #- Utility transforms to/from reduced [-1,1] coordinates
 def _reduce_xyfp(x, y):
@@ -45,75 +44,6 @@ def _expand_xyfvc(x, y):
     c = 3000.0
     return (x+1)*c, (y+1)*c
 
-#- Tranformation in reduced coordinates space, to be used by minimizer
-def transform(x, y, scale, rotation, offset_x, offset_y, zbcoeffs=None):
-    """
-    TODO: document
-    """
-    x = x + offset_x
-    y = y + offset_y
-    xx = (x*np.cos(rotation) - y*np.sin(rotation))*scale # + offset_x
-    yy = (x*np.sin(rotation) + y*np.cos(rotation))*scale # + offset_y
-
-    if zbcoeffs is not None:
-        dx, dy = getZhaoBurgeXY(zbcoeffs, xx, yy)
-        xx += dx
-        yy += dy
-
-    return xx, yy
-
-def fit_scale_rotation_offset(x, y, xp, yp, fitzb=False):
-    """
-    Fit scale, rotation, offset plus optional Zhao-Burge corrections
-    for x,y -> xp,yp.
-
-    TODO: document details
-    """
-
-    def func(params, x, y, xp, yp, fitzb):
-        scale, rotation, offset_x, offset_y = params[0:4]
-        xx, yy = transform(x, y, scale, rotation, offset_x, offset_y)
-
-        if fitzb:
-            c, zbx, zby = fitZhaoBurge(xx, yy, xp, yp)
-            xx += zbx
-            yy += zby
-
-        dr2 = np.sum((xx-xp)**2 + (yy-yp)**2)
-        return dr2
-
-    p0 = np.array([1.0, 0.0, 0.0, 0.0])
-    p = minimize(func, p0, args=(x, y, xp, yp, fitzb)) #, method='Nelder-Mead')
-
-    scale, rotation, offset_x, offset_y = p.x
-    if fitzb:
-        #- including ZB in every iteration is ~10x better than fitting
-        #- scale,rotation,offset, then separately fitting ZB
-        xx, yy = transform(x, y, scale, rotation, offset_x, offset_y)
-        zbcoeffs, zbx, zby = fitZhaoBurge(xx, yy, xp, yp)
-        return scale, rotation, offset_x, offset_y, zbcoeffs
-    else:
-        return scale, rotation, offset_x, offset_y
-
-def fitZhaoBurge(x, y, xp, yp):
-    dx = xp-x
-    dy = yp-y
-
-    nx = len(x)
-    nzb = 8
-    H = np.zeros((2*nx, nzb))
-    for i in range(nzb):
-        zbx, zby, name = getZhaoBurgeTerm(i, x, y)
-        H[0:nx, i] = zbx
-        H[nx:, i] = zby
-
-    A = H.T.dot(H)
-    b = H.T.dot(np.concatenate([dx, dy]))
-    c = np.linalg.solve(A, b)
-
-    zbx, zby = getZhaoBurgeXY(c, x, y)
-
-    return c, zbx, zby
 
 #-------------------------------------------------------------------------
 
@@ -121,11 +51,12 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
     def tojson(self):
         params = dict()
         params['method'] = 'Zhao-Burge'
-        params['version'] = '1'
+        params['version'] = '2'
         params['scale'] = self.scale
         params['rotation'] = self.rotation
         params['offset_x'] = self.offset_x
         params['offset_y'] = self.offset_y
+        params['zbpolids'] = [int(polid) for polid in self.zbpolids]
         params['zbcoeffs'] = list(self.zbcoeffs)
         return json.dumps(params)
 
@@ -134,12 +65,22 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         tx = cls()
         params = json.loads(jsonstring)
         assert params['method'] == 'Zhao-Burge'
-        assert params['version'] == '1'
-        tx.scale = params['scale']
-        tx.rotation = params['rotation']
-        tx.offset_x = params['offset_x']
-        tx.offset_y = params['offset_y']
-        tx.zbcoeffs = np.asarray(params['zbcoeffs'])
+        if params['version'] == '1' :
+            tx.scale = params['scale']
+            tx.rotation = params['rotation']
+            tx.offset_x = params['offset_x']
+            tx.offset_y = params['offset_y']
+            tx.zbpolids = np.array([2,  5,  6,   9,  20,  28, 29,  30],dtype=int)
+            tx.zbcoeffs = np.asarray(params['zbcoeffs'])
+        elif params['version'] == '2' :
+            tx.scale = params['scale']
+            tx.rotation = params['rotation']
+            tx.offset_x = params['offset_x']
+            tx.offset_y = params['offset_y']
+            tx.zbpolids = np.asarray(params['zbpolids'])
+            tx.zbcoeffs = np.asarray(params['zbcoeffs'])
+        else :
+            raise RuntimeError("don't know version {}".format(version))
         return tx
 
     def fit(self, spots, metrology=None, update_spots=False):
@@ -176,13 +117,15 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         rxfp, ryfp = _reduce_xyfp(metrology['X_FP'], metrology['Y_FP'])
 
         #- Perform fit
-        scale, rotation, offset_x, offset_y, zbcoeffs = \
+        #- Perform fit
+        scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = \
             fit_scale_rotation_offset(rxpix, rypix, rxfp, ryfp, fitzb=True)
 
         self.scale = scale
         self.rotation = rotation
         self.offset_x = offset_x
         self.offset_y = offset_y
+        self.zbpolids = zbpolids
         self.zbcoeffs = zbcoeffs
 
         #- Goodness of fit
@@ -229,7 +172,7 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         """
         rx, ry = _reduce_xyfvc(xpix, ypix)
         rxfp, ryfp = transform(rx, ry, self.scale, self.rotation,
-            self.offset_x, self.offset_y, self.zbcoeffs)
+            self.offset_x, self.offset_y, self.zbpolids, self.zbcoeffs)
         xfp, yfp = _expand_xyfp(rxfp, ryfp)
         return xfp, yfp
 
@@ -245,7 +188,7 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         #- a different rx,ry that when applies becomes rxfp, ryfp
         dx = dy = 0.0
         for i in range(20):
-            dx2, dy2 = getZhaoBurgeXY(self.zbcoeffs, rxfp-dx, ryfp-dy)
+            dx2, dy2 = getZhaoBurgeXY(self.zbpolids, self.zbcoeffs, rxfp-dx, ryfp-dy)
             dmax = max(np.max(np.abs(dx2-dx)), np.max(np.abs(dy2-dy)))
             dx, dy = dx2, dy2
             if dmax < 1e-12:

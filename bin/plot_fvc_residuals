@@ -44,6 +44,12 @@ else :
     xm = table["X_FP_METRO"][ii]
     ym = table["Y_FP_METRO"][ii]
 
+ii = (table["LOCATION"]>0)&(table["X_FP_EXP"]!=0)&(table["PINHOLE_ID"]>0)
+number_of_fiducials = np.unique(table["LOCATION"][ii]).size
+print("Number of fiducials that are ON=",number_of_fiducials)
+
+
+
 fig = plt.figure(figsize=(6,6))
 
 a = plt.subplot(1,1,1)

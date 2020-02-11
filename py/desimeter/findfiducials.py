@@ -75,24 +75,22 @@ def findfiducials(spots,input_transform=None,separation=8.) :
     saved_median_distance=0
     for loop in range(nloop) :
         indices_2, distances = match_same_system(x1,y1,x2,y2)
-        mdist = np.median(distances)
+        mdist = np.median(distances[indices_2>=0])
         if loop < nloop-1 :
             maxdistance = max(10,3.*1.4*mdist)
         else : # final iteration
-            maxdistance = 100 # pixel
-            
+            maxdistance = 10 # pixel
         selection = np.where((indices_2>=0)&(distances<maxdistance))[0]
         log.info("iter #{} median_dist={} max_dist={} matches={}".format(loop,mdist,maxdistance,selection.size))
-        
         corr21 = SimpleCorr()
         corr21.fit(x2[indices_2[selection]],y2[indices_2[selection]],x1[selection],y1[selection])
         x2,y2 = corr21.apply(x2,y2)
         if np.abs(saved_median_distance-mdist)<0.0001 : break # no more improvement
         saved_median_distance = mdist
     
-    # use same coord system match (note we now mtach the otherway around)
+    # use same coord system match (note we now match the otherway around)
     indices_1, distances = match_same_system(x2,y2,x1,y1)
-    maxdistance = 100. # FVC pixels
+    maxdistance = 10. # FVC pixels
     selection = np.where((indices_1>=0)&(distances<maxdistance))[0]
     fiducials_candidates_indices     = fiducials_candidates_indices[indices_1[selection]]
     matching_known_fiducials_indices = selection
