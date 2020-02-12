@@ -14,9 +14,10 @@ class TestCorr(unittest.TestCase):
         y1=np.random.uniform(size=nn)-0.5
         
         # arb. dilatation
-        scale = 12.
-        x3 = scale*x1
-        y3 = scale*y1
+        xscale = 12.
+        yscale = 13.
+        x3 = xscale*x1
+        y3 = yscale*y1
         # arb. translation
         x3 += 33.
         y3 += 11.
@@ -26,9 +27,14 @@ class TestCorr(unittest.TestCase):
         x3b,y3b=corr31.apply(x3,y3)
         
         dist=np.sqrt((x3b-x1)**2+(y3b-y1)**2)
-        print(dist)
         assert(np.all(dist<1e-6))
-        
+
+        print("Testing inverse")
+        x1b,y1b=corr31.apply_inverse(x1,y1)
+
+        dist=np.sqrt((x1b-x3)**2+(y1b-y3)**2)
+        assert(np.all(dist<1e-6))
+
         
 if __name__ == '__main__':
     unittest.main()
