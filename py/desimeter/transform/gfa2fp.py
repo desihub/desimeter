@@ -54,6 +54,7 @@ def fp2gfa(petal_loc, xfp, yfp):
         log.error('PETAL_LOC {} GFA metrology missing'.format(petal_loc))
     
     params = _gfa_transforms[petal_loc]
+
     xgfa, ygfa = undo_scale_rotation_offset(xfp, yfp, **params)
     
     return xgfa, ygfa
@@ -178,14 +179,32 @@ def fit_gfa2fp(metrology):
         if np.count_nonzero(ii) > 0:
             xfp = np.asarray(metrology['X_FP'][ii])
             yfp = np.asarray(metrology['Y_FP'][ii])
+            zfp = np.asarray(metrology['Z_FP'][ii])
+
+            #- measure norm of plane
+            x01 =  np.array( [ xfp[1]-xfp[0], yfp[1]-yfp[0], zfp[1]-zfp[0] ] )
+            x01 /= np.sqrt(np.sum(x01**2))
+            x12 =  np.array( [ xfp[2]-xfp[1], yfp[2]-yfp[1], zfp[2]-zfp[1] ] )
+            x12 /= np.sqrt(np.sum(x12**2))
+            norm_vector= np.cross(x01,x12)
+            # I checked the sign of all components
             
+            #- compute correction to apply
+            delta_z = 2.23 # mm
+            delta_x = delta_z*norm_vector[0]/norm_vector[2]
+            delta_y = delta_z*norm_vector[1]/norm_vector[2]
+
             #- minimization starting parameters
             theta = np.radians(p*36 - 77)
             rmax = 407
             p0 = (0.015, 18+p*36.0, rmax*np.cos(theta), rmax*np.sin(theta))
         
             gfa_transforms[p] = fit_scale_rotation_offset(xgfa, ygfa, xfp, yfp, p0=p0)
-    
+
+            #- apply correction to offsets
+            gfa_transforms[p]["xoffset"] += delta_x
+            gfa_transforms[p]["yoffset"] += delta_y
+
     return gfa_transforms
         
         
