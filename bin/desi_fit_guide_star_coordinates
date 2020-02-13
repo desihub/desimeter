@@ -10,7 +10,7 @@ from desimeter.fieldmodel import FieldModel
 from desimeter.time import mjd2lst
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                     description="""FVC image processing""")
+                                     description="""Fit guide star catalog to derive a field model (pointing, field rotation, scale)""")
 parser.add_argument('-i','--infile', type = str, default = None, required = True,
                     help = 'path to a GFA catalog file, fits or csv, like ""')
 parser.add_argument('-o','--outfile', type = str, default = None, required = True,

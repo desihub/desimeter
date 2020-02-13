@@ -24,6 +24,10 @@ class FieldModel(object):
         self.hexrot_deg = None
         self.adc1 = None
         self.adc2 = None
+
+        self.precession = True
+        self.aberration = True
+        self.polar_misalignment = True
         
         self.sxx = 1.
         self.syy = 1.
@@ -164,7 +168,7 @@ class FieldModel(object):
         for loop in range(3) : # loop because change of pointing induces a rotation of the field
             
             # we transform GAIA coordinates to the tangent plane
-            x_tan_gaia,y_tan_gaia = radec2tan(ra_gaia,dec_gaia,self.ra,self.dec,mjd=self.mjd,lst_deg=self.lst,hexrot_deg = self.hexrot_deg)
+            x_tan_gaia,y_tan_gaia = radec2tan(ra_gaia,dec_gaia,self.ra,self.dec,mjd=self.mjd,lst_deg=self.lst,hexrot_deg = self.hexrot_deg, precession = self.precession, aberration = self.aberration, polar_misalignment = self.polar_misalignment)
         
             # now that we have both sets of coordinates, we fit a transformation from one to the other
             correction.fit(x_tan_meas,y_tan_meas,x_tan_gaia,y_tan_gaia)
@@ -258,11 +262,11 @@ class FieldModel(object):
     def fp2radec(self,x_fp,y_fp) :
         x_tan,y_tan = fp2tan(x_fp,y_fp,self.adc1,self.adc2)
         x_tan,y_tan = self.tancorr_inst2sky(x_tan,y_tan) # correction
-        ra,dec = tan2radec(x_tan,y_tan,self.ra,self.dec,mjd=self.mjd,lst_deg=self.lst,hexrot_deg = self.hexrot_deg)
+        ra,dec = tan2radec(x_tan,y_tan,self.ra,self.dec,mjd=self.mjd,lst_deg=self.lst,hexrot_deg = self.hexrot_deg, precession = self.precession, aberration = self.aberration, polar_misalignment = self.polar_misalignment)
         return ra,dec
 
     def radec2fp(self,ra,dec) :
-        x_tan,y_tan = radec2tan(ra,dec,self.ra,self.dec,mjd=self.mjd,lst_deg=self.lst,hexrot_deg = self.hexrot_deg)
+        x_tan,y_tan = radec2tan(ra,dec,self.ra,self.dec,mjd=self.mjd,lst_deg=self.lst,hexrot_deg = self.hexrot_deg, precession = self.precession, aberration = self.aberration, polar_misalignment = self.polar_misalignment)
         x_tan,y_tan = self.tancorr_sky2inst(x_tan,y_tan) # correction
         x_fp,y_fp   = tan2fp(x_tan,y_tan,self.adc1,self.adc2)
         return x_fp,y_fp
@@ -416,4 +420,47 @@ class TanCorr(object):
         return xy[0],xy[1]
         
         
-        
+def fieldrot(ra,dec,mjd,lst_deg,hexrot_deg=0) :
+    """
+    Computes the field rotation in degrees.
+
+    Args:
+      ra: scalar, float, RA in degrees
+      dec: scalar, float, Dec in degrees
+      mjd: scalar, float, MJD in days
+      lst_deg: scalar, float, LST in degrees (ha = lst_deg - ra)
+    
+    Optional:
+      hexrot_deg: scalar, float, Hexapod rotation in degrees (default=0)
+    
+    Returns:
+      field rotation angle in degrees
+
+    """
+    fm = FieldModel()
+    fm.ra=ra
+    fm.dec=dec
+    fm.mjd=mjd
+    fm.lst=lst_deg
+    fm.adc1=0
+    fm.adc2=0
+    fm.hexrot_deg=hexrot_deg
+    return fm.compute_fieldrot()
+
+def dfieldrotdt(ra,dec,mjd,lst_deg) :    
+    """
+    Computes the derivative with time of the field rotation in arcsec per minute.
+
+    Args:
+      ra: scalar, float, RA in degrees
+      dec: scalar, float, Dec in degrees
+      mjd: scalar, float, MJD in days
+      lst_deg: scalar, float, LST in degrees (ha = lst_deg - ra)
+    
+    Returns:
+      field rotation angle derivative with time in arcsec per minute
+
+    """
+    
+    one_minute_in_degrees = 1./60./24.*360 # 
+    return 3600.*(fieldrot(ra,dec,mjd,lst_deg+one_minute_in_degrees,hexrot_deg=0) - fieldrot(ra,dec,mjd,lst_deg,hexrot_deg=0))
