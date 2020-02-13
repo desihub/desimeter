@@ -53,8 +53,8 @@ if args.fits_header is not None :
         vals=header["TCSST"].split(":")
         lst = (float(vals[0])+float(vals[1])/60.+float(vals[2])/3600.)/24.*360. # deg
         # just checking
-        lst_bis = mjd2lst(mjd)
-        print(lst,lst_bis)
+        #lst_bis = mjd2lst(mjd)
+        #print(lst,lst_bis)
     else :
         lst = mjd2lst(mjd)
 
