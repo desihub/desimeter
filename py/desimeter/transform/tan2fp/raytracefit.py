@@ -162,7 +162,7 @@ class TAN2FP_RayTraceFit(object) :
         sorted_indices=np.argsort(dadc_array)
         dadc_array = dadc_array[sorted_indices]
         dadc_arg   = (adc2-adc1)
-        if dadc_arg < 0 : dadc_arg += 360.
+        if dadc_arg < 0 : dadc_arg = 0.
         scale    = interp1d(dadc_array,self.scale[sorted_indices],'cubic')(dadc_arg)
         rotation = interp1d(dadc_array,self.rotation[sorted_indices],'cubic')(dadc_arg)
         offset_x = interp1d(dadc_array,self.offset_x[sorted_indices],'cubic')(dadc_arg)
