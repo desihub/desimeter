@@ -47,14 +47,15 @@ def main() :
         rays=incoming_rays(adc1=adc1,adc2=adc2,dangle=0.1)
         xfp = np.zeros((rays.shape[0]))
         yfp = np.zeros((rays.shape[0]))
+        zfp = np.zeros((rays.shape[0]))
         for i,ray in enumerate(rays) :
-            adc1, adc2, ngood, xfp[i] , yfp[i], zave, xrms, yrms, zrms = RT185.getNine(ray)
+            adc1, adc2, ngood, xfp[i] , yfp[i], zfp[i], xrms, yrms, zrms = RT185.getNine(ray)
 
         wave = refwave[ rays[:,0].astype(int) ]
         xtan = rays[:,1]
         ytan = rays[:,2]
         for i in range(len(rays)) :
-            result.append([adc1,adc2,xtan[i],ytan[i],xfp[i],yfp[i],wave[i]])
+            result.append([adc1,adc2,xtan[i],ytan[i],xfp[i],yfp[i],zfp[i],wave[i]])
 
         #plt.figure("tan")
         #plt.plot(xtan,ytan,".")
@@ -74,6 +75,7 @@ def main() :
     table.add_column(Column(name="Y_TAN",dtype=float,unit="none",length=nray))
     table.add_column(Column(name="X_FP",dtype=float,unit="mm",length=nray))
     table.add_column(Column(name="Y_FP",dtype=float,unit="mm",length=nray))
+    table.add_column(Column(name="Z_FP",dtype=float,unit="mm",length=nray))
     table.add_column(Column(name="WAVELENGTH",dtype=float,unit="A",length=nray))
     
     table["ADC1"] = result[:,0]
@@ -82,7 +84,8 @@ def main() :
     table["Y_TAN"] = result[:,3]
     table["X_FP"] = result[:,4]
     table["Y_FP"] = result[:,5]
-    table["WAVELENGTH"] = result[:,6]
+    table["Z_FP"] = result[:,6]
+    table["WAVELENGTH"] = result[:,7]
     
     table.write("raytrace-tan2fp-4957-v17.csv")
     

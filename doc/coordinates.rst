@@ -53,10 +53,19 @@ ICRS (International Celestial Reference System)
 Coordinate transformations
 ++++++++++++++++++++++++++
 
+PTL -> FP
+~~~~~~~~~
+
+Solid transformation from PTL to FP composed of a translation and a rotation.
+The transformation coefficients are saved in the yaml file `petal-alignments.yaml`_ . In the current
+version, they are the same as the ones used by PlateMaker. They were dowloaded from the online
+data base using the script `load_petal_alignments_from_db`_ .
+
+
 GFA -> FP
 ~~~~~~~~~
 
-Based on the metrology compilation in `DESI-5421`_ + rigid transformation from PTL to FP.
+Based on the metrology compilation in `DESI-5421`_ + the transformation from PTL to FP.
 The fit of the metrology is performed on the fly for the first call of the function.
 
 Example::
@@ -70,10 +79,11 @@ FVC -> FP
 
 Based on a fit of the measured pixel coordinates of fiducials and their metrology.
 In most and probably all cases, the transformation is used in the same procedure
- as the fit (see the script ``desi_fvc_proc``). Several implementations of this
- transform exist in ``transform/fvc2fp``.
+as the fit (see the script `desi_fvc_proc`_ ). Two implementations of this
+transform exist in `transform.fvc2fp`_ , but we used by default the Zhao-Burge transform
+implemented in `transform.fvc2fp.zb.py`_ .
 
- Example::
+Example::
 
   from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
   tx = FVCFP_ZhaoBurge()
@@ -84,22 +94,26 @@ In most and probably all cases, the transformation is used in the same procedure
 FP -> TAN
 ~~~~~~~~~
 
-From the focal surface instruments to the tangent plane. This contains all of the optics
-distortion. This transformation is minimal for now. It is based on the echo22 design model
-(the default ``echo22.py`` transformations are "linked" in ``transform/tan2fp/__init__.py``).
-We have to do much better than this.
+From the focal surface instruments to the tangent plane. We have two implementations
+for now.
 
- Example::
+* `transform.tan2fp.echo22.py`_ It is based on the echo22 design model. Does not account for ADC rotation.
+* `transform.tan2fp.raytracefit.py`_ It is based on a ray tracing model fitted fitted ZB polynomials. It does include ADC rotation and is now the default. More information on this in `raytrace.rst`_ . 
+ 
+Example::
 
    from desimeter.transform.tan2fp import fp2tan,tan2fp
-   x_tan,y_tan = fp2tan(x_fp,y_fp)
-
+   x_tan,y_tan = fp2tan(x_fp,y_fp,adc1=60.,adc2=120.)
+   x_fp,y_fp = fp2tan(x_tan,y_tan,adc1=60.,adc2=120.)
+   
+   
 TAN -> ICRS
 ~~~~~~~~~~~
 
 This transformation includes precession, aberration, refraction, polar mis-alignment, hexapod rotation angle.
+The code is in `transform.radec2tan.py`_ .
 
- Example::
+Example::
 
    from desimeter.transform.radec2tan import radec2tan,tan2radec
    ra,dec = radec2tan(x_tan,y_tan,telescope_ra,telescop_dec,mjd,lst,precession=True,aberration=True)
@@ -109,7 +123,7 @@ Field Model
 
 This is not a transformation from one system to another but rather the combination of the transformations,
 including a correction based on the location of GFA guide stars. This "field model" is fit to the data
-using the script ``desi_fit_guide_star_coordinates``.
+using the script `desi_fit_guide_star_coordinates`_ . The routines are in `fieldmodel.py`_ .
 
 Example::
 
@@ -124,5 +138,15 @@ Example::
   
 .. _`data.README`: https://github.com/desihub/desimeter/blob/master/py/desimeter/data/README.rst
 .. _`DESI-5421`: https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=5421
-
+.. _`petal-alignments.yaml`: https://github.com/desihub/desimeter/blob/master/py/desimeter/data/petal-alignments.yaml
+.. _`load_petal_alignments_from_db`: https://github.com/desihub/desimeter/blob/master/bin/load_petal_alignments_from_db
+.. _`desi_fvc_proc`: https://github.com/desihub/desimeter/blob/master/bin/desi_fvc_proc
+.. _`transform.fvc2fp`: https://github.com/desihub/desimeter/tree/master/py/desimeter/transform/fvc2fp
+.. _`transform.fvc2fp.zb.py`: https://github.com/desihub/desimeter/blob/master/py/desimeter/transform/fvc2fp/zb.py
+.. _`transform.tan2fp.echo22.py`: https://github.com/desihub/desimeter/blob/master/py/desimeter/transform/tan2fp/echo22.py
+.. _`transform.tan2fp.raytracefit.py`: https://github.com/desihub/desimeter/blob/master/py/desimeter/transform/tan2fp/raytracefit.py
+.. _`raytrace.rst`: https://github.com/desihub/desimeter/blob/master/doc/raytrace.rst
+.. _`transform.radec2tan.py`: https://github.com/desihub/desimeter/blob/master/py/desimeter/transform/radec2tan.py
+.. _`desi_fit_guide_star_coordinates`: https://github.com/desihub/desimeter/blob/master/bin/desi_fit_guide_star_coordinates
+.. _`fieldmodel.py`: https://github.com/desihub/desimeter/blob/master/py/desimeter/fieldmodel.py
 

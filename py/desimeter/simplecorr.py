@@ -115,3 +115,12 @@ class SimpleCorr(object):
         xy=scale_matrix.dot(rot_matrix.dot(np.array([x,y])))
         return xy[0]+self.dx,xy[1]+self.dy
   
+    def apply_inverse(self,x,y) :
+        det = self.sxx*self.syy - self.sxy**2
+        scale_matrix = np.array([[self.syy,-self.sxy],[-self.sxy,self.sxx]])/det
+        ca=np.cos(self.rot_deg/180*np.pi)
+        sa=np.sin(self.rot_deg/180*np.pi)
+        rot_matrix = np.array([[ca,sa],[-sa,ca]])
+        xy=rot_matrix.dot(scale_matrix.dot(np.array([x-self.dx,y-self.dy])))
+        return xy[0],xy[1]
+
