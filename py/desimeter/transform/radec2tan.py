@@ -539,10 +539,13 @@ def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = Tr
         tel_ra,tel_dec = apply_precession_from_icrs(tel_ra, tel_dec, mjd, use_astropy)
     if aberration :
         tel_ra,tel_dec = apply_aberration(tel_ra,tel_dec,mjd, use_astropy)
-    
+
     tel_ha = lst_deg - tel_ra
 
-    
+    if polar_misalignment :
+        polar_misalignment_matrix = compute_polar_misalignment_rotation_matrix(me_arcsec=ME_ARCSEC,ma_arcsec=MA_ARCSEC)
+        tel_ha,tel_dec = getLONLAT(polar_misalignment_matrix.dot(getXYZ(tel_ha,tel_dec)))
+
     # we need to apply refraction for the telescope pointing to interpret the x,y
     tel_alt,tel_az = hadec2altaz(tel_ha,tel_dec)
     # apply refraction
@@ -566,8 +569,7 @@ def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = Tr
         # inverse matrix
         polar_misalignment_matrix = compute_polar_misalignment_rotation_matrix(me_arcsec=-ME_ARCSEC,ma_arcsec=-MA_ARCSEC)
         ha,dec  = getLONLAT(polar_misalignment_matrix.dot(getXYZ(ha,dec)))
-        tel_ha,tel_dec  = getLONLAT(polar_misalignment_matrix.dot(getXYZ(tel_ha,tel_dec)))
-        
+
     # ra
     ra = lst_deg - ha
         
