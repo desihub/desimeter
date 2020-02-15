@@ -133,18 +133,19 @@ for filename in args.infile :
     print(filename)
     t=Table.read(filename)
     #print(t.dtype.names)
-    selection=(t["PINHOLE_ID"]==0)&(t["LOCATION"]>0)
+    selection=(t["LOCATION"]>0)
+    location_and_pinhole=(np.array(t["LOCATION"])*10+np.array(t["PINHOLE_ID"])).astype(int)
     if first :
-        for loc in t["LOCATION"][selection] :
+        for loc in location_and_pinhole[selection] :
             x[loc] = []
             y[loc] = []
-            xexp[loc] = float(t["X_FP_EXP"][t["LOCATION"]==loc][0])
-            yexp[loc] = float(t["Y_FP_EXP"][t["LOCATION"]==loc][0])
+            xexp[loc] = float(t["X_FP_EXP"][location_and_pinhole==loc][0])
+            yexp[loc] = float(t["Y_FP_EXP"][location_and_pinhole==loc][0])
             #print(loc,xexp[loc],yexp[loc])
         first=False
 
-    for loc in t["LOCATION"][selection] :
-        ii = np.where(t["LOCATION"]==loc)[0]
+    for loc in location_and_pinhole[selection] :
+        ii = np.where(location_and_pinhole==loc)[0]
         if ii.size > 1 :
             print("several matched for LOCATION ",loc)
             continue
@@ -152,23 +153,30 @@ for filename in args.infile :
         if not loc in x.keys() :
             x[loc] = []
             y[loc] = []
-            xexp[loc] = float(t["X_FP_EXP"][t["LOCATION"]==loc][0])
-            yexp[loc] = float(t["Y_FP_EXP"][t["LOCATION"]==loc][0])
+            xexp[loc] = float(t["X_FP_EXP"][location_and_pinhole==loc][0])
+            yexp[loc] = float(t["Y_FP_EXP"][location_and_pinhole==loc][0])
             
         x[loc].append(float(t["X_FP"][i]))
         y[loc].append(float(t["Y_FP"][i]))
 
+location_and_pinhole=np.array(list(x.keys()),dtype=int)
+location=location_and_pinhole//10
+pinhole=location_and_pinhole%10
+print("number of positioners:",np.sum(pinhole==0))
+print("number of fiducials:",np.sum(pinhole==1))
+print("number of pinholes:",np.sum(pinhole>=1))
 
-print("number of positioners:",len(x.keys()))
-
+ndots=len(location_and_pinhole)
         
 theta=np.linspace(0,2*np.pi,50)
 
-locs=[]
-x1=[]
-y1=[]
-x2=[]
-y2=[]
+
+xfp_metro=np.zeros(ndots)
+yfp_metro=np.zeros(ndots)
+xfp_meas=np.zeros(ndots)
+yfp_meas=np.zeros(ndots)
+
+
 count=0
 for iloc,loc in enumerate(x.keys()) :
     if len(x[loc])<6 : continue
@@ -180,61 +188,60 @@ for iloc,loc in enumerate(x.keys()) :
     
     #print("{} nmeas={} rms(x)={} rms(y)={}".format(loc,ii.size,np.std(x[loc]),np.std(y[loc])))
     
-    if np.std(x[loc])<1. :
-        if args.plot and count<nmaxplot :
+    if pinhole[iloc] == 0 and np.std(x[loc])<1. :
+        # this is a non-moving positioner, I don't use this
+        if False and args.plot and count<nmaxplot :
             plt.figure("circles")
             plt.plot(np.mean(x[loc]),np.mean(y[loc]),"x",color="k",markersize=12)
         continue
     count += 1
     
-    mx=np.median(x[loc])
-    my=np.median(y[loc])
-    # here is the fit
-    try:
-        xc,yc,r = fit_circle(x[loc],y[loc])
-    except ValueError:
-        print("fit circle failed for loc={} x={} y={}".format(loc,mx,my))
-        continue
+    xc=np.median(x[loc])
+    yc=np.median(y[loc])
 
-    if iloc%100==0 :
-        print("{}/{} loc={} x={} y={} r={}".format(iloc,len(x),loc,mx,my,r))
-    if r<0.1 : continue
+    if pinhole[iloc] == 0 : # it's a positioner
+        # here is the fit
+        try:
+            xc,yc,r = fit_circle(x[loc],y[loc])
+        except ValueError:
+            print("fit circle failed for loc={} x={} y={}".format(loc,xc,yc))
+            continue
+
+        if iloc%100==0 :
+            print("{}/{} loc={} x={} y={} r={}".format(iloc,len(x),loc,xc,yc,r))
+        if r<0.1 : continue
     
-    if args.plot and count<nmaxplot :
-        plt.figure("circles")
-        plt.plot(x[loc],y[loc],"o")
-        plt.plot(xexp[loc],yexp[loc],"x")
-        theta=np.linspace(0,2*np.pi,50)
-        plt.plot(xc+r*np.cos(theta),yc+r*np.sin(theta),"-",color="green")
-        plt.plot(xc,yc,"+",color="green")
+        if args.plot and count<nmaxplot :
+            plt.figure("circles")
+            plt.plot(x[loc],y[loc],"o")
+            plt.plot(xexp[loc],yexp[loc],"x")
+            theta=np.linspace(0,2*np.pi,50)
+            plt.plot(xc+r*np.cos(theta),yc+r*np.sin(theta),"-",color="green")
+            plt.plot(xc,yc,"+",color="green")
         
     
-    x1.append(xexp[loc])
-    y1.append(yexp[loc])
-    x2.append(xc)
-    y2.append(yc)
-    locs.append(loc)
+    xfp_metro[iloc]=xexp[loc]
+    yfp_metro[iloc]=yexp[loc]
+    xfp_meas[iloc]=xc
+    yfp_meas[iloc]=yc
 
-locs=np.array(locs)
-x1=np.array(x1)
-y1=np.array(y1)
-x2=np.array(x2)
-y2=np.array(y2)
-dx=x2-x1
-dy=y2-y1
+dx=xfp_meas-xfp_metro
+dy=yfp_meas-yfp_metro
 dr=np.sqrt(dx**2+dy**2)
-print("median offset=",np.median(dr))
-ii=np.where(dr<0.2)[0]
+print("median offset = {:4.1f} um",np.median(dr[dr!=0])*1000.)
+
+ii=np.where((xfp_metro!=0)&(dr<0.2))[0]
 
 # make a table out of that
-t2=Table([locs[ii],x1[ii],y1[ii],x2[ii],y2[ii]],names=["LOCATION","X_FP_METRO","Y_FP_METRO","X_FP_THETA_AXIS","Y_FP_THETA_AXIS"],dtype=[int,float,float,float,float])
+t2=Table([location[ii],pinhole[ii],xfp_metro[ii],yfp_metro[ii],xfp_meas[ii],yfp_meas[ii]],names=["LOCATION","PINHOLE_ID","X_FP_METRO","Y_FP_METRO","X_FP","Y_FP"],dtype=[int,int,float,float,float,float])
 
 t2.write(args.outfile,format="csv",overwrite=True)
 print("wrote",args.outfile)         
 
 if args.plot :
-    plt.figure(figsize=(6.1, 6))
-    plt.quiver(x1[ii],y1[ii],dx[ii],dy[ii])
+    plt.figure("quiver",figsize=(6.1, 6))
+    plt.quiver(xfp_meas[ii],yfp_meas[ii],dx[ii],dy[ii])
+    plt.plot(xfp_meas[ii][pinhole[ii]>0],yfp_meas[ii][pinhole[ii]>0],".",c="red")
     plt.show()
 
     
