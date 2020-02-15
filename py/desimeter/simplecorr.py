@@ -51,18 +51,56 @@ class SimpleCorr(object):
     def __str__(self):
         return "desimeter.simplecorr.SimpleCorr\n dx= {:7.6f}\n dy= {:7.6f}\n rot_deg= {:5.4f}\n sxx= {:5.4f}\n syy= {:5.4f}\n sxy= {:5.4f}\n nmatch= {:d}\n rms= {:7.6f} \n".format(self.dx,self.dy,self.rot_deg,self.sxx,self.syy,self.sxy,self.nmatch,self.rms)
 
-    def fit(self, x1, y1, x2, y2) :
+    def fit_rotoff(self, x1, y1, x2, y2):
+        """
+        Fit rotation + offset (but not scale) for (x1,y1) -> (x2,y2)
+        
+        Args:
+           x1,y1,x2,y2 : 1D np.arrays of coordinates in tangent plane
+        """
+
+        assert((x1.shape == y1.shape)&(x2.shape == y2.shape)&(x1.shape == x2.shape))
+        n = len(x1)
+        v = np.concatenate([x2, y2])
+        A = np.zeros((2*n, 4))
+        A[0:n, 0] = x1
+        A[n:, 0]  = y1
+        A[0:n, 1] = -y1
+        A[n:, 1]  = x1
+        A[0:n, 2] = 1
+        A[n:, 2]  = 0
+        A[0:n, 3] = 0
+        A[n:, 3]  = 1
+    
+        ATv = A.T.dot(v)
+        ATA = A.T.dot(A)
+        p = np.linalg.solve(ATA, ATv)
+    
+        self.rot_deg = np.degrees(np.arctan2(p[1], p[0]))
+        self.dx = p[2]
+        self.dy = p[3]
+        self.sxx = 1.
+        self.syy = 1.
+        self.sxy = 0.
+        
+    def fit(self, x1, y1, x2, y2, solid=False) :
         """
         Adjust tranformation from x1,y1 to x2,y2
         
         Args:
            x1,y1,x2,y2 : 1D np.arrays of coordinates in tangent plane
 
+        Optional:
+           if solid, scales are forced = 1
+
         Returns:
            None
 
         """
 
+        if solid :
+            return self.fit_rotoff(x1, y1, x2, y2)
+        
         assert((x1.shape == y1.shape)&(x2.shape == y2.shape)&(x1.shape == x2.shape))
                 
         # now fit simultaneously extra offset, rotation, scale
