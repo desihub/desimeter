@@ -17,6 +17,7 @@ from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
 from desimeter.match import match_same_system
 from desimeter.transform.xy2qs import qs2xy
 from desimeter.fieldmodel import FieldModel
+from desimeter.io import load_metrology
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""FVC image processing""")
@@ -40,8 +41,6 @@ parser.add_argument('--field-model', type = str, default = None, required = Fals
                     help = 'use this json file as field model to convert fiber coordinates to RA Dec')
 parser.add_argument('--fvc-psf-sigma', type = float, default = 1., required = False,
                     help = 'use this PSF sigma for the centroid measurement')
-
-
 
 args  = parser.parse_args()
 log   = get_logger()
@@ -97,12 +96,7 @@ if args.expected_positions is not None :
             log.error("No EXP_Q_0 nor X_FP in expected positions file {}".format(args.expected_positions))
 else :
     log.info("since no input expected positions, use metrology to match the fibers to the positioner centers")
-    filename = resource_filename('desimeter',"data/fp-metrology.csv")
-    if not os.path.isfile(filename) :
-        log.error("cannot find {}".format(filename))
-        raise IOError("cannot find {}".format(filename))
-    log.info("reading metrology in {}".format(filename)) 
-    expected_pos = Table.read(filename,format="csv")
+    expected_pos = load_metrology()
     
 if not "LOCATION" in expected_pos.keys() :
     # add useful location keyword
@@ -134,6 +128,7 @@ selection = (spots["X_FP_METRO"]!=0)
 spots["X_FP_EXP"][selection]=spots["X_FP_METRO"][selection]
 selection = (spots["Y_FP_METRO"]!=0)
 spots["Y_FP_EXP"][selection]=spots["Y_FP_METRO"][selection]
+
 
 # write transfo
 if args.output_transform is not None :
