@@ -27,6 +27,8 @@ parser.add_argument('-o','--outfile', type = str, default = None, required = Tru
                     help = 'path to output CSV ASCII file')
 parser.add_argument('--extname', type = str, default = 'F0000', required = False,
                     help = 'input EXTNAME to use if more than one HDU; last for last HDU')
+parser.add_argument('--sequence', action = 'store_true',
+                    help = 'loop over FXXXX extensions, will write one output file per extension replacing .csv by -XXXX.csv')
 parser.add_argument('--output-transform', type = str, default = None, required = False,
                     help = 'write transformation to this json file')
 parser.add_argument('--input-transform', type = str, default = None, required = False,
@@ -45,114 +47,138 @@ parser.add_argument('--fvc-psf-sigma', type = float, default = 1., required = Fa
 args  = parser.parse_args()
 log   = get_logger()
 
+if not args.outfile.endswith(".csv") :
+    print("sorry output filename has to end with .csv")
+    sys.exit(12)
+    
+spots_list=[]
+
 filename = args.infile
 if filename.find(".fits")>0 :
     log.info("read FITS FVC image")
     with fitsio.FITS(args.infile) as fx:
-        if len(fx) == 1:
-            image = fx[0].read().astype(float)
+        print(fx) # shockingly needed to get the attribute hdu_map
+        extnames = []
+        if args.sequence :
+            for extname in fx.hdu_map.keys() :
+                if isinstance(extname, str) and extname.lower().find("f0")==0 :
+                    extnames.append(extname)
+        elif len(fx) == 1:
+            extnames.append(0)
         elif args.extname.strip() != 'last':
-            image = fx[args.extname].read().astype(float)
-        else:
-            extnames = [k for k in fx.hdu_map.keys() if isinstance(k, str)]
-            extnames = [e.lower() for e in extnames]
+            extnames.append(args.extname)
+        else :
+            tmp_extnames = [k for k in fx.hdu_map.keys() if isinstance(k, str)]
+            tmp_extnames = [e.lower() for e in tmp_extnames]
             extname = None
-            for i in range(len(extnames)):
+            for i in range(len(tmp_extnames)):
                 extname0 = f'f{i:04d}'
-                if extname0 in extnames:
+                if extname0 in tmp_extnames:
                     extname = extname0
+            extnames.append(extname)
+
+        for extname in extnames :
+            log.info('reading image in extension {}'.format(extname))
             image = fx[extname].read().astype(float)
-            log.info(f'using extension {extname}...')
-    spots = detectspots(image,threshold=args.threshold,nsig=7,psf_sigma=args.fvc_psf_sigma)
+            spots_list.append( detectspots(image,threshold=args.threshold,nsig=7,psf_sigma=args.fvc_psf_sigma) )
+            
+        
 elif filename.find(".csv")>0 :
     log.info("read CSV spots table")
-    spots = Table.read(filename,format="csv")
+    spots_list.append( Table.read(filename,format="csv") )
 else :
     log.info("sorry, I don't know what to do with input file {} because not .fits nor .csv".format(filename))
     sys.exit(12)
 
-
-spots = findfiducials(spots,input_transform=args.input_transform)
-n_matched_pinholes = np.sum(spots['PINHOLE_ID'] > 0)
-n_matched_fiducials = np.sum(spots['PINHOLE_ID'] == 4)
-if n_matched_fiducials < 3:
-    log.error('Fewer than three matched fiducials; exiting early.')
-    sys.exit(13)
-
-
-tx = FVCFP_ZhaoBurge()
-tx.fit(spots, update_spots=True)
-
-if args.expected_positions is not None :
-    log.info("reading expected positions in {}".format(args.expected_positions))
-    expected_pos = Table.read(args.expected_positions) # auto-magically guess format
-    if not "X_FP_EXP" in expected_pos.keys() :
-        if "EXP_Q_0" in  expected_pos.keys() :
-            log.info("EXP_Q_0,EXP_S_0 -> X_FP,Y_FP")
-            x,y = qs2xy(q=expected_pos["EXP_Q_0"],s=expected_pos["EXP_S_0"])
-            expected_pos["X_FP"] = x
-            expected_pos["Y_FP"] = y
-        else :
-            log.error("No EXP_Q_0 nor X_FP in expected positions file {}".format(args.expected_positions))
-else :
-    log.info("since no input expected positions, use metrology to match the fibers to the positioner centers")
-    expected_pos = load_metrology()
-    
-if not "LOCATION" in expected_pos.keys() :
-    # add useful location keyword
-    expected_pos["LOCATION"] = np.array(expected_pos["PETAL_LOC"])*1000+np.array(expected_pos["DEVICE_LOC"])
-
-if "PINHOLE_ID" in expected_pos.dtype.names :
-    # exclude pinhole because here we want to match fibers
-    ii = np.where(expected_pos["PINHOLE_ID"]==0)[0]
-    expected_pos = expected_pos[:][ii]
-
-# select spots that are not already matched
-selection  = (spots["LOCATION"]==0)
-# match
-indices_of_expected_pos,distances = match_same_system(spots["X_FP"][selection],spots["Y_FP"][selection],expected_pos["X_FP"],expected_pos["Y_FP"])
-for maxdist in [0.1,1,5.] :
-    log.info("Number of match < {}mm = {}/{}".format(maxdist,np.sum(distances<maxdist),len(expected_pos)))
-
-# add columns after matching fibers
-for k1,k2 in zip(["X_FP","Y_FP"],["X_FP_EXP","Y_FP_EXP"]) :
-    if k2 not in spots.keys() : spots[k2] = np.zeros(len(spots))
-    spots[k2][selection]=expected_pos[k1][indices_of_expected_pos]
-for k in ["EXP_Q_0","EXP_S_0","PETAL_LOC","DEVICE_LOC","LOCATION"] :
-    if k in expected_pos.keys() :
-        if k not in spots.keys() : spots[k] = np.zeros(len(spots))
-        spots[k][selection]=expected_pos[k][indices_of_expected_pos]
-
-# for spots with metrology X_FP_EXP=X_FP_METRO
-selection = (spots["X_FP_METRO"]!=0)
-spots["X_FP_EXP"][selection]=spots["X_FP_METRO"][selection]
-selection = (spots["Y_FP_METRO"]!=0)
-spots["Y_FP_EXP"][selection]=spots["Y_FP_METRO"][selection]
+for seqid,spots in enumerate(spots_list) :
+    spots = findfiducials(spots,input_transform=args.input_transform)
+    n_matched_pinholes = np.sum(spots['PINHOLE_ID'] > 0)
+    n_matched_fiducials = np.sum(spots['PINHOLE_ID'] == 4)
+    if n_matched_fiducials < 3:
+        log.error('Fewer than three matched fiducials; exiting early.')
+        sys.exit(13)
 
 
-# write transfo
-if args.output_transform is not None :
-    if not args.output_transform.endswith(".json") :
-        print("error, can only write json files, so please choose an output filename end ing with .json")
+    tx = FVCFP_ZhaoBurge()
+    tx.fit(spots, update_spots=True)
+
+    if args.expected_positions is not None :
+        log.info("reading expected positions in {}".format(args.expected_positions))
+        expected_pos = Table.read(args.expected_positions) # auto-magically guess format
+        if not "X_FP_EXP" in expected_pos.keys() :
+            if "EXP_Q_0" in  expected_pos.keys() :
+                log.info("EXP_Q_0,EXP_S_0 -> X_FP,Y_FP")
+                x,y = qs2xy(q=expected_pos["EXP_Q_0"],s=expected_pos["EXP_S_0"])
+                expected_pos["X_FP"] = x
+                expected_pos["Y_FP"] = y
+            else :
+                log.error("No EXP_Q_0 nor X_FP in expected positions file {}".format(args.expected_positions))
     else :
-        tx.write_jsonfile(args.output_transform)
-        print("wrote transform in {}".format(args.output_transform))
+        log.info("since no input expected positions, use metrology to match the fibers to the positioner centers")
+        expected_pos = load_metrology()
+
+    if not "LOCATION" in expected_pos.keys() :
+        # add useful location keyword
+        expected_pos["LOCATION"] = np.array(expected_pos["PETAL_LOC"])*1000+np.array(expected_pos["DEVICE_LOC"])
+
+    if "PINHOLE_ID" in expected_pos.dtype.names :
+        # exclude pinhole because here we want to match fibers
+        ii = np.where(expected_pos["PINHOLE_ID"]==0)[0]
+        expected_pos = expected_pos[:][ii]
+
+    # select spots that are not already matched
+    selection  = (spots["LOCATION"]==0)
+    # match
+    indices_of_expected_pos,distances = match_same_system(spots["X_FP"][selection],spots["Y_FP"][selection],expected_pos["X_FP"],expected_pos["Y_FP"])
+    for maxdist in [0.1,1,5.] :
+        log.info("Number of match < {}mm = {}/{}".format(maxdist,np.sum(distances<maxdist),len(expected_pos)))
+
+    # add columns after matching fibers
+    for k1,k2 in zip(["X_FP","Y_FP"],["X_FP_EXP","Y_FP_EXP"]) :
+        if k2 not in spots.keys() : spots[k2] = np.zeros(len(spots))
+        spots[k2][selection]=expected_pos[k1][indices_of_expected_pos]
+    for k in ["EXP_Q_0","EXP_S_0","PETAL_LOC","DEVICE_LOC","LOCATION"] :
+        if k in expected_pos.keys() :
+            if k not in spots.keys() : spots[k] = np.zeros(len(spots))
+            spots[k][selection]=expected_pos[k][indices_of_expected_pos]
+
+    # for spots with metrology X_FP_EXP=X_FP_METRO
+    selection = (spots["X_FP_METRO"]!=0)
+    spots["X_FP_EXP"][selection]=spots["X_FP_METRO"][selection]
+    selection = (spots["Y_FP_METRO"]!=0)
+    spots["Y_FP_EXP"][selection]=spots["Y_FP_METRO"][selection]
 
 
-if args.field_model is not None :
-    log.info("Reading field model in {}".format(args.field_model))
-    with open(args.field_model) as file :
-        fm = FieldModel.fromjson(file.read())
-    spots["RA"] = np.zeros(len(spots),dtype=float)
-    spots["DEC"] = np.zeros(len(spots),dtype=float)
-    ii=(spots["X_FP"]!=0)&(spots["Y_FP"]!=0)
-    ra,dec = fm.fp2radec(spots["X_FP"][ii],spots["Y_FP"][ii])
-    spots["RA"][ii]  = ra
-    spots["DEC"][ii] = dec
+    # write transfo
+    if args.output_transform is not None :
+        if not args.output_transform.endswith(".json") :
+            print("error, can only write json files, so please choose an output filename end ing with .json")
+        else :
+            tx.write_jsonfile(args.output_transform)
+            print("wrote transform in {}".format(args.output_transform))
+
+
+    if args.field_model is not None :
+        log.info("Reading field model in {}".format(args.field_model))
+        with open(args.field_model) as file :
+            fm = FieldModel.fromjson(file.read())
+        spots["RA"] = np.zeros(len(spots),dtype=float)
+        spots["DEC"] = np.zeros(len(spots),dtype=float)
+        ii=(spots["X_FP"]!=0)&(spots["Y_FP"]!=0)
+        ra,dec = fm.fp2radec(spots["X_FP"][ii],spots["Y_FP"][ii])
+        spots["RA"][ii]  = ra
+        spots["DEC"][ii] = dec
 
     
-# write spots
-spots.write(args.outfile,format="csv",overwrite=True)
-print("wrote {}".format(args.outfile))
+        
+    if not args.sequence :
+        outfile=args.outfile
+    else :
+        outfile=args.outfile.replace(".csv","-F{:04d}.csv".format(seqid))
 
+    
+    # write spots
+    spots.write(outfile,format="csv",overwrite=True)
+    print("wrote {}".format(outfile))
+    
 
