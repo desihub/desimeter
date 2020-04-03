@@ -1,0 +1,96 @@
+#!/usr/bin/env python
+
+import argparse
+import os.path
+import sys
+import matplotlib.pyplot as plt
+import numpy as np
+from astropy.table import Table
+from pkg_resources import resource_filename
+
+def parse_fibers(fiber_string) :
+    """
+    Short func that parses a string containing a comma separated list of 
+    integers, which can include ":" or ".." or "-" labeled ranges
+
+    Args:
+        fiber_string (str) : list of integers or integer ranges
+
+    Returns (array 1-D):
+        1D numpy array listing all of the integers given in the list,
+        including enumerations of ranges given.
+
+    Note: this follows python-style ranges, i,e, 1:5 or 1..5 returns 1, 2, 3, 4
+    """
+    if fiber_string is None :
+        return np.array([])
+    else:
+        fiber_string = str(fiber_string)
+
+    if len(fiber_string.strip(' \t'))==0:
+        return np.array([])
+
+    fibers=[]
+
+
+    for sub in fiber_string.split(',') :
+        sub = sub.replace(' ','')
+        if sub.isdigit() :
+            fibers.append(int(sub))
+            continue
+
+        match = False
+        for symbol in [':','..','-']:
+            if not match and symbol in sub:
+                tmp = sub.split(symbol)
+                if (len(tmp) == 2) and tmp[0].isdigit() and tmp[1].isdigit() :
+                    match = True
+                    for f in range(int(tmp[0]),int(tmp[1])) :
+                        fibers.append(f)
+
+        if not match:
+            print("parsing error. Didn't understand {}".format(sub))
+            sys.exit(1)
+
+    return np.array(fibers)
+
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="""Plot FVC spots, showing residuals with metrology""")
+parser.add_argument('-i','--infile', type = str, default = None, required = True, nargs="*",
+                    help = 'path to one or several FVC spots tables in CSV format (with X_FP,Y_FP,LOCATION columns)')
+parser.add_argument('--locations', type = str, default = None, required = True,
+                    help = 'list of locations to show (location=petal_loc*1000+device_loc, example 1012 , 1001,1002,1013 or 4040:4053 ...)')
+parser.add_argument('--legend', action = 'store_true',
+                    help = 'show legend')
+
+args  = parser.parse_args()
+
+fig = plt.figure(figsize=(6,6))
+
+locations=parse_fibers(args.locations)
+
+x=dict()
+y=dict()
+for l in locations :
+    x[l]=list()
+    y[l]=list()
+for filename in  args.infile :
+
+    table=Table.read(filename,format="csv")
+
+    for l in locations :
+        ii = np.where(table["LOCATION"]==l)[0]
+        x[l].append(table["X_FP"][ii])
+        y[l].append(table["Y_FP"][ii])
+for l in locations :
+    plt.plot(x[l],y[l],"o",label="LOC={:04d}".format(l))
+
+if args.legend :
+    plt.legend()
+plt.xlabel("XFP (mm)")
+plt.xlabel("YFP (mm)")
+plt.grid()
+plt.show()
+
+
