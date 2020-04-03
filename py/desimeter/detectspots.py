@@ -199,7 +199,7 @@ def detectspots(fvcimage,threshold=500,nsig=7,psf_sigma=1.) :
     if xoffset !=0 or yoffset !=0 :
         log.warning("Applying offsets x += {} and y += {} (to match with others, like the POS files)".format(xoffset,yoffset))
     if xoffset == 0 and yoffset == 0 :
-        log.warning("Here center of first pixel has coord=(0,0); so we expect offsets of 1 with respect to coordinates in .pos files.")
+        log.debug("Here center of first pixel has coord=(0,0); so we expect offsets of 1 with respect to coordinates in .pos files.")
     
     for j,index in enumerate(peakindices) :
         i0=index//n1
