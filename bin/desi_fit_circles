@@ -7,23 +7,9 @@ from scipy import optimize
 import matplotlib.pyplot as plt
 import argparse
 
-# from desimeter.transform.xy2qs import xy2qs, qs2xy
-from desimodel.focalplane import xy2qs, qs2xy
 
-#- Transform between CS5 x,y and curved focal surface
-def xy2uv(x, y):
-    q, s = xy2qs(x, y)
-    qrad = np.radians(q)
-    u = s*np.cos(qrad)
-    v = s*np.sin(qrad)
-    return u, v
+from desimeter.transform.xy2qs import xy2uv, uv2xy
 
-def uv2xy(u, v):
-    s = np.sqrt(u**2 + v**2)
-    qrad = np.arctan2(v, u)
-    q = np.degrees(qrad)
-    x, y = qs2xy(q, s)
-    return x, y
 
 #- Least squares fit to circle; adapted from "Method 2b" in
 #- https://scipy-cookbook.readthedocs.io/items/Least_Squares_Circle.html

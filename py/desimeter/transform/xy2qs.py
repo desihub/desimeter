@@ -48,3 +48,18 @@ def qs2xy(q, s):
     y = r*np.sin(np.radians(q))
 
     return x, y
+
+#- Transform between CS5 x,y and curved focal surface
+def xy2uv(x, y):
+    q, s = xy2qs(x, y)
+    qrad = np.radians(q)
+    u = s*np.cos(qrad)
+    v = s*np.sin(qrad)
+    return u, v
+
+def uv2xy(u, v):
+    s = np.sqrt(u**2 + v**2)
+    qrad = np.arctan2(v, u)
+    q = np.degrees(qrad)
+    x, y = qs2xy(q, s)
+    return x, y
