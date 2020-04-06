@@ -99,13 +99,17 @@ elif jj.size > 0 : # sadly
 a.quiver(x,y,dx,dy)
 a.set_xlabel("X_FP (mm)")
 a.set_ylabel("Y_FP (mm)")
-a.legend(loc="upper left")
 
 dist=np.sqrt(dx**2+dy**2)
+
+rms=np.sqrt(np.mean(dist[dist<0.2]**2))
+blabla="rms(2D) = {:3.1f} um".format(rms*1000.)
+print(blabla)
+a.legend(loc="upper left",title=blabla)
+
 a2=fig.add_subplot(666)
 a2.hist(dist[dist<0.1]*1000.)
 a2.set_xlabel("dist. (um)")
-
 
 if False :
     print("Write coordinates of missing or incorrect fiducials")
