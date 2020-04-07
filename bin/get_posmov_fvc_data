@@ -16,7 +16,7 @@ parser.add_argument('--posid', type = str, default = "M07071", required = False,
 parser.add_argument('--petalid', type = int, default = 4, required = False, help="petal id")
 parser.add_argument('--date-min', type = str, default = "2020-01-01", required = False, help="date min with format YYYY-MM-DD")
 parser.add_argument('--date-max', type = str, default = "2020-03-30", required = False, help="date max with format YYYY-MM-DD")
-parser.add_argument('--deltat-max', type = float, default = "60", required = False, help="max delay between FVC image and posmovedb entry in seconds")
+parser.add_argument('--deltat-max', type = float, default = "25", required = False, help="max delay between FVC image and posmovedb entry in seconds")
 parser.add_argument('--fvc-file-list', type = str, default = "/global/cfs/cdirs/desi/engineering/fvc/desimeter/v0.2.0/fvc-desimeter-and-dates.csv", required = False, help="file with the fvc file list")
 parser.add_argument('--plot', action = "store_true", help="plot")
 parser.add_argument('-o',"--outfile", type=str, default = None, required = False, help="save coordinates as csv table in this file")
@@ -80,7 +80,7 @@ for i in range(tstamp.size) :
 
 dmt_deltat=dmt_tstamp[dmt_index]-tstamp
 
-jj=np.where(dmt_deltat<args.deltat_max)[0] # FVC image less than n seconds after move
+jj=np.where((dmt_deltat>0)&(dmt_deltat<args.deltat_max))[0] # FVC image less than n seconds after move
 
 
 x_dmt=np.zeros(tstamp.size)
@@ -98,7 +98,6 @@ for j in jj :
 
 
 if args.outfile is not None :
-    print("sorry, no implemented yet")
     jj=np.where(x_dmt!=0)[0]
     ot = Table()
     ot["DATE"]  = date[jj]
@@ -106,6 +105,7 @@ if args.outfile is not None :
     ot["POS_T"] = pos_t[jj]
     ot["X_FP"]  = x_dmt[jj]
     ot["Y_FP"]  = y_dmt[jj]
+    ot["DELTAT"] = dmt_deltat[jj]
     ot.write(args.outfile)
     print("wrote",args.outfile)
 
