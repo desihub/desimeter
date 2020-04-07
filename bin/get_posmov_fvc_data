@@ -1,0 +1,133 @@
+#!/usr/bin/env python
+
+import os
+import psycopg2
+import numpy as np
+import matplotlib.pyplot as plt
+from astropy.table import Table
+import datetime
+
+import argparse
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="""Match posmovedb and FVC data""")
+
+parser.add_argument('--posid', type = str, default = "M07071", required = False, help="positioner id, like 'M07071'")
+parser.add_argument('--petalid', type = int, default = 4, required = False, help="petal id")
+parser.add_argument('--date-min', type = str, default = "2020-01-01", required = False, help="date min with format YYYY-MM-DD")
+parser.add_argument('--date-max', type = str, default = "2020-03-30", required = False, help="date max with format YYYY-MM-DD")
+parser.add_argument('--deltat-max', type = float, default = "60", required = False, help="max delay between FVC image and posmovedb entry in seconds")
+parser.add_argument('--fvc-file-list', type = str, default = "/global/cfs/cdirs/desi/engineering/fvc/desimeter/v0.2.0/fvc-desimeter-and-dates.csv", required = False, help="file with the fvc file list")
+parser.add_argument('--plot', action = "store_true", help="plot")
+parser.add_argument('-o',"--outfile", type=str, default = None, required = False, help="save coordinates as csv table in this file")
+
+args  = parser.parse_args()
+
+print("db query...")
+comm = psycopg2.connect(host='db.replicator.dev-cattle.stable.spin.nersc.org',port=60042, database='desi_dev', user='desi_reader')
+cx=comm.cursor()
+cx.execute("select pos_t,pos_p,time_recorded,pos_id,petal_id,device_loc,log_note from posmovedb.positioner_moves_p{} where pos_id='{}' and time_recorded BETWEEN date '{}' and date '{}'".format(args.petalid,args.posid,args.date_min,args.date_max))
+
+data=cx.fetchall()
+print("got {} entries".format(len(data)))
+pos_t = np.array([d[0] for d in data])
+pos_p = np.array([d[1] for d in data])
+
+print("compute timestamps...")
+date = np.array([d[2] for d in data])
+for i in range(len(date)) :
+    #date[i].tzinfo = None  # does this help?
+    date[i] = datetime.datetime(date[i].year,date[i].month,date[i].day,date[i].hour,date[i].minute,date[i].second) # get rid of time zone
+tstamp =  np.array([d.timestamp() for d in date])
+pos_id=data[0][3]
+petal_id=data[0][4]
+device_loc=data[0][5]
+
+petal_id2loc = dict()
+petal_id2loc[2]=7
+petal_id2loc[3]=3
+petal_id2loc[4]=0
+petal_id2loc[5]=1
+petal_id2loc[6]=2
+petal_id2loc[7]=8
+petal_id2loc[8]=4
+petal_id2loc[9]=9
+petal_id2loc[10]=5
+petal_id2loc[11]=6
+
+petal_loc=petal_id2loc[petal_id]
+location = petal_loc*1000+device_loc
+print("location=",location)
+
+print("reading csv table...")
+dmt=Table.read(args.fvc_file_list)
+dmt_tstamp = np.array([datetime.datetime.strptime(d,"%Y-%m-%dT%H:%M:%S").timestamp() for d in dmt["DATE"]])
+print("done")
+jj=np.argsort(dmt_tstamp)
+dmt=dmt[:][jj]
+dmt_tstamp=dmt_tstamp[jj]
+
+dmt_index=np.zeros(tstamp.size,dtype=int)
+#dmt_deltat=np.zeros(tstamp.size)
+
+for i in range(tstamp.size) :
+    j=np.where(dmt_tstamp>tstamp[i])[0]
+    if j.size>0 :
+        dmt_index[i]=j[0]
+        #dmt_deltat[i]=dmt_tstamp[j[0]]-tstamp[i]
+    else :
+        dmt_index[i]=len(dmt)-1
+
+dmt_deltat=dmt_tstamp[dmt_index]-tstamp
+
+jj=np.where(dmt_deltat<args.deltat_max)[0] # FVC image less than n seconds after move
+
+
+x_dmt=np.zeros(tstamp.size)
+y_dmt=np.zeros(tstamp.size)
+for j in jj :
+    filename=dmt["FILE"][dmt_index[j]]
+    filename_date=dmt["DATE"][dmt_index[j]]
+    if os.path.isfile(filename) :
+        print(date[j],filename_date,filename)
+        dmt_xytable=Table.read(filename)
+        kk=np.where(dmt_xytable["LOCATION"]==location)[0]
+        if kk.size>0 :
+            x_dmt[j]=dmt_xytable["X_FP"][kk[0]]
+            y_dmt[j]=dmt_xytable["Y_FP"][kk[0]]
+
+
+if args.outfile is not None :
+    print("sorry, no implemented yet")
+    jj=np.where(x_dmt!=0)[0]
+    ot = Table()
+    ot["DATE"]  = date[jj]
+    ot["POS_P"] = pos_p[jj]
+    ot["POS_T"] = pos_t[jj]
+    ot["X_FP"]  = x_dmt[jj]
+    ot["Y_FP"]  = y_dmt[jj]
+    ot.write(args.outfile)
+    print("wrote",args.outfile)
+
+    
+if args.plot :
+    plt.figure()
+    jj=np.where(x_dmt!=0)[0]
+    a=plt.subplot(211,title=pos_id)
+    a.scatter(pos_t[jj],x_dmt[jj],c=pos_p[jj])
+    a.set_ylabel(r"$x_{FP}$ (mm, desimeter)")
+    a=plt.subplot(212)
+    a.scatter(pos_t[jj],y_dmt[jj],c=pos_p[jj])
+    a.set_xlabel("POS_T (posintT)")
+    a.set_ylabel(r"$y_{FP}$ (mm, desimeter)")
+
+    plt.figure()
+    plt.subplot(111,title=pos_id)
+    plt.scatter(x_dmt[jj],y_dmt[jj],c=pos_p[jj])
+    cb=plt.colorbar()
+    cb.set_label('POS_P (posintP)', rotation=270, labelpad=10.)
+    plt.xlabel(r"$x_{FP}$")
+    plt.ylabel(r"$y_{FP}$")
+
+    plt.show()
+
