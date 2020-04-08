@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os
+import os,sys
 import psycopg2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,37 +12,33 @@ import argparse
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Match posmovedb and FVC data""")
 
-parser.add_argument('--posid', type = str, default = "M07071", required = False, help="positioner id, like 'M07071'")
-parser.add_argument('--petalid', type = int, default = 4, required = False, help="petal id")
-parser.add_argument('--date-min', type = str, default = "2020-01-01", required = False, help="date min with format YYYY-MM-DD")
-parser.add_argument('--date-max', type = str, default = "2020-03-30", required = False, help="date max with format YYYY-MM-DD")
+parser.add_argument('--date-min', type = str, default = "2019-01-01", required = False, help="date min with format YYYY-MM-DD")
+parser.add_argument('--date-max', type = str, default = "2030-01-01", required = False, help="date max with format YYYY-MM-DD")
 parser.add_argument('--deltat-max', type = float, default = "25", required = False, help="max delay between FVC image and posmovedb entry in seconds")
 parser.add_argument('--fvc-file-list', type = str, default = "/global/cfs/cdirs/desi/engineering/fvc/desimeter/v0.2.0/fvc-desimeter-and-dates.csv", required = False, help="file with the fvc file list")
-parser.add_argument('--plot', action = "store_true", help="plot")
-parser.add_argument('-o',"--outfile", type=str, default = None, required = False, help="save coordinates as csv table in this file")
 
 args  = parser.parse_args()
 
-print("db query...")
 comm = psycopg2.connect(host='db.replicator.dev-cattle.stable.spin.nersc.org',port=60042, database='desi_dev', user='desi_reader')
 cx=comm.cursor()
-cx.execute("select pos_t,pos_p,time_recorded,pos_id,petal_id,device_loc,log_note from posmovedb.positioner_moves_p{} where pos_id='{}' and time_recorded BETWEEN date '{}' and date '{}'".format(args.petalid,args.posid,args.date_min,args.date_max))
 
-data=cx.fetchall()
-print("got {} entries".format(len(data)))
-pos_t = np.array([d[0] for d in data])
-pos_p = np.array([d[1] for d in data])
+print("get list of petalid ...")
+cx.execute("select relname from pg_class where relkind='r' and relname !~ '^(pg_|sql_)';")
+tables=[d[0] for d in cx.fetchall()]
+petalids=[]
+for table in tables :
+    if table.find("positioner_moves_p")>=0 :
+        tmp=table.replace("positioner_moves_p","")
+        #print(tmp)
+        try :
+            i=int(tmp)
+            if i<20 :
+                print(table)
+                petalids.append(i)
+        except ValueError :
+            pass
 
-print("compute timestamps...")
-date = np.array([d[2] for d in data])
-for i in range(len(date)) :
-    #date[i].tzinfo = None  # does this help?
-    date[i] = datetime.datetime(date[i].year,date[i].month,date[i].day,date[i].hour,date[i].minute,date[i].second) # get rid of time zone
-tstamp =  np.array([d.timestamp() for d in date])
-pos_id=data[0][3]
-petal_id=data[0][4]
-device_loc=data[0][5]
-
+#sys.exit(12)
 petal_id2loc = dict()
 petal_id2loc[2]=7
 petal_id2loc[3]=3
@@ -55,11 +51,7 @@ petal_id2loc[9]=9
 petal_id2loc[10]=5
 petal_id2loc[11]=6
 
-petal_loc=petal_id2loc[petal_id]
-location = petal_loc*1000+device_loc
-print("location=",location)
-
-print("reading csv table...")
+print("reading csv table with list of desimeter files ...")
 dmt=Table.read(args.fvc_file_list)
 dmt_tstamp = np.array([datetime.datetime.strptime(d,"%Y-%m-%dT%H:%M:%S").timestamp() for d in dmt["DATE"]])
 print("done")
@@ -67,67 +59,123 @@ jj=np.argsort(dmt_tstamp)
 dmt=dmt[:][jj]
 dmt_tstamp=dmt_tstamp[jj]
 
-dmt_index=np.zeros(tstamp.size,dtype=int)
-#dmt_deltat=np.zeros(tstamp.size)
-
-for i in range(tstamp.size) :
-    j=np.where(dmt_tstamp>tstamp[i])[0]
-    if j.size>0 :
-        dmt_index[i]=j[0]
-        #dmt_deltat[i]=dmt_tstamp[j[0]]-tstamp[i]
-    else :
-        dmt_index[i]=len(dmt)-1
-
-dmt_deltat=dmt_tstamp[dmt_index]-tstamp
-
-jj=np.where((dmt_deltat>0)&(dmt_deltat<args.deltat_max))[0] # FVC image less than n seconds after move
-
-
-x_dmt=np.zeros(tstamp.size)
-y_dmt=np.zeros(tstamp.size)
-for j in jj :
-    filename=dmt["FILE"][dmt_index[j]]
-    filename_date=dmt["DATE"][dmt_index[j]]
-    if os.path.isfile(filename) :
-        print(date[j],filename_date,filename)
-        dmt_xytable=Table.read(filename)
-        kk=np.where(dmt_xytable["LOCATION"]==location)[0]
-        if kk.size>0 :
-            x_dmt[j]=dmt_xytable["X_FP"][kk[0]]
-            y_dmt[j]=dmt_xytable["Y_FP"][kk[0]]
-
-
-if args.outfile is not None :
-    jj=np.where(x_dmt!=0)[0]
-    ot = Table()
-    ot["DATE"]  = date[jj]
-    ot["POS_P"] = pos_p[jj]
-    ot["POS_T"] = pos_t[jj]
-    ot["X_FP"]  = x_dmt[jj]
-    ot["Y_FP"]  = y_dmt[jj]
-    ot["DELTAT"] = dmt_deltat[jj]
-    ot.write(args.outfile)
-    print("wrote",args.outfile)
-
+for petalid in petalids :
     
-if args.plot :
-    plt.figure()
-    jj=np.where(x_dmt!=0)[0]
-    a=plt.subplot(211,title=pos_id)
-    a.scatter(pos_t[jj],x_dmt[jj],c=pos_p[jj])
-    a.set_ylabel(r"$x_{FP}$ (mm, desimeter)")
-    a=plt.subplot(212)
-    a.scatter(pos_t[jj],y_dmt[jj],c=pos_p[jj])
-    a.set_xlabel("POS_T (posintT)")
-    a.set_ylabel(r"$y_{FP}$ (mm, desimeter)")
+    print("get list of positioners for petalid {} ...".format(petalid))
+    cx.execute("select distinct pos_id,device_loc from posmovedb.positioner_moves_p{}".format(petalid))
+    data=cx.fetchall()
+    posids=np.array([d[0] for d in data])
+    devicelocs=np.array([d[1] for d in data])
+    petalloc=petal_id2loc[petalid]
+    locations=petalloc*1000+devicelocs
+    print(posids)
+    print(locations)
+    print("number of positioners= {}".format(len(posids)))
+    
+    print("get unique recorded times ...".format(petalid))
+    cx.execute("select distinct time_recorded from posmovedb.positioner_moves_p{}".format(petalid))
+    data=cx.fetchall()
+    date=[d[0] for d in data]
+    print("number of unique time_recorded = {}".format(len(date)))
+    for i in range(len(date)) :
+        date[i] = datetime.datetime(date[i].year,date[i].month,date[i].day,date[i].hour,date[i].minute,date[i].second) # get rid of time zone
+    tstamp =  np.array([d.timestamp() for d in date])
 
-    plt.figure()
-    plt.subplot(111,title=pos_id)
-    plt.scatter(x_dmt[jj],y_dmt[jj],c=pos_p[jj])
-    cb=plt.colorbar()
-    cb.set_label('POS_P (posintP)', rotation=270, labelpad=10.)
-    plt.xlabel(r"$x_{FP}$")
-    plt.ylabel(r"$y_{FP}$")
+    print("match FVC image ...")
+    dmt_index=np.zeros(tstamp.size,dtype=int)
+    for i in range(tstamp.size) :
+        j=np.where(dmt_tstamp>tstamp[i])[0]
+        if j.size>0 :
+            dmt_index[i]=j[0]
+            #dmt_deltat[i]=dmt_tstamp[j[0]]-tstamp[i]
+        else :
+            dmt_index[i]=len(dmt)-1
+    dmt_deltat=dmt_tstamp[dmt_index]-tstamp
+    selection = np.where((dmt_deltat>0)&(dmt_deltat<args.deltat_max))[0] # FVC image less than n seconds after move
+    print("number of matched FVC images= {}".format(len(selection)))
+    #selected_date=date[selection]
+    #selected_tstamp=tstamp[selection]
+    #selected_dmt_index=dmt_index[selection]
+    #selected_dmt_deltat=dmt_deltat[selection]
 
-    plt.show()
+    posid_tstamp=dict()
+    posid_deltat=dict()
+    posid_x_dmt=dict()
+    posid_y_dmt=dict()
+    for posid in posids :
+        posid_tstamp[posid]=[]
+        posid_deltat[posid]=[]
+        posid_x_dmt[posid]=[]
+        posid_y_dmt[posid]=[]
+        
+    print("loop on FVC images and collect positioner coordinates ...")
+    for count,i in enumerate(selection) :
+        filename = dmt["FILE"][dmt_index[i]]
+        filename_date=dmt["DATE"][dmt_index[i]]
+        if os.path.isfile(filename) :
+            print("{}/{} {} {} {}".format(count+1,len(selection),date[i],filename_date,filename))
+            dmt_xytable=Table.read(filename)
 
+            for posid,loc in zip(posids,locations) :
+                kk=np.where(dmt_xytable["LOCATION"]==loc)[0]
+                if kk.size>0 :
+                    posid_tstamp[posid].append(tstamp[i])
+                    posid_deltat[posid].append(dmt_deltat[i])
+                    posid_x_dmt[posid].append(dmt_xytable["X_FP"][kk[0]])
+                    posid_y_dmt[posid].append(dmt_xytable["Y_FP"][kk[0]])
+        #if count>300 : break # debug
+
+    for posid,deviceloc in zip(posids,devicelocs) :
+        posid_tstamp[posid]=np.array(posid_tstamp[posid])
+        posid_deltat[posid]=np.array(posid_deltat[posid])
+        posid_x_dmt[posid]=np.array(posid_x_dmt[posid])
+        posid_y_dmt[posid]=np.array(posid_y_dmt[posid])
+        
+    print("now for each positioner read pos_t and pos_p in db...")
+    for posid,deviceloc in zip(posids,devicelocs) :
+        cx.execute("select pos_t,pos_p,time_recorded,pos_id,petal_id,device_loc,log_note from posmovedb.positioner_moves_p{} where pos_id='{}' and time_recorded BETWEEN date '{}' and date '{}'".format(petalid,posid,args.date_min,args.date_max))
+        data=cx.fetchall()
+        pos_t = np.array([d[0] for d in data])
+        pos_p = np.array([d[1] for d in data])
+        date = np.array([d[2] for d in data])
+        for i in range(len(date)) :
+            #date[i].tzinfo = None  # does this help?
+            date[i] = datetime.datetime(date[i].year,date[i].month,date[i].day,date[i].hour,date[i].minute,date[i].second) # get rid of time zone
+        tstamp =  np.array([d.timestamp() for d in date])
+        
+        jj = np.where(np.in1d(tstamp,posid_tstamp[posid]))[0]
+        print("for {} got {} entries in db, with {} matched to desimeter data".format(posid,len(data),jj.size))
+        kk = np.argsort(tstamp[jj])
+        jj = jj[kk]
+        pos_t  = pos_t[jj]
+        pos_p  = pos_p[jj]
+        date   = date[jj]
+        tstamp = tstamp[jj]
+        dd = {t:i for i,t in enumerate(posid_tstamp[posid])}
+        jj = [dd[t] for t in tstamp]
+        x_dmt = posid_x_dmt[posid][jj]
+        y_dmt = posid_y_dmt[posid][jj]
+        deltat = posid_deltat[posid][jj]
+        
+        # save this
+        jj=np.where(x_dmt!=0)[0]
+        ot = Table()
+        # add petal id
+        ot["POS_ID"] = np.repeat(posid,jj.size)
+        ot["PETAL_ID"] = np.repeat(petalid,jj.size)
+        ot["PETAL_LOC"] = np.repeat(petalloc,jj.size)
+        ot["DEVICE_LOC"] = np.repeat(deviceloc,jj.size)
+        ot["DATE"]  = date[jj]
+        ot["POS_P"] = pos_p[jj]
+        ot["POS_T"] = pos_t[jj]
+        ot["X_FP"]  = x_dmt[jj]
+        ot["Y_FP"]  = y_dmt[jj]
+        ot["DELTAT"]  = deltat[jj]
+        
+        #ot["DELTAT"] = dmt_deltat[jj]
+        ofilename="results/{}.csv".format(posid)
+        ot.write(ofilename,overwrite=True)
+        print("wrote",ofilename)
+        #sys.exit(12)
+    
+ 
