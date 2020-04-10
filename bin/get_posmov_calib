@@ -64,22 +64,16 @@ for petalid in petalids :
     print("number of positioners= {}".format(len(posids)))
     
     for posid in posids :
-        cx.execute("select petal_id,device_loc,pos_id,pos_calib_index,time_recorded,bus_id,length_r1,length_r2,offset_x,offset_y,offset_t,offset_p from posmovedb.positioner_calibration_p{} where pos_id='{}'".format(petalid,posid))
-        #cx.execute("select petal_id,device_loc,pos_id,pos_calib_index,time_recorded,bus_id,length_r1,length_r2,offset_x,offset_y,offset_t,offset_p from posmovedb.positioner_calibration_p{} PM where EXISTS (select * from posmovedb.positioner_calibration_index_p{} where id = '{}' and last_index=PM.pos_calib_index)".format(petalid,petalid,posid))
+        cx.execute("select petal_id,device_loc,pos_id,pos_calib_index,time_recorded,bus_id,length_r1,length_r2,offset_x,offset_y,offset_t,offset_p from posmovedb.positioner_calibration_p{} where pos_id='{}' order by time_recorded desc limit 1".format(petalid,posid))
         data=cx.fetchall()
         names=[d[0] for d in cx.description]
-        
         res=dict()
         for i,name in enumerate(names) :
-            res[name]=np.array([d[i] for d in data])
-        tstamp=[d.timestamp() for d in res["time_recorded"]]
-        #print(tstamp)
-        j=np.argmax(tstamp)
+            res[name]=data[0][i]
         for name in names :
-            #print("{} = {}".format(name,res[name][j]))
             if not name in results.keys() :
                 results[name] = []
-            results[name].append(res[name][j])
+            results[name].append(res[name])
         if not "petal_loc" in results.keys() :
             results["petal_loc"] = []
         results["petal_loc"].append(petalloc) 
