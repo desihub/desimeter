@@ -1,0 +1,383 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Analysis script comparing internally-tracked (theta, phi) to fvc-measured (x,y).
+The goal is to examine the general performance of all positioners during any
+move (not just a specialized calibration sequence).
+
+Data sources:
+
+    theta and phi:
+    --------------
+    The positioner moves database contains time-stamped data for values POS_T
+    and POS_P. These correspond to focalplane coordinates posintTP.
+    
+    x and y:
+    --------
+    The NERSC and KPNO servers contain numerous FITS files. These are processed
+    by desimeter. A result X_FP, Y_FP is generated from the centroids. This
+    corresponds to focalplane coordinates ptlXY.
+    
+    As of 2020-04-08, J. Guy identified 9472 such files from the commissioning
+    operations so far at the Mayall, and has run them through desimeter. See
+    Julien's email to desi-commiss@desi.lbl.gov of 2020-04-08, in which he
+    attaches several descriptive slides.
+
+    The fvc catalogs he produced are on NERSC at:
+        /global/cfs/cdirs/desi/engineering/fvc/desimeter/v0.2.0/
+
+    And the matched coordinates per positioner are on NERSC at:
+        /global/cfs/cdirs/desi/engineering/fvc/desimeter/v0.2.0/positioners/
+"""
+
+import os
+import sys
+import cProfile, pstats
+import pandas
+import math
+import numpy
+import time
+import datetime
+import multiprocessing
+import yaml
+
+# DESI-specific imports
+# path handling is to be improved as I migrate better into github/desimeter
+desimeter_path = os.path.abspath('../py/desimeter/')
+sys.path.append(desimeter_path)
+import posparams.fitter as fitter
+import posparams.plotter as plotter
+sys.path.append(fitter.petal_path)
+import petaltransforms
+
+# paths
+home_dir = os.getenv('HOME')
+main_dir = os.path.join(home_dir, 'Desktop/posparams')
+data_dir = os.path.join(main_dir, 'fvc_desimeter_v0.2.0_positioners-2') # where to find data files
+save_dir = main_dir
+desimeter_data_dir = os.path.join(desimeter_path, 'data')
+
+# common options
+files_to_process = ['M00282.csv', 'M02841.csv', 'M02930.csv', 'M04064.csv', 'M07071.csv'] # leave empty to process all files found in data_dir
+params_to_keep_fixed = [] # see comments in pos_params_bestfit function
+param_overrides = {} # any key:val pairs to override the default params in bestfit module
+period_days = 1 # spacing of datum dates at which to run the fit
+min_slice_width = 100 # minimum number of data points to select for a fit
+static_params_group_func = numpy.median
+static_params_quantile = 0.05 # sort static param fits by fit error, take this fraction with least error, and "group_func" them to decide the single set of best values 
+n_processes_max = os.cpu_count() - 1 # max number of processors to use
+profile_one_job = False # set True to test and time a single analysis job
+should_plot = True
+
+# parameter overrides
+param_nominals = fitter.default_values
+param_nominals.update(param_overrides)
+
+# log and output file handling
+date_format_file = '%Y%m%dT%H%M%S'
+def now_str(fmt):
+    return datetime.datetime.now().strftime(fmt)
+timestamp_str = now_str(date_format_file)
+log_name = timestamp_str + '_log.txt'
+log_path = os.path.join(save_dir, log_name)
+def printlog(s):
+    s = f'{now_str(date_format_data)} {s}'
+    print(s)
+    with open(log_path,'a') as file:
+        print(s, file=file)
+
+# find csv files and parse out their positioner ids
+all_files = os.listdir(data_dir)
+if files_to_process:
+    files = set(all_files).intersection(set(files_to_process))
+else:
+    files = all_files
+csv_files = {}
+posid_str_length = 6
+for name in files:
+    posid, ext = os.path.splitext(name)
+    posid = posid[:posid_str_length]
+    if  ext == '.csv' and len(posid) == posid_str_length and posid[0].isalpha() and posid[1:].isnumeric():
+        csv_files[posid] = name
+
+# read data
+frames = {}
+required_keys = {'DATE', 'POS_P', 'POS_T', 'X_FP', 'Y_FP', 'CTRL_ENABLED',
+                 'TOTAL_MOVE_SEQUENCES'}
+for posid in csv_files:
+    path = os.path.join(data_dir, csv_files[posid])
+    frame = pandas.read_csv(path)
+    frame = frame.sort_values('DATE', ascending=True, ignore_index=True)
+    key_search = [key in frame.columns for key in required_keys]
+    if all(key_search):
+        frames[posid] = frame
+posids = sorted(csv_files.keys())
+
+# load petal alignments
+
+petal_alignments_file = 'petal-alignments.yaml'
+petal_alignments_path = os.path.join(desimeter_data_dir, petal_alignments_file)
+with open(petal_alignments_path, 'r') as file:
+    petal_alignments = yaml.safe_load(file)
+ptl_trans = {}
+for petal_loc, alignment in petal_alignments.items():
+    args = (alignment[key] for key in ['Tx', 'Ty', 'Tz', 'alpha', 'beta', 'gamma'])
+    ptl_trans[petal_loc] = petaltransforms.PetalTransforms(*args, curved=True)
+
+# obtain xy in petal coordinate system
+for posid in frames:
+    petal_loc = frames[posid]['PETAL_LOC'][0]
+    trans = ptl_trans[petal_loc]
+    obsX = frames[posid]['X_FP']
+    obsY = frames[posid]['Y_FP']
+    obsXY = numpy.array([obsX, obsY])
+    ptlXY = trans.obsXY_to_ptlXYZ(obsXY, cast=False)
+    frames[posid]['X_PTL'] = ptlXY[0]
+    frames[posid]['Y_PTL'] = ptlXY[1]
+
+# filter out bad rows
+for posid in frames:
+    # drop any rows with disabled control (not valid data)
+    frames[posid] = frames[posid][frames[posid]['CTRL_ENABLED'] == True]
+    frames[posid] = frames[posid].reset_index(drop=True)
+
+    # drop any rows where no move sequence was performed
+    moveseq_diff = frames[posid]['TOTAL_MOVE_SEQUENCES'].diff()
+    frames[posid] = frames[posid][moveseq_diff != 0]
+    frames[posid] = frames[posid].reset_index(drop=True)
+    
+    # drop any rows where no cruise move was performed
+#    cruiseT_diff = frames[posid]['TOTAL_CRUISE_MOVES_T'].diff()
+#    cruiseP_diff = frames[posid]['TOTAL_CRUISE_MOVES_P'].diff()
+#    frames[posid] = frames[posid][cruiseT_diff + cruiseP_diff != 0]
+#    frames[posid] = frames[posid].reset_index(drop=True)
+
+# add a time-since-epoch column to data frames
+date_format_data = '%Y-%m-%d %H:%M:%S'
+for posid, frame in frames.items():
+    time_structs = [time.strptime(frame['DATE'][i], date_format_data) for i in range(len(frame))]
+    time_sec = [time.mktime(t) for t in time_structs]
+    frame['DATE_SEC'] = time_sec
+
+# data selectors
+def select_by_index(posid, start=0, final=-1):
+    '''Returns a subset of data formatted for the best-fitting function.'''
+    frame = frames[posid]
+    data = {}
+    subframe = frame[start:final]
+    data['posintT'] = subframe['POS_T'].tolist()
+    data['posintP'] = subframe['POS_P'].tolist()
+    data['ptlX'] = subframe['X_PTL'].tolist()
+    data['ptlY'] = subframe['Y_PTL'].tolist()
+    return data, subframe
+
+def first_time_match(frame, time_in_sec):
+    '''Returns index of first row in dataframe which matches the argued time.'''
+    return frame[frame['DATE_SEC'] >= time_in_sec].index[0]
+
+def first_date_in_sec(frame):
+    return frame['DATE_SEC'].tolist()[0]
+
+def last_date_in_sec(frame):
+    return frame['DATE_SEC'].tolist()[-1]
+
+def slice_idxs_for_dates(posid, start=None, final=None):
+    '''Returns a start and finish indices corresponding to dates in positioner
+    posid's data frame.'''
+    frame = frames[posid]
+    start_sec = first_date_in_sec(frame)
+    final_sec = last_date_in_sec(frame)
+    if start:
+        start = time.strptime(start, date_format_data) if isinstance(start, str) else start
+        start_sec = max(start_sec, start)
+    if final:
+        final = time.strptime(final, date_format_data) if isinstance(final, str) else final
+        final_sec = min(final_sec, final)
+    start_idx = first_time_match(frame, start_sec)
+    final_idx = first_time_match(frame, final_sec)
+    return start_idx, final_idx
+
+def dict_str(d):
+    '''Return a string displaying formatted values in dict d.'''
+    s = '{'
+    for key,val in d.items():
+        s += f"'{key}':{val:.3f}, "
+    s = s[:-2]
+    s += '}'
+    return s
+
+# find date range of all data and assign datum dates
+period_sec = period_days * 24 * 60 * 60
+first = math.inf
+last = -math.inf
+for frame in frames.values():
+    first = min(first, first_date_in_sec(frame))
+    last = max(last, last_date_in_sec(frame))
+datum_dates = numpy.arange(first, last, period_sec).tolist()
+
+# function for multiprocessing of many analyis cases
+case_enum = {'posid':0,
+             'start_idx':1,
+             'final_idx':2}
+def process(mode='static', cases=[], nominals=param_nominals, savedir='.'):
+    '''Process many analysis cases.
+    
+    Inputs:
+        mode     ... 'static' or 'dynamic', see notes in fitter module
+        cases    ... list of values matching sequence defined in case_enum
+        nominals ... if mode == 'static' --> single dict with keys = parameter names
+                     if mode =='dynamic' --> dict with keys = posids and values = subdicts giving each positioner's particular set of parameter names/values
+        savedir  ... where to save analysis results as they are generated
+        
+    Outputs:
+        output_frame ... single pandas dataframe containing all results
+        output_path ... path to saved csv data file containing all results
+    '''
+    assert mode in {'static', 'dynamic'}
+    mp_results = {} # container for result objects from the multiprocessing pool
+    output_columns = ['ANALYSIS_DATE', 'POS_ID', 'DATA_START_DATE', 'DATA_END_DATE', 'NUM_POINTS', 'FIT_ERROR']
+    output_columns += fitter.all_keys
+    output = {col:[] for col in output_columns}
+    with multiprocessing.Pool(processes=n_processes_max) as pool:
+        
+        # send out jobs
+        for case in cases:
+            posid = case[case_enum['posid']]
+            m = case[case_enum['start_idx']]
+            n = case[case_enum['final_idx']]
+            xytp_data, subframe = select_by_index(posid, start=m, final=n+1)
+            job_desc = f'{mode} params analysis of {posid} over data period:\n'
+            job_desc += f'  start idx = {m:5d}, date = {subframe["DATE"][m]}\n'
+            job_desc += f'  final idx = {n:5d}, date = {subframe["DATE"][n]}\n'
+            job_desc += f' num points = {n-m+1:5d}'
+            printlog(f'job added:\n{job_desc}\n')
+            if mode == 'static':
+                these_nominals = nominals
+            else:
+                these_nominals = nominals[posid]
+            argsdict = xytp_data
+            argsdict.update({'mode':mode,
+                             'nominals':these_nominals,
+                             'keep_fixed':params_to_keep_fixed,
+                             'description':job_desc})
+            if profile_one_job:
+                prof = cProfile.Profile()
+                params, fit_err, _ = prof.runcall(fitter.fit_params, **argsdict)
+                print(f'Results:\n{params}\nfit error = {fit_err}')
+                statsfile = 'stats'
+                prof.dump_stats(statsfile)
+                p = pstats.Stats(statsfile)
+                for sorter in ['cumtime', 'tottime']:
+                    p.strip_dirs()
+                    p.sort_stats(sorter)
+                    p.print_stats(15)
+                os.remove(statsfile)
+                return {posid:params}, fit_err
+            mp_results[case] = pool.apply_async(fitter.fit_params, kwds=argsdict)
+        
+        # retrieve results as they come in
+        while mp_results:
+            completed = set()
+            for case, result in mp_results.items():
+                if result.ready():
+                    completed.add(case)
+                    params, fit_err, job_desc = result.get()
+                    posid = case[case_enum['posid']]
+                    period_start_idx = case[case_enum['start_idx']]
+                    period_final_idx = case[case_enum['final_idx']]
+                    output['ANALYSIS_DATE'].append(now_str(date_format_data))
+                    output['POS_ID'].append(posid)
+                    output['DATA_START_DATE'].append(frames[posid]['DATE'][period_start_idx])
+                    output['DATA_END_DATE'].append(frames[posid]['DATE'][period_final_idx])
+                    output['NUM_POINTS'].append(period_final_idx - period_start_idx + 1)
+                    output['FIT_ERROR'].append(fit_err)
+                    for key in params:
+                        output[key].append(params[key])
+                    job_desc += '\n'
+                    job_desc += f'{posid}: best params = {dict_str(params)}\n'
+                    job_desc += f'{posid}: fit error = {fit_err:.3f}'
+                    printlog(f'job completed:\n{job_desc}\n')
+            for case in completed:
+                del mp_results[case]
+            time.sleep(0.05)
+    output_frame = pandas.DataFrame(output)
+    output_frame = output_frame.sort_values(['POS_ID','DATA_END_DATE'], ascending=True, ignore_index=True)
+    output_name = f'{timestamp_str}_results_{mode}.csv'
+    output_path = os.path.join(savedir, output_name)
+    output_frame.to_csv(output_path, index=False, date_format=date_format_data)
+    return output_frame, output_path
+        
+
+if __name__ == '__main__':
+    
+    # define analysis cases spanning the data history
+    cases = []
+    formatted_xytp_data = {}
+    for posid, frame in frames.items():
+        last_date_this_frame = last_date_in_sec(frame)
+        i = 0
+        j = 1
+        while j < len(datum_dates):
+            start = datum_dates[i]
+            final = datum_dates[j]
+            if final > last_date_this_frame:
+                final == last_date_this_frame
+                j = len(datum_dates) - 1
+            start_idx, final_idx = slice_idxs_for_dates(posid, start, final)
+            not_enough_points = final_idx - start_idx < min_slice_width
+            if not_enough_points:
+                if i > 0:
+                    i -= 1
+                else:
+                    j += 1
+            else:
+                case = [None]*len(case_enum)
+                case[case_enum['posid']] = posid
+                case[case_enum['start_idx']] = start_idx
+                case[case_enum['final_idx']] = final_idx
+                cases.append(tuple(case)) # tuple is hashable, so can use case as a dict key later
+                i = j
+                j += 1
+    
+    # FIRST-PASS:  STATIC PARAMETERS
+    static_out, static_file = process(mode='static',
+                                      cases=cases,
+                                      nominals=param_nominals.copy(),
+                                      savedir=save_dir)
+
+    # DECIDE ON BEST STATIC PARAMS    
+    if profile_one_job:
+        best_static = static_out
+    else:
+        best_static = {}
+        for posid in posids:
+            best_static[posid] = param_nominals.copy()
+            subframe = static_out[static_out['POS_ID'] == posid]
+            quantile = subframe['FIT_ERROR'].quantile(static_params_quantile)
+            selection = subframe[subframe['FIT_ERROR'] <= quantile]
+            these_best = {key:static_params_group_func(selection[key]) for key in fitter.static_keys}
+            best_static[posid].update(these_best)
+    
+    # SECOND-PASS:  DYNAMIC PARAMETERS
+    dynamic_out, dynamic_file = process(mode='dynamic',
+                                        cases=cases,
+                                        nominals=best_static,
+                                        savedir=save_dir)
+    
+    if profile_one_job:
+        sys.exit() # in this case our work is done...
+    
+    # MERGED STATIC + DYNAMIC
+    # Note how merge here assumes both static and dynamic are provided pre-sorted into same order.
+    merged = static_out.copy()
+    for key in fitter.dynamic_keys:
+        merged[key] = dynamic_out[key]
+    for key in ['ANALYSIS_DATE', 'FIT_ERROR']:
+        merged.rename(columns = {key: key + '_STATIC'}, inplace = True)
+        merged[key + '_DYNAMIC'] = dynamic_out[key]
+    merged_file = static_file.split('static')[0] + 'merged.csv'
+    merged.to_csv(merged_file)
+
+    # plotting
+    if should_plot:
+        plotter.plot(datapath=merged_file, dynamic=dynamic_file)
