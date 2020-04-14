@@ -40,6 +40,8 @@ import time
 import datetime
 import multiprocessing
 import yaml
+import argparse
+from pkg_resources import resource_filename
 
 # DESI-specific imports
 # path handling is to be improved as I migrate better into github/desimeter
@@ -53,12 +55,14 @@ import petaltransforms
 # paths
 home_dir = os.getenv('HOME')
 main_dir = os.path.join(home_dir, 'Desktop/posparams')
-data_dir = os.path.join(main_dir, 'fvc_desimeter_v0.2.0_positioners-2') # where to find data files
+data_dir = os.path.join(main_dir, 'fvc_desimeter_v0.2.0_positioners-3') # where to find data files
 save_dir = main_dir
-desimeter_data_dir = os.path.join(desimeter_path, 'data')
+desimeter_data_dir = resource_filename("desimeter", "data")
 
 # common options
-files_to_process = ['M00282.csv', 'M02841.csv', 'M02930.csv', 'M04064.csv', 'M07071.csv'] # leave empty to process all files found in data_dir
+verbose = True
+should_log = True
+files_to_process = [] # leave empty to process all files found in data_dir
 params_to_keep_fixed = [] # see comments in pos_params_bestfit function
 param_overrides = {} # any key:val pairs to override the default params in bestfit module
 period_days = 1 # spacing of datum dates at which to run the fit
@@ -75,6 +79,7 @@ param_nominals.update(param_overrides)
 
 # log and output file handling
 date_format_file = '%Y%m%dT%H%M%S'
+date_format_data = '%Y-%m-%d %H:%M:%S'
 def now_str(fmt):
     return datetime.datetime.now().strftime(fmt)
 timestamp_str = now_str(date_format_file)
@@ -82,9 +87,11 @@ log_name = timestamp_str + '_log.txt'
 log_path = os.path.join(save_dir, log_name)
 def printlog(s):
     s = f'{now_str(date_format_data)} {s}'
-    print(s)
-    with open(log_path,'a') as file:
-        print(s, file=file)
+    if verbose:
+        print(s)
+    if should_log:
+        with open(log_path,'a') as file:
+            print(s, file=file)
 
 # find csv files and parse out their positioner ids
 all_files = os.listdir(data_dir)
@@ -106,15 +113,25 @@ required_keys = {'DATE', 'POS_P', 'POS_T', 'X_FP', 'Y_FP', 'CTRL_ENABLED',
                  'TOTAL_MOVE_SEQUENCES'}
 for posid in csv_files:
     path = os.path.join(data_dir, csv_files[posid])
+    path = os.path.realpath(path)
     frame = pandas.read_csv(path)
     frame = frame.sort_values('DATE', ascending=True, ignore_index=True)
     key_search = [key in frame.columns for key in required_keys]
     if all(key_search):
         frames[posid] = frame
+        printlog(f'{posid}: Read from {path}')
 posids = sorted(csv_files.keys())
 
-# load petal alignments
+def drop_empties():
+    '''eliminate any empty frames'''
+    for posid in set(frames.keys()):
+        if frames[posid].empty:
+            del posids[posids.index(posid)]
+            del frames[posid]
+            printlog(f'{posid}: dropped from analysis (no data)')
+drop_empties()
 
+# load petal alignments
 petal_alignments_file = 'petal-alignments.yaml'
 petal_alignments_path = os.path.join(desimeter_data_dir, petal_alignments_file)
 with open(petal_alignments_path, 'r') as file:
@@ -123,6 +140,7 @@ ptl_trans = {}
 for petal_loc, alignment in petal_alignments.items():
     args = (alignment[key] for key in ['Tx', 'Ty', 'Tz', 'alpha', 'beta', 'gamma'])
     ptl_trans[petal_loc] = petaltransforms.PetalTransforms(*args, curved=True)
+printlog(f'Loaded petal alignments {petal_alignments_path}:\n{petal_alignments}')
 
 # obtain xy in petal coordinate system
 for posid in frames:
@@ -134,9 +152,12 @@ for posid in frames:
     ptlXY = trans.obsXY_to_ptlXYZ(obsXY, cast=False)
     frames[posid]['X_PTL'] = ptlXY[0]
     frames[posid]['Y_PTL'] = ptlXY[1]
+    printlog(f'{posid}: (X_FP, Y_FP) converted to (X_PTL, Y_PTL)')
 
 # filter out bad rows
 for posid in frames:
+    initial_len = len(frames[posid])
+    
     # drop any rows with disabled control (not valid data)
     frames[posid] = frames[posid][frames[posid]['CTRL_ENABLED'] == True]
     frames[posid] = frames[posid].reset_index(drop=True)
@@ -152,12 +173,17 @@ for posid in frames:
 #    frames[posid] = frames[posid][cruiseT_diff + cruiseP_diff != 0]
 #    frames[posid] = frames[posid].reset_index(drop=True)
 
+    final_len = len(frames[posid])
+    printlog(f'{posid}: dropped {initial_len - final_len} of {initial_len} non-conforming data rows')
+    
+drop_empties()
+
 # add a time-since-epoch column to data frames
-date_format_data = '%Y-%m-%d %H:%M:%S'
 for posid, frame in frames.items():
     time_structs = [time.strptime(frame['DATE'][i], date_format_data) for i in range(len(frame))]
     time_sec = [time.mktime(t) for t in time_structs]
     frame['DATE_SEC'] = time_sec
+    printlog(f'{posid}: generated seconds-since-epoch column (\'DATE_SEC\')')
 
 # data selectors
 def select_by_index(posid, start=0, final=-1):
@@ -250,7 +276,7 @@ def process(mode='static', cases=[], nominals=param_nominals, savedir='.'):
             job_desc += f'  start idx = {m:5d}, date = {subframe["DATE"][m]}\n'
             job_desc += f'  final idx = {n:5d}, date = {subframe["DATE"][n]}\n'
             job_desc += f' num points = {n-m+1:5d}'
-            printlog(f'job added:\n{job_desc}\n')
+            printlog(f'job {cases.index(case)} of {len(cases)} added:\n{job_desc}\n')
             if mode == 'static':
                 these_nominals = nominals
             else:
@@ -263,7 +289,7 @@ def process(mode='static', cases=[], nominals=param_nominals, savedir='.'):
             if profile_one_job:
                 prof = cProfile.Profile()
                 params, fit_err, _ = prof.runcall(fitter.fit_params, **argsdict)
-                print(f'Results:\n{params}\nfit error = {fit_err}')
+                printlog(f'Results:\n{params}\nfit error = {fit_err}')
                 statsfile = 'stats'
                 prof.dump_stats(statsfile)
                 p = pstats.Stats(statsfile)
@@ -296,9 +322,10 @@ def process(mode='static', cases=[], nominals=param_nominals, savedir='.'):
                     job_desc += '\n'
                     job_desc += f'{posid}: best params = {dict_str(params)}\n'
                     job_desc += f'{posid}: fit error = {fit_err:.3f}'
-                    printlog(f'job completed:\n{job_desc}\n')
+                    printlog(f'job {cases.index(case)} completed:\n{job_desc}\n')
             for case in completed:
                 del mp_results[case]
+            printlog(f'Jobs remaining: {len(mp_results)}')
             time.sleep(0.05)
     output_frame = pandas.DataFrame(output)
     output_frame = output_frame.sort_values(['POS_ID','DATA_END_DATE'], ascending=True, ignore_index=True)
@@ -309,9 +336,17 @@ def process(mode='static', cases=[], nominals=param_nominals, savedir='.'):
         
 
 if __name__ == '__main__':
+    # argument parsing - TODO
+    #parser = argparse.ArgumentParser()
+    #args = parser.parse_args()
+    #parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    #                                     description="""Get latest calibration""")
+    #parser.add_argument('-o','--outfile', type= str, required=True, help="output csv file name")
+    #args  = parser.parse_args()
     
     # define analysis cases spanning the data history
     cases = []
+    num_cases = {posid:0 for posid in posids}
     formatted_xytp_data = {}
     for posid, frame in frames.items():
         last_date_this_frame = last_date_in_sec(frame)
@@ -336,8 +371,11 @@ if __name__ == '__main__':
                 case[case_enum['start_idx']] = start_idx
                 case[case_enum['final_idx']] = final_idx
                 cases.append(tuple(case)) # tuple is hashable, so can use case as a dict key later
+                num_cases[posid] += 1
                 i = j
                 j += 1
+        printlog(f'{posid}: {num_cases[posid]:5d} analysis cases defined')
+    printlog(f'Total analysis cases: {len(cases)}')
     
     # FIRST-PASS:  STATIC PARAMETERS
     static_out, static_file = process(mode='static',
