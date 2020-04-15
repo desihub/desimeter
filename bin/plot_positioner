@@ -43,7 +43,7 @@ for l in locations :
 if args.legend :
     plt.legend()
 plt.xlabel("XFP (mm)")
-plt.xlabel("YFP (mm)")
+plt.ylabel("YFP (mm)")
 plt.grid()
 plt.show()
 

@@ -2,11 +2,13 @@
 Utility functions to fit and apply coordinates transformation from PTL (petal local) to FP (focal plane ~ CS5)
 """
 
+import yaml
 import numpy as np
 from desimeter.log import get_logger
 from astropy.table import Table,Column
 from pkg_resources import resource_filename
 
+petal_alignment_dict = None
 
 # %% rotation matrices
 def Rx(angle):  # all in radians
@@ -38,10 +40,22 @@ def Rz(angle):  # all in radians
 	
 def Rxyz(alpha, beta, gamma):  # yaw-pitch-roll system, all in radians
     return Rz(gamma) @ Ry(beta) @ Rx(alpha)  # @ is matrix multiplication
-	
-def apply_ptl2fp(spots,petal_alignment_dict) :
 
+def get_petal_alignment_data() :
+    global petal_alignment_dict
+    if petal_alignment_dict is None :
+        filename = resource_filename('desimeter',"data/petal-alignments.yaml")
+        ifile=open(filename)
+        petal_alignment_dict = yaml.safe_load(ifile)
+        ifile.close()
+    return petal_alignment_dict
+
+def apply_ptl2fp(spots) :
+    
     log = get_logger()
+
+    petal_alignment_dict = get_petal_alignment_data()
+        
     
     nspot = spots['PETAL_LOC'].size
 
@@ -68,3 +82,16 @@ def apply_ptl2fp(spots,petal_alignment_dict) :
     return spots
     
     
+def ptl2fp(petal_loc,xptl,yptl,zptl=None) :
+    
+    if zptl is None : zptl=np.zeros(xptl.shape)
+    xyzptl = np.vstack([xptl,yptl,zptl])
+
+    # global focal plane coordinates 'FP'
+    params = get_petal_alignment_data()[petal_loc]
+    Rotation = Rxyz(params["alpha"],params["beta"],params["gamma"])
+    Translation = np.array([params["Tx"],params["Ty"],params["Tz"]])
+    xyzfp = Rotation.dot(xyzptl) + Translation[:,None]
+    
+    return xyzfp[0],xyzfp[1],xyzfp[2]
+
