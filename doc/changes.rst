@@ -30,9 +30,9 @@ desimeter change Log
 * Add model for new singlet FVC lens [PR `#40`_]
 * Add ray trace model of corrector distortions including ADC [PR `#41`_]
 * Update to metrology v6 [PR `#44`_]
-* Account for z-offset of GFA sensors [`#45`_]
+* Account for z-offset of GFA sensors [PR `#45`_]
 * Add field rotation prediction [PR `#48`_]
-* Update to metrology v7 [PR `#50`]
+* Update to metrology v7 [PR `#50`_]
 * Added tools to fit positioner calibration circles [PR `#53`_]
 
 .. _`#15`: https://github.com/desihub/desimeter/pull/15
