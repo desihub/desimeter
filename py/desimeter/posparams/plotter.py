@@ -133,6 +133,8 @@ def plot_pos(dataframe, savepath, statics_during_dynamic):
     times = [time.mktime(val) for val in dates]
     tick_values = numpy.arange(times[0], times[-1]+day_in_sec, tick_period_days*day_in_sec)
     tick_labels = [datetime.datetime.fromtimestamp(t).strftime('%Y-%m-%d') for t in tick_values]
+    n_pts = len(dataframe)
+    marker = ''
     for p in plot_defs:
         plt.subplot(2, 3, p['subplot'])
         for key in p['keys']:
@@ -141,11 +143,15 @@ def plot_pos(dataframe, savepath, statics_during_dynamic):
                 ax_right = plt.twinx()
                 color = 'red'
                 linestyle = '--'
+                if n_pts == 1:
+                    marker = '^'
             else:
                 color = 'blue'
                 linestyle = '-'
+                if n_pts == 1:
+                    marker = 'v'
             y = [val * p['mult'] for val in dataframe[key].tolist()]
-            plt.plot(times, y, color=color, linestyle=linestyle)
+            plt.plot(times, y, color=color, linestyle=linestyle, marker=marker)
             if not ax_right:
                 ax_left = plt.gca()
             units = f' ({p["units"]})' if p['units'] else ''
@@ -178,8 +184,6 @@ def plot_pos(dataframe, savepath, statics_during_dynamic):
     plt.savefig(savepath, bbox_inches='tight')
     plt.close(fig)
     return savepath
-
-
     
 if __name__ == '__main__':
     datapath = filedialog.askopenfilename(initialdir=".",
