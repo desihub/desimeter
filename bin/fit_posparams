@@ -55,13 +55,13 @@ import petaltransforms
 # paths
 home_dir = os.getenv('HOME')
 main_dir = os.path.join(home_dir, 'Desktop/posparams')
-data_dir = os.path.join(main_dir, 'fvc_desimeter_v0.2.0_positioners-3') # where to find data files
+data_dir = os.path.join(main_dir, 'set2') # where to find data files
 save_dir = main_dir
 desimeter_data_dir = resource_filename("desimeter", "data")
 
 # common options
 verbose = True
-should_log = True
+should_log = False
 files_to_process = [] # leave empty to process all files found in data_dir
 params_to_keep_fixed = [] # see comments in pos_params_bestfit function
 param_overrides = {} # any key:val pairs to override the default params in bestfit module
@@ -370,7 +370,9 @@ if __name__ == '__main__':
 
         printlog(f'{posid}: {num_cases[posid]:5d} analysis cases defined')
     printlog(f'Total analysis cases: {len(cases)}')
-
+    cases = list(set(cases))
+    printlog(f'Reduced to: {len(cases)} unique cases')
+	
     # FIRST-PASS:  STATIC PARAMETERS
     static_out, static_file = process(mode='static',
                                       cases=cases,
