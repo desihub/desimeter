@@ -391,6 +391,7 @@ if __name__ == '__main__':
             selection = subframe[subframe['FIT_ERROR'] <= quantile]
             these_best = {key:static_params_group_func(selection[key]) for key in fitter.static_keys}
             best_static[posid].update(these_best)
+            printlog(f'{posid}: Selected best static params = {dict_str(best_static[posid])}')
 
     # SECOND-PASS:  DYNAMIC PARAMETERS
     dynamic_out, dynamic_file = process(mode='dynamic',
