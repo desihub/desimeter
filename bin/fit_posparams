@@ -40,7 +40,7 @@ import time
 import datetime
 import multiprocessing
 import yaml
-import argparse
+#import argparse
 from pkg_resources import resource_filename
 
 # DESI-specific imports
@@ -207,22 +207,6 @@ def first_date_in_sec(frame):
 def last_date_in_sec(frame):
     return frame['DATE_SEC'].tolist()[-1]
 
-def slice_idxs_for_dates(posid, start=None, final=None):
-    '''Returns a start and finish indices corresponding to dates in positioner
-    posid's data frame.'''
-    frame = frames[posid]
-    start_sec = first_date_in_sec(frame)
-    final_sec = last_date_in_sec(frame)
-    if start:
-        start = time.strptime(start, date_format_data) if isinstance(start, str) else start
-        start_sec = max(start_sec, start)
-    if final:
-        final = time.strptime(final, date_format_data) if isinstance(final, str) else final
-        final_sec = min(final_sec, final)
-    start_idx = first_time_match(frame, start_sec)
-    final_idx = first_time_match(frame, final_sec)
-    return start_idx, final_idx
-
 def dict_str(d):
     '''Return a string displaying formatted values in dict d.'''
     s = '{'
@@ -325,7 +309,7 @@ def process(mode='static', cases=[], nominals=param_nominals, savedir='.'):
                     printlog(f'job {cases.index(case)} completed:\n{job_desc}\n')
             for case in completed:
                 del mp_results[case]
-            printlog(f'Jobs remaining: {len(mp_results)}')
+                printlog(f'Jobs remaining: {len(mp_results)}')
             time.sleep(0.05)
     output_frame = pandas.DataFrame(output)
     output_frame = output_frame.sort_values(['POS_ID','DATA_END_DATE'], ascending=True, ignore_index=True)
@@ -333,57 +317,67 @@ def process(mode='static', cases=[], nominals=param_nominals, savedir='.'):
     output_path = os.path.join(savedir, output_name)
     output_frame.to_csv(output_path, index=False, date_format=date_format_data)
     return output_frame, output_path
-        
 
 if __name__ == '__main__':
     # argument parsing - TODO
     #parser = argparse.ArgumentParser()
     #args = parser.parse_args()
     #parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    #                                     description="""Get latest calibration""")
+    #                                 description="""Get latest calibration""")
     #parser.add_argument('-o','--outfile', type= str, required=True, help="output csv file name")
     #args  = parser.parse_args()
     
     # define analysis cases spanning the data history
     cases = []
-    num_cases = {posid:0 for posid in posids}
+    num_cases = {posid: 0 for posid in posids}
     formatted_xytp_data = {}
     for posid, frame in frames.items():
-        last_date_this_frame = last_date_in_sec(frame)
-        i = 0
-        j = 1
-        while j < len(datum_dates):
-            start = datum_dates[i]
-            final = datum_dates[j]
-            if final > last_date_this_frame:
-                final == last_date_this_frame
-                j = len(datum_dates) - 1
-            start_idx, final_idx = slice_idxs_for_dates(posid, start, final)
-            not_enough_points = final_idx - start_idx < min_slice_width
-            if not_enough_points:
-                if i > 0:
-                    i -= 1
-                else:
-                    j += 1
-            else:
-                case = [None]*len(case_enum)
-                case[case_enum['posid']] = posid
-                case[case_enum['start_idx']] = start_idx
-                case[case_enum['final_idx']] = final_idx
-                cases.append(tuple(case)) # tuple is hashable, so can use case as a dict key later
-                num_cases[posid] += 1
-                i = j
-                j += 1
+        min_data_date = first_date_in_sec(frame)
+        max_data_date = last_date_in_sec(frame)
+        def frame_idx_for_date(date_in_sec):
+            '''Helper function to grab the first row index that matches the
+            argued date (in seconds since epoch). For date_in_sec below or
+            above the time range of the data frame, function will return either
+            index 0 or max index.'''
+            if date_in_sec > max_data_date:
+                return len(frame) - 1
+            return frame[frame['DATE_SEC'] >= date_in_sec].index[0]
+        widths = []
+        start_idxs = []
+        final_idxs = []
+        for j in range(1, len(datum_dates)):
+            start_date = datum_dates[j - 1]
+            final_date = datum_dates[j]
+            start_idxs.append(frame_idx_for_date(start_date))
+            final_idxs.append(frame_idx_for_date(final_date))
+            widths.append(final_idxs[-1] - start_idxs[-1])
+        for J in range(len(final_idxs)):
+            backwards_sum = lambda i: sum(w for w in widths[i:J+1])
+            satisfies_min_width = lambda i: backwards_sum(i) > min_slice_width
+            should_expand_backwards = lambda i: not(satisfies_min_width(i)) and i > 0
+            I = J
+            while should_expand_backwards(I):
+                I -= 1
+            can_expand_forwards = J < len(widths) - 1
+            if not satisfies_min_width(I) and can_expand_forwards:
+                continue  # skip ahead and try the next datum date
+            case = [None]*len(case_enum)
+            case[case_enum['posid']] = posid
+            case[case_enum['start_idx']] = start_idxs[I]
+            case[case_enum['final_idx']] = final_idxs[J]
+            cases.append(tuple(case))  # tuple is hashable, so can use case as a dict key later
+            num_cases[posid] += 1
+
         printlog(f'{posid}: {num_cases[posid]:5d} analysis cases defined')
     printlog(f'Total analysis cases: {len(cases)}')
-    
+
     # FIRST-PASS:  STATIC PARAMETERS
     static_out, static_file = process(mode='static',
                                       cases=cases,
                                       nominals=param_nominals.copy(),
                                       savedir=save_dir)
 
-    # DECIDE ON BEST STATIC PARAMS    
+    # DECIDE ON BEST STATIC PARAMS
     if profile_one_job:
         best_static = static_out
     else:
@@ -395,23 +389,23 @@ if __name__ == '__main__':
             selection = subframe[subframe['FIT_ERROR'] <= quantile]
             these_best = {key:static_params_group_func(selection[key]) for key in fitter.static_keys}
             best_static[posid].update(these_best)
-    
+
     # SECOND-PASS:  DYNAMIC PARAMETERS
     dynamic_out, dynamic_file = process(mode='dynamic',
                                         cases=cases,
                                         nominals=best_static,
                                         savedir=save_dir)
-    
+
     if profile_one_job:
-        sys.exit() # in this case our work is done...
-    
+        sys.exit()  # in this case our work is done
+
     # MERGED STATIC + DYNAMIC
     # Note how merge here assumes both static and dynamic are provided pre-sorted into same order.
     merged = static_out.copy()
     for key in fitter.dynamic_keys:
         merged[key] = dynamic_out[key]
     for key in ['ANALYSIS_DATE', 'FIT_ERROR']:
-        merged.rename(columns = {key: key + '_STATIC'}, inplace = True)
+        merged.rename(columns={key: key + '_STATIC'}, inplace=True)
         merged[key + '_DYNAMIC'] = dynamic_out[key]
     merged_file = static_file.split('static')[0] + 'merged.csv'
     merged.to_csv(merged_file)
