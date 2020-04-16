@@ -27,7 +27,7 @@ Data sources:
         /global/cfs/cdirs/desi/engineering/fvc/desimeter/v0.2.0/
 
     And the matched coordinates per positioner are on NERSC at:
-        /global/cfs/cdirs/desi/engineering/fvc/desimeter/v0.2.0/positioners/
+        /global/cfs/cdirs/desi/engineering/fvc/desimeter/v0.2.0/positioners-3/
 """
 
 import os
