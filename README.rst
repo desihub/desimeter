@@ -132,6 +132,13 @@ If you want to use desimeter but don't intend to actively develop it::
 For developers, we recommend adding `desimeter/py` to `$PYTHONPATH`
 and `desimeter/bin` to `$PATH` instead of installing desimeter.
 
+For developers in a Windows + Anaconda environment, add a new user variable
+`PYTHONPATH` in the Environment Variables GUI editor. Include the path (for
+your machine) ending in `desimeter\py` in the Value field. After a non-
+exhaustive search, no easy equivalent was found for adding `desimeter\bin`
+to `Path`. You'll have to type out `python <full path to command>` at the
+Anaconda Prompt terminal.
+
 Other Notes
 -----------
 

@@ -4,7 +4,6 @@ Plot time series of positioner parameters.
 """
 
 import os
-import sys
 import matplotlib.pyplot as plt
 import tkinter.filedialog as filedialog
 import time
@@ -13,11 +12,8 @@ import numpy as np
 from astropy.table import Table
 from astropy.time import Time
 
-# DESI-specific imports
-# path handling is to be improved as I migrate better into github/desimeter
-desimeter_path = os.path.abspath('..')
-sys.path.append(desimeter_path)
-import posparams.fitter as fitter
+# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
+import desimeter.posparams.fitter as fitter
 
 # common options
 img_ext = '.png'

@@ -7,8 +7,8 @@ import sys
 import math
 import scipy.optimize
 
-# DESI-specific imports
-# path handling is to be improved as I migrate better into github/desimeter
+# Instrument postransforms.py module will be replaced in future by equivalent
+# functionality within the desimeter world.
 petal_path = 'C:/Users/joe/Desktop/desi_svn/focalplane/plate_control/trunk/petal/'
 sys.path.append(petal_path)
 import postransforms

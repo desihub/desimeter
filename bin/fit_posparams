@@ -43,12 +43,12 @@ from pkg_resources import resource_filename
 from astropy.table import Table
 from astropy.time import Time
 
-# DESI-specific imports
-# path handling is to be improved as I migrate better into github/desimeter
-desimeter_path = os.path.abspath('../py/desimeter/')
-sys.path.append(desimeter_path)
-import posparams.fitter as fitter
-import posparams.plotter as plotter
+# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
+import desimeter.posparams.fitter as fitter
+import desimeter.posparams.plotter as plotter
+
+# Instrument petaltransforms.py module will be replaced in future by equivalent
+# functionality within the desimeter world.
 sys.path.append(fitter.petal_path)
 import petaltransforms
 
