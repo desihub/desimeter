@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 This module provides coordinate transformation between petal cartesian (x, y)
-and pseudo-cartesian "flat" (x, y) coordinates.
+and two pseudo-cartesian systems.
 
     x_ptl, y_ptl   ... Units mm. Cartesian coordinates, relative to petal.
                        Corresponds to ptlXY in postransforms.py.
                      
     x_flat, y_flat ... Units mm. Pseudo-cartesian, relative to petal.
                        Corresponds to flatXY in postransforms.py.
+    
+    x_pos, y_pos   ... Unis mm. Pseudo-cartesian, local to a fiber positioenr.
+                       Corresponds to poslocXY in postransforms.py.
                        
 "Flat" cooridnates are produced by the approximation (Q, S) ~ (Q, R). In other
 words:
@@ -20,8 +23,9 @@ The spatial warping in flat xy is < 1 um local to a given positioner. In the
 petal or global coordinates, the warping causes up to ~ 500 um variation from
 physical reality.
 
-On the DESI instrument, the x and y center position of each robot (OFFSET_X
-and OFFSET_Y) are calculated in flat xy space.
+On the DESI instrument, the calibration parameters (OFFSET_X, OFFSET_Y,
+LENGTH_R1, LENGTH_R2, OFFSET_T, OFFSET_P) are all calculated in this pseudo-
+cartesian space.
 """
 
 import numpy as np
@@ -54,7 +58,7 @@ def ptl2flat(x_ptl, y_ptl):
     return x_flat, y_flat
 
 if __name__ == '__main__':
-    '''Sample code to generate expected values below:
+    '''Sample code to generate test values below:
     
     import postransforms
     import numpy as np
