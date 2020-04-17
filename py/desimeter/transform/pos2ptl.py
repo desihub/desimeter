@@ -12,11 +12,11 @@ and several fiber positioner systems.
     x_loc, y_loc   ... Units mm. Pseudo-cartesian, local to a fiber positioenr.
                        Corresponds to poslocXY in postransforms.py.
                        
-    t_loc, p_loc   ... Units deg. Externally-measured angles of positioner's
+    t_ext, p_ext   ... Units deg. Externally-measured angles of positioner's
                        kinematic "arms", in the "flat" or "loc" systems.
                        Corresponds to poslocTP in postransforms.py.
                        
-    t_pos, p_pos   ... Units deg. Internally-tracked angles of positioner's
+    t_int, p_int   ... Units deg. Internally-tracked angles of positioner's
                        kinematic "arms", in a system where theta (and therefore
                        also phi) depend on the angle at which the positioner
                        was physically mounted in the petal.
@@ -48,15 +48,39 @@ Function usage:
 import numpy as np
 import xy2qs
 
-def flat2ptl(x_flat, y_flat):
-    '''Converts (x_flat, y_flat) coordinates to (x_ptl, y_ptl).'''
-    q = np.arctan2(y_flat, x_flat)
-    s = np.hypot(x_flat, y_flat)
-    r = xy2qs.s2r(s)
-    x_ptl = r * np.cos(q)
-    y_ptl = r * np.sin(q)
-    return x_ptl, y_ptl
-    
+# DEFAULT VALUES FOR ANGULAR RANGE LIMITS
+# ---------------------------------------
+# The physical fiber positioner robot has hard limits on its angular travel
+# ranges. In usage on the instrument, they are applied to t_int and p_int. The
+# limit values are derived from a number calibration parameters:
+#
+#   PHYSICAL_RANGE_T, PHYSICAL_RANGE_P,
+#   PRINCIPLE_HARDSTOP_CLEARANCE_T, PRINCIPLE_HARDSTOP_CLEARANCE_P,
+#   SECONDARY_HARDSTOP_CLEARANCE_T, SECONDARY_HARDSTOP_CLEARANCE_P,
+#   BACKLASH, near_full_range_reduced_hardstop_clearance_factor
+#
+# c.f. https://desi.lbl.gov/svn/code/focalplane/plate_control/trunk/petal/posmodel.py
+#      https://desi.lbl.gov/svn/code/focalplane/plate_control/trunk/petal/posconstants.py
+#
+# The use of these parameters to determine range limits varies depending on the
+# operational context. This module provides no tools to predict or determine
+# what particular limit values one ought to apply. That is a complicated
+# question of operational context and intent. Some nominal values are supplied,
+# which should work in most analysis situations.
+#
+# This module *does* provide the functional capability to correctly apply a
+# given set of limits to a coordinate conversion, in the same way as the
+# instrument would do, given those same values.
+#
+# And after all that text... here ya go:
+nom_t_min = -200
+nom_t_max = 200
+nom_p_min = -20
+nom_p_max = 200
+
+# TRANSFORMS
+# ----------
+
 def ptl2flat(x_ptl, y_ptl):
     '''Converts (x_ptl, y_ptl) coordinates to (x_ptl, y_ptl).'''
     q = np.arctan2(y_ptl, x_ptl)
@@ -66,13 +90,26 @@ def ptl2flat(x_ptl, y_ptl):
     y_flat = s * np.sin(q)
     return x_flat, y_flat
 
+def flat2ptl(x_flat, y_flat):
+    '''Converts (x_flat, y_flat) coordinates to (x_ptl, y_ptl).'''
+    q = np.arctan2(y_flat, x_flat)
+    s = np.hypot(x_flat, y_flat)
+    r = xy2qs.s2r(s)
+    x_ptl = r * np.cos(q)
+    y_ptl = r * np.sin(q)
+    return x_ptl, y_ptl
+
 def flat2loc(u_flat, u_offset):
     '''Converts x_flat or y_flat coordinate to x_loc or y_loc.
-    READ THE FINE PRINT: args here are not  like "(x,y)". More like "(x,xo)".
+    READ THE FINE PRINT: Args here are not  like "(x,y)". More like "(x,xo)".
         
+    INPUTS
         u_flat   ... x_flat or y_flat
         u_offset ... OFFSET_X or OFFSET_Y
-    
+        
+    OUTPUTS:
+        u_loc    ... x_loc or y_loc
+        
     u_offset may either be a scalar (will be applied to all points), or
     a vector of unique values per point.
     '''
@@ -83,10 +120,14 @@ def flat2loc(u_flat, u_offset):
     
 def loc2flat(u_loc, u_offset):
     '''Converts x_loc or y_loc coordinate to x_flat or y_flat.
-    READ THE FINE PRINT: args here are not  like "(x,y)". More like "(x,xo)".
+    READ THE FINE PRINT: Args here are not  like "(x,y)". More like "(x,xo)".
     
+    INPUTS:
         u_loc    ... x_loc or y_loc
         u_offset ... OFFSET_X or OFFSET_Y
+        
+    OUTPUTS:
+        u_flat   ... x_flat or y_flat
     
     u_offset may either be a scalar (will be applied to all points), or
     a vector of unique values per point.
@@ -95,6 +136,86 @@ def loc2flat(u_loc, u_offset):
     u_offset = _to_numpy(u_offset)
     u_flat = u_loc + u_offset
     return u_flat
+
+def loc2ext(x_loc, y_loc, r1, r2,
+            t_min=nom_t_min, t_max=nom_t_max,
+            p_min=nom_p_min, p_max=nom_p_max):
+    '''Converts (x_loc, y_loc) coordinates to (t_ext, p_ext).
+    READ THE FINE PRINT: Returned tuple has 3 elements. Nonlinear, range-limited.
+    
+    INPUTS:
+        x_loc, y_loc ... positioner local (x,y), as described in module notes
+        r1, r2       ... kinematic arms LENGTH_R1 and LENGTH_R2, scalar or vector
+        t_min, t_max ... range limits on t_int
+        
+    OUTPUTS:
+        t_ext, p_ext ... externally-measured (theta,phi), see module notes
+        unreachable  ... vector of same length, containing booleans
+        
+    The vector "unreachable" identifies any points where the desired (x,y) can
+    not be reached by the positioner. In such cases, the returned t_ext, p_ext
+    correspond to a point which is as near as possible to x_loc, y_loc. This
+    matches how it works on the instrument.
+    
+    (The purpose of returning these "nearest possible" points, rather than a
+    simple "fail", is to be operationally tolerant of targets that may be just
+    a few um from the edge of reachability. In these cases, near-enough can
+    still deliver good spectra.)
+    '''
+    pass
+
+def ext2loc(t_ext, p_ext, r1, r2):
+    '''Converts (t_ext, p_ext) coordinates to (x_loc, y_loc).
+    
+    INPUTS:
+        t_ext, p_ext ... externally-measured (theta,phi), see module notes
+        r1, r2       ... kinematic arms LENGTH_R1 and LENGTH_R2, scalar or vector
+        
+    OUTPUTS:
+        x_loc, y_loc ... positioner local (x,y), as described in module notes
+    '''
+    pass
+
+def ext2int(u_ext):
+    '''Converts t_ext or p_ext coordinate to t_int or p_int.'''
+    pass
+
+def int2ext(u_int):
+    '''Converts t_int or p_int coordinate to t_ext or p_ext.'''
+    pass
+
+def delta_t_int(t0_int, t1_int, t_scale=1.0, t_min=nom_t_min, t_max=nom_t_max):
+    '''Special function for the subtraction operation on internal theta:
+        
+        output = (t1_int - t0_int) / scale
+        
+    Angles are wrapped into the range between t_min and t_max, in the same
+    manner as done on the instrument. For example, let:
+    
+        t0 = -179, t1 = +179, t_min = -185
+    
+    Then the output of delta_t != +358. Rather, delta_t --> +2.
+    
+    This function also provides consistent application of scale factor,
+    intended to correspond to SCALE_T, a.k.a. GEAR_CALIB_T. When using the
+    scale feature, understand that on the instrument it is applied at a lower
+    level (conversion from number of intended motor rotations to number of
+    expected output shaft rotations). than the postransforms module knows
+    about.
+    '''
+    pass
+
+def delta_p_int(p0_int, p1_int, p_scale=1.0):
+    pass
+        
+def addto_t_int(t_int, dt_int, t_scale=1.0, t_min=nom_t_min, t_max=nom_t_max):
+    '''Special function for the addition operation on internal theta:
+        
+        output = t_int + dt_int * scale
+        
+    '''
+    # note determine order of wrapping operations based on sign of du
+    pass
     
 def _to_numpy(u):
     '''Internal function to cast values to vectors.'''
