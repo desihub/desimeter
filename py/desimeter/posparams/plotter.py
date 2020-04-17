@@ -11,6 +11,7 @@ import multiprocessing
 import numpy as np
 from astropy.table import Table
 from astropy.time import Time
+import astropy.stats as stats
 
 # imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
 import desimeter.posparams.fitter as fitter
@@ -21,115 +22,142 @@ max_plots = None # set to integer to limit # of plots (i.e. for debugging) or No
 home_dir = os.getenv('HOME')
 main_dir = os.path.join(home_dir, 'Desktop/posparams')
 savedir_prefix = os.path.join(main_dir, 'plots_')
+error_series_filename = 'fiterror' + img_ext
 tick_period_days = 7
 day_in_sec = 24*60*60
 n_processes_max = os.cpu_count() - 1 # max number of processors to use
+error_bins = [0, 0.01, 0.05, 0.1, np.inf] # for error_series plot, bin edges in which to categorize positioners
 
-# plot definitions
-plot_defs= [{'keys': ['FIT_ERROR_STATIC', 'FIT_ERROR_DYNAMIC'],
-             'units': 'um RMS',
-             'mult': 1000,
-             'subplot': 1,
-             'logscale': True,
-             'equal_scales': True},
+# plot definitions for parameter subplots
+param_subplot_defs = [
+    {'keys': ['FIT_ERROR_STATIC', 'FIT_ERROR_DYNAMIC'],
+     'units': 'um RMS',
+     'mult': 1000,
+     'subplot': 1,
+     'logscale': True,
+     'equal_scales': True},
             
-            {'keys': ['NUM_POINTS'],
-             'units': 'USED IN FIT',
-             'mult': 1,
-             'subplot': 4,
-             'logscale': False},
+    {'keys': ['NUM_POINTS'],
+     'units': 'USED IN FIT',
+     'mult': 1,
+     'subplot': 4,
+     'logscale': False},
             
-            {'keys': ['LENGTH_R1', 'LENGTH_R2'],
-             'units': 'mm',
-             'mult': 1,
-             'subplot': 2,
-             'logscale': False,
-             'equal_scales': True},
+    {'keys': ['LENGTH_R1', 'LENGTH_R2'],
+     'units': 'mm',
+     'mult': 1,
+     'subplot': 2,
+     'logscale': False,
+     'equal_scales': True},
             
-            {'keys': ['OFFSET_X', 'OFFSET_Y'],
-             'units': 'mm',
-             'mult': 1,
-             'subplot': 5,
-             'logscale': False,
-             'equal_scales': False},
+    {'keys': ['OFFSET_X', 'OFFSET_Y'],
+     'units': 'mm',
+     'mult': 1,
+     'subplot': 5,
+     'logscale': False,
+     'equal_scales': False},
             
-            {'keys': ['OFFSET_T', 'OFFSET_P'],
-             'units': 'deg',
-             'mult': 1,
-             'subplot': 6,
-             'logscale': False,
-             'equal_scales': False},
+    {'keys': ['OFFSET_T', 'OFFSET_P'],
+     'units': 'deg',
+     'mult': 1,
+     'subplot': 6,
+     'logscale': False,
+     'equal_scales': False},
             
-            {'keys': ['SCALE_T', 'SCALE_P'],
-             'units': '',
-             'mult': 1,
-             'subplot': 3,
-             'logscale': False,
-             'equal_scales': True},
-            ]
+    {'keys': ['SCALE_T', 'SCALE_P'],
+     'units': '',
+     'mult': 1,
+     'subplot': 3,
+     'logscale': False,
+     'equal_scales': True},
+    ]
 
-def plot(datapath, dynamic=''):
+def plot(datapath, dynamic='', mode='params'):
     '''Plot best-fit positioner params data, taken from csv file.
     
     Inputs:
         datapath ... main dataset to plot, csv file path
+        
         dynamic  ... aux file (for "dynamic" params), csv file path
+        
+        mode     ... valid options are:
+                     'params' ... runs plot_params() on each positoner
+                     'errors' ... runs plot_errors() on all positioners
+                     'all'    ... runs all plotting functions
+        
+    Outputs:
+        Image(s) saved to disk.
     '''
-    table = Table.read(datapath, format='csv')
-    if dynamic:
-        dynam_table = Table.read(dynamic, format='csv')
-    posids = sorted(set(table['POS_ID']))
-    num_posids = len(posids)
-    num_plots = num_posids if max_plots == None else min(max_plots, num_posids)
-    posids_to_plot = [posids[i] for i in range(num_plots)]
     basename = os.path.basename(datapath)
     timestamp = basename.split('_')[0]
     savedir = savedir_prefix + timestamp
-    if not os.path.exists(savedir):
-        os.makedirs(savedir)
-    mp_results = {}
-    with multiprocessing.Pool(processes=n_processes_max) as pool:
-        for posid in posids_to_plot:
-            subtable = table[table['POS_ID'] == posid]
-            if dynamic:
-                dynam_subtable = dynam_table[dynam_table['POS_ID'] == posid]
-                some_row = dynam_subtable[0]
-                statics_during_dynamic = {key:some_row[key] for key in some_row.columns if key in fitter.static_keys}
-            else:
-                statics_during_dynamic = {key:None for key in fitter.static_keys}
-            savepath = os.path.join(savedir, posid + img_ext)
-            mp_results[posid] = pool.apply_async(plot_pos, args=(subtable, savepath, statics_during_dynamic))
-            print(f'Plot job added: {posid}')
-        while mp_results:
-            completed = set()
-            for posid, result in mp_results.items():
-                if result.ready():
-                    completed.add(posid)
-                    print(f'Plot saved: {result.get()}')
-            for posid in completed:
-                del mp_results[posid]
-            time.sleep(0.05)
+    table = Table.read(datapath, format='csv')
+    if 'DATA_END_DATE_SEC' in table.columns: # column not present in 2020-04-15 batch run data
+        table['DATE_SEC'] = table['DATA_END_DATE_SEC']
+    else:
+        table['DATE_SEC'] = Time(table['DATA_END_DATE']).unix
+    if mode in {'params', 'all'}:
+        if dynamic:
+            dynam_table = Table.read(dynamic, format='csv')
+        posids = sorted(set(table['POS_ID']))
+        num_posids = len(posids)
+        num_plots = num_posids if max_plots == None else min(max_plots, num_posids)
+        posids_to_plot = [posids[i] for i in range(num_plots)]
+        if not os.path.exists(savedir):
+            os.makedirs(savedir)
+        mp_results = {}
+        with multiprocessing.Pool(processes=n_processes_max) as pool:
+            for posid in posids_to_plot:
+                subtable = table[table['POS_ID'] == posid]
+                if dynamic:
+                    dynam_subtable = dynam_table[dynam_table['POS_ID'] == posid]
+                    some_row = dynam_subtable[0]
+                    statics_during_dynamic = {key:some_row[key] for key in some_row.columns if key in fitter.static_keys}
+                else:
+                    statics_during_dynamic = {key:None for key in fitter.static_keys}
+                savepath = os.path.join(savedir, posid + img_ext)
+                mp_results[posid] = pool.apply_async(plot_params, args=(subtable, savepath, statics_during_dynamic))
+                print(f'Plot job added: {posid}')
+            while mp_results:
+                completed = set()
+                for posid, result in mp_results.items():
+                    if result.ready():
+                        completed.add(posid)
+                        print(f'Plot saved: {result.get()}')
+                for posid in completed:
+                    del mp_results[posid]
+                time.sleep(0.05)
+    if mode in {'errors', 'all'}:
+        savepath = os.path.join(savedir, error_series_filename)
+        plot_errors(table, savepath)
 
-def plot_pos(table, savepath, statics_during_dynamic):
-    '''Plot time series of positioner parameters, as determined by best-fit
-    of historical data.
+def plot_params(table, savepath, statics_during_dynamic):
+    '''Plot time series of positioner parameters for a single positioner.
     
     Inputs:
-        table ... astropy table as generated by fit_params
-        savepath ... where to save output plot file
-        statics_during_dynamic ... dict of static params used during the dynamic params best-fit
+        table    ... Astropy table as generated by fit_params, then reduced to
+                     just the rows for a single POS_ID.
+        
+        savepath ... Where to save output plot file. Extension determines image
+                     format.
+        
+        statics_during_dynamic ... Dict of static params used during the
+                     dynamic params best-fit
+        
+    Outputs:
+        The plot image file is saved to savepath. Also the savepath string is
+        returned unaltered (for ease of tracking progress during multi-
+        processing).
     '''
+    fig = _init_plot()
     posid = table['POS_ID'][0]
-    plt.ioff()
-    fig = plt.figure(figsize=(20,10), dpi=150)
-    plt.clf()
     fig.subplots_adjust(wspace=.3, hspace=.3)
-    times = Time(table['DATA_END_DATE']).unix
+    times = table['DATE_SEC']
     tick_values = np.arange(times[0], times[-1]+day_in_sec, tick_period_days*day_in_sec)
     tick_labels = [Time(t, format='unix', out_subfmt='date').iso for t in tick_values]
     n_pts = len(table)
     marker = ''
-    for p in plot_defs:
+    for p in param_subplot_defs:
         plt.subplot(2, 3, p['subplot'])
         for key in p['keys']:
             ax_right = None
@@ -174,9 +202,75 @@ def plot_pos(table, savepath, statics_during_dynamic):
     title += f'\nbest-fits to historical data'
     title += f'\nanalysis date: {analysis_date}'
     plt.suptitle(title)
-    plt.savefig(savepath, bbox_inches='tight')
-    plt.close(fig)
+    _save_and_close_plot(fig, savepath)
     return savepath
+
+def plot_errors(table, savepath):
+    '''Plot time series of posparam fit errors, summing up at each time point
+    for all postioners represented in table.
+    
+    Inputs:
+        table    ... Astropy table as generated by fit_params, containing data
+                     rows for multiple positioners.
+        
+        savepath ... Where to save output plot file. Extension determines image
+                     format.
+        
+    Outputs:
+        The plot image file is saved to savepath.
+    '''
+    fig = _init_plot()
+
+    # This is very much in-progress code. Idea is:
+    #
+    #   for any pos_id with multiple rows on the same day:
+    #       select row with lowest FIT_ERROR value and delete the others
+    #   for each threshold level: (like "ceiling" in proto code below)
+    #       select just the rows within that threshold zone
+    #       set up daily bins
+    #       histogram the dates-in-seconds into those bins
+    #
+    #   This yields a count of how many positioners were measured during each
+    #   day as meeting the threshold conditions.
+    #
+    #   Finally, cumulatively sum the bins.
+    #
+    #   Merits: easy / quick to write
+    #   Demerits: awkward to capture positioners failing out of the cumulative
+    #             counts, because losing track of posids.
+    #
+    # Alternate method:
+    #   
+    #   A bit more ploddingly, make a dict carrying an empty set for each day.
+    #   These are the bins. Now just march through the goddamned table, chucking
+    #   posids into these sets if they meet the threshold criteria.
+    #
+    #   Merits: keeps track of POS_IDs
+    #   Demerits: not fancy (probably a merit)
+    ceiling = 0.02
+    time_min = min(table['DATE_SEC'])
+    time_max = max(table['DATE_SEC'])
+    nbins = int(np.ceil((time_max - time_min) / day_in_sec))
+    time_range = (time_min, time_min + nbins * day_in_sec)
+    d = table[table['FIT_ERROR_DYNAMIC'] <= ceiling]
+    h = stats.histogram(d['DATE_SEC'], bins=nbins, range=time_range)
+        
+    _save_and_close_plot(fig, savepath)
+    
+
+def _init_plot():
+    '''Internal common plot initialization function. Returns figure handle.'''
+    plt.ioff()
+    fig = plt.figure(figsize=(20,10), dpi=150)
+    plt.clf()
+    return fig
+    
+def _save_and_close_plot(fig, savepath):
+    '''Internal common plot saving and closing function. Argue the figure
+    handle to close, and the path where to save the image. Extension determines
+    image format.'''
+    plt.savefig(savepath, bbox_inches='tight')
+    plt.close(fig)    
     
 if __name__ == '__main__':
     datapath = filedialog.askopenfilename(initialdir=".",
@@ -184,5 +278,5 @@ if __name__ == '__main__':
                                           filetypes=(("CSV","*.csv"),("all files","*.*")),
                                           )
     dynamic_path = datapath.split('merged.csv')[0] + 'dynamic.csv'
-    plot(datapath, dynamic_path)
+    plot(datapath, dynamic_path, mode='params')
 
