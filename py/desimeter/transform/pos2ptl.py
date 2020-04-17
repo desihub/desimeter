@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 This module provides coordinate transformation between petal cartesian (x, y)
-and two pseudo-cartesian systems.
+and several fiber positioner systems.
 
     x_ptl, y_ptl   ... Units mm. Cartesian coordinates, relative to petal.
                        Corresponds to ptlXY in postransforms.py.
@@ -9,8 +9,19 @@ and two pseudo-cartesian systems.
     x_flat, y_flat ... Units mm. Pseudo-cartesian, relative to petal.
                        Corresponds to flatXY in postransforms.py.
     
-    x_pos, y_pos   ... Unis mm. Pseudo-cartesian, local to a fiber positioenr.
+    x_loc, y_loc   ... Units mm. Pseudo-cartesian, local to a fiber positioenr.
                        Corresponds to poslocXY in postransforms.py.
+                       
+    t_loc, p_loc   ... Units deg. Externally-measured angles of positioner's
+                       kinematic "arms", in the "flat" or "loc" systems.
+                       Corresponds to poslocTP in postransforms.py.
+                       
+    t_pos, p_pos   ... Units deg. Internally-tracked angles of positioner's
+                       kinematic "arms", in a system where theta (and therefore
+                       also phi) depend on the angle at which the positioner
+                       was physically mounted in the petal.
+                       Corresponds to posintTP in postransforms.py.
+                       Also corresponds to POS_T, POS_P in the online database.
                        
 "Flat" cooridnates are produced by the approximation (Q, S) ~ (Q, R). In other
 words:
@@ -19,6 +30,8 @@ words:
     2. Approximate that polar R same as surface coordinate S along asphere.
     3. (Q, S) --> (x_flat, y_flat)
     
+The "loc" coordinates are a translation within "flat".
+    
 The spatial warping in flat xy is < 1 um local to a given positioner. In the
 petal or global coordinates, the warping causes up to ~ 500 um variation from
 physical reality.
@@ -26,17 +39,17 @@ physical reality.
 On the DESI instrument, the calibration parameters (OFFSET_X, OFFSET_Y,
 LENGTH_R1, LENGTH_R2, OFFSET_T, OFFSET_P) are all calculated in this pseudo-
 cartesian space.
+
+Function usage:
+    Inputs: Args may be scalars or 1xN lists, tuples, or numpy arrays.
+    Output: Tuple of 2 numpy arrays.
 """
 
 import numpy as np
 import xy2qs
 
 def flat2ptl(x_flat, y_flat):
-    '''Converts (x_flat, y_flat) coordinates to (x_ptl, y_ptl).
-    See module notes for description of these coordinate systems.
-    Input args may be scalars or 1xN lists, tuples, or numpy arrays.
-    Output is a tuple of 2 numpy arrays.
-    '''
+    '''Converts (x_flat, y_flat) coordinates to (x_ptl, y_ptl).'''
     q = np.arctan2(y_flat, x_flat)
     s = np.hypot(x_flat, y_flat)
     r = xy2qs.s2r(s)
@@ -45,17 +58,47 @@ def flat2ptl(x_flat, y_flat):
     return x_ptl, y_ptl
     
 def ptl2flat(x_ptl, y_ptl):
-    '''Converts (x_ptl, y_ptl) coordinates to (x_ptl, y_ptl).
-    See module notes for description of these coordinate systems.
-    Input args may be scalars or 1xN lists, tuples, or numpy arrays.
-    Output is a tuple of 2 numpy arrays.
-    '''
+    '''Converts (x_ptl, y_ptl) coordinates to (x_ptl, y_ptl).'''
     q = np.arctan2(y_ptl, x_ptl)
     r = np.hypot(x_ptl, y_ptl)
     s = xy2qs.r2s(r)
     x_flat = s * np.cos(q)
     y_flat = s * np.sin(q)
     return x_flat, y_flat
+
+def flat2loc(u_flat, u_offset):
+    '''Converts x_flat or y_flat coordinate to x_loc or y_loc.
+    READ THE FINE PRINT: args here are not  like "(x,y)". More like "(x,xo)".
+        
+        u_flat   ... x_flat or y_flat
+        u_offset ... OFFSET_X or OFFSET_Y
+    
+    u_offset may either be a scalar (will be applied to all points), or
+    a vector of unique values per point.
+    '''
+    u_flat = _to_numpy(u_flat)
+    u_offset = _to_numpy(u_offset)
+    u_loc = u_flat - u_offset
+    return u_loc
+    
+def loc2flat(u_loc, u_offset):
+    '''Converts x_loc or y_loc coordinate to x_flat or y_flat.
+    READ THE FINE PRINT: args here are not  like "(x,y)". More like "(x,xo)".
+    
+        u_loc    ... x_loc or y_loc
+        u_offset ... OFFSET_X or OFFSET_Y
+    
+    u_offset may either be a scalar (will be applied to all points), or
+    a vector of unique values per point.
+    '''
+    u_loc = _to_numpy(u_loc)
+    u_offset = _to_numpy(u_offset)
+    u_flat = u_loc + u_offset
+    return u_flat
+    
+def _to_numpy(u):
+    '''Internal function to cast values to vectors.'''
+    return u if isinstance(u, np.ndarray) else np.array(u)
 
 if __name__ == '__main__':
     '''Sample code to generate test values below:
