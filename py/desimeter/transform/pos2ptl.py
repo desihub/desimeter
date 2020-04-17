@@ -9,7 +9,8 @@ and several fiber positioner systems.
     x_flat, y_flat ... Units mm. Pseudo-cartesian, relative to petal.
                        Corresponds to flatXY in postransforms.py.
     
-    x_loc, y_loc   ... Units mm. Pseudo-cartesian, local to a fiber positioenr.
+    x_loc, y_loc   ... Units mm. Pseudo-cartesian, local to a fiber positioner.
+                       On local tangent plane to asphere, to a good approximation.
                        Corresponds to poslocXY in postransforms.py.
                        
     t_ext, p_ext   ... Units deg. Externally-measured angles of positioner's
@@ -23,6 +24,14 @@ and several fiber positioner systems.
                        Corresponds to posintTP in postransforms.py.
                        Also corresponds to POS_T, POS_P in the online database.
                        
+
+TYPICAL INPUTS / OUTPUTS:
+-------------------------
+    Inputs: Args may be scalars or 1xN lists, tuples, or numpy arrays.
+    Output: Tuple of 2 numpy arrays.
+
+"FLAT" SPACE
+------------
 "Flat" cooridnates are produced by the approximation (Q, S) ~ (Q, R). In other
 words:
     
@@ -36,50 +45,33 @@ The spatial warping in flat xy is < 1 um local to a given positioner. In the
 petal or global coordinates, the warping causes up to ~ 500 um variation from
 physical reality.
 
+CALIBRATION PARAMETERS:
+-----------------------
 On the DESI instrument, the calibration parameters (OFFSET_X, OFFSET_Y,
 LENGTH_R1, LENGTH_R2, OFFSET_T, OFFSET_P) are all calculated in this pseudo-
 cartesian space.
 
-Function usage:
-    Inputs: Args may be scalars or 1xN lists, tuples, or numpy arrays.
-    Output: Tuple of 2 numpy arrays.
+ANGULAR RANGE LIMITS:
+---------------------
+The physical fiber positioner robot has hard limits on its angular travel
+ranges. In usage on the instrument, they are applied to t_int and p_int. The
+limit values are derived from a number calibration parameters: PHYSICAL_RANGE_T,
+PHYSICAL_RANGE_P, PRINCIPLE_HARDSTOP_CLEARANCE_T, PRINCIPLE_HARDSTOP_CLEARANCE_P,
+SECONDARY_HARDSTOP_CLEARANCE_T, SECONDARY_HARDSTOP_CLEARANCE_P, BACKLASH, and
+near_full_range_reduced_hardstop_clearance_factor. C.f.
+https://desi.lbl.gov/svn/code/focalplane/plate_control/trunk/petal/posmodel.py
+https://desi.lbl.gov/svn/code/focalplane/plate_control/trunk/petal/posconstants.py
+
+The use of these parameters to determine range limits varies depending on the
+operational context.
+
+This module makes the greatly simplifying assumption that it will not be used
+for instrument control, only for target selection or analyis purposes. Therefore
+angular range limits are NOT implemented here.
 """
 
 import numpy as np
 import xy2qs
-
-# DEFAULT VALUES FOR ANGULAR RANGE LIMITS
-# ---------------------------------------
-# The physical fiber positioner robot has hard limits on its angular travel
-# ranges. In usage on the instrument, they are applied to t_int and p_int. The
-# limit values are derived from a number calibration parameters:
-#
-#   PHYSICAL_RANGE_T, PHYSICAL_RANGE_P,
-#   PRINCIPLE_HARDSTOP_CLEARANCE_T, PRINCIPLE_HARDSTOP_CLEARANCE_P,
-#   SECONDARY_HARDSTOP_CLEARANCE_T, SECONDARY_HARDSTOP_CLEARANCE_P,
-#   BACKLASH, near_full_range_reduced_hardstop_clearance_factor
-#
-# c.f. https://desi.lbl.gov/svn/code/focalplane/plate_control/trunk/petal/posmodel.py
-#      https://desi.lbl.gov/svn/code/focalplane/plate_control/trunk/petal/posconstants.py
-#
-# The use of these parameters to determine range limits varies depending on the
-# operational context. This module provides no tools to predict or determine
-# what particular limit values one ought to apply. That is a complicated
-# question of operational context and intent. Some nominal values are supplied,
-# which should work in most analysis situations.
-#
-# This module *does* provide the functional capability to correctly apply a
-# given set of limits to a coordinate conversion, in the same way as the
-# instrument would do, given those same values.
-#
-# And after all that text... here ya go:
-nom_t_min = -200
-nom_t_max = 200
-nom_p_min = -20
-nom_p_max = 200
-
-# TRANSFORMS
-# ----------
 
 def ptl2flat(x_ptl, y_ptl):
     '''Converts (x_ptl, y_ptl) coordinates to (x_ptl, y_ptl).'''
@@ -137,11 +129,9 @@ def loc2flat(u_loc, u_offset):
     u_flat = u_loc + u_offset
     return u_flat
 
-def loc2ext(x_loc, y_loc, r1, r2,
-            t_min=nom_t_min, t_max=nom_t_max,
-            p_min=nom_p_min, p_max=nom_p_max):
+def loc2ext(x_loc, y_loc, r1, r2):
     '''Converts (x_loc, y_loc) coordinates to (t_ext, p_ext).
-    READ THE FINE PRINT: Returned tuple has 3 elements. Nonlinear, range-limited.
+    READ THE FINE PRINT: Returned tuple has 3 elements.
     
     INPUTS:
         x_loc, y_loc ... positioner local (x,y), as described in module notes
@@ -184,31 +174,31 @@ def int2ext(u_int):
     '''Converts t_int or p_int coordinate to t_ext or p_ext.'''
     pass
 
-def delta_t_int(t0_int, t1_int, t_scale=1.0, t_min=nom_t_min, t_max=nom_t_max):
-    '''Special function for the subtraction operation on internal theta:
+# user gives direction (+1, -1) or zero or none if not known
+# don't do wraptol here 
+def delta_angle(u0_int, u1_int, u_scale=1.0, wraptol=0):
+    '''Special function for the subtraction operation on angles, like:
         
         output = (t1_int - t0_int) / scale
+        output = (p1_int - p0_int) / scale
         
-    Angles are wrapped into the range between t_min and t_max, in the same
-    manner as done on the instrument. For example, let:
+    For angles crossing the +/-180 deg boundary, the argument wraptol controls
+    whether the delta goes the "short way" or the "long way" around. E.g.:
     
-        t0 = -179, t1 = +179, t_min = -185
+        u0 = +179, u1 = -179, wraptol = 0 --> delta_u = -358
+        u0 = +179, u1 = -179, wraptol = 3 --> delta_u = +2
     
-    Then the output of delta_t != +358. Rather, delta_t --> +2.
-    
-    This function also provides consistent application of scale factor,
-    intended to correspond to SCALE_T, a.k.a. GEAR_CALIB_T. When using the
-    scale feature, understand that on the instrument it is applied at a lower
-    level (conversion from number of intended motor rotations to number of
-    expected output shaft rotations). than the postransforms module knows
-    about.
+    This function also provides consistent application of a scale factor,
+    intended to correspond to SCALE_T and SCALE_P, a.k.a. GEAR_CALIB_T and
+    GEAR_CALIB_P. Understand that on the instrument, these calibrations are
+    applied when converting between number of intended motor rotations and
+    corresponding number of expected output shaft rotations. Therefore:
+        1. They don't work in absolute coordinates. Only relative operations.
+        2. The postransforms module knows nothing about them.
     '''
     pass
-
-def delta_p_int(p0_int, p1_int, p_scale=1.0):
-    pass
         
-def addto_t_int(t_int, dt_int, t_scale=1.0, t_min=nom_t_min, t_max=nom_t_max):
+def addto_angle(t_int, dt_int, t_scale=1.0, t_min=nom_t_min, t_max=nom_t_max):
     '''Special function for the addition operation on internal theta:
         
         output = t_int + dt_int * scale
@@ -220,6 +210,25 @@ def addto_t_int(t_int, dt_int, t_scale=1.0, t_min=nom_t_min, t_max=nom_t_max):
 def _to_numpy(u):
     '''Internal function to cast values to vectors.'''
     return u if isinstance(u, np.ndarray) else np.array(u)
+
+def _wrap_theta(tp0, dtdp, posintT_range):
+    """
+    tp0             : initial TP positions
+    dtdp            : delta TP movement
+    posintT_range   : allowed range of internal theta, tuple or list
+
+    Returns a modified dtdp after appropriately wrapping the delta theta
+    to not cross a physical hardstop. Phi angle is untouched.
+    """
+    ti, dt, dp = tp0[0], dtdp[0], dtdp[1]  # t initial, dt, dp
+    wrapped_dt = dt - 360*pc.sign(dt)
+    tf = ti + dt
+    wrapped_tf = ti + wrapped_dt
+    if min(posintT_range) <= wrapped_tf <= max(posintT_range):
+        if ((min(posintT_range) > tf or max(posintT_range) < tf)
+                or abs(wrapped_dt) < abs(dt)):
+            dt = wrapped_dt
+    return dt, dp
 
 if __name__ == '__main__':
     '''Sample code to generate test values below:
