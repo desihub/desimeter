@@ -44,6 +44,8 @@ def r2s(r):
     # fitted on desimodel/data/focalplane/fiberpos.ecsv
     # residuals are < 0.4 microns
     # JHS -- I find this not true for 0 < r < 25
+    #        For example r2s(0) == 0.0036, clearly not quite right
+    #        Suggest comparison to posconstants.R2S_lookup()
     r = r if isinstance(r, np.ndarray) else np.array(r)
     c = np.array([-3.01232440e-03,  1.45324708e-02, -2.55244612e-02,  2.15885180e-02, -8.05287872e-03,  2.05529419e-03,  9.99773920e-01,  9.12275165e-06])
     pol = np.poly1d(c)    
