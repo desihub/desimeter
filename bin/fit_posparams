@@ -270,7 +270,9 @@ def process(mode='static', cases=[], nominals=param_nominals, savedir='.'):
     '''
     assert mode in {'static', 'dynamic'}
     mp_results = {} # container for result objects from the multiprocessing pool
-    output_columns = ['ANALYSIS_DATE', 'POS_ID', 'DATA_START_DATE', 'DATA_END_DATE', 'NUM_POINTS', 'FIT_ERROR']
+    output_columns = ['ANALYSIS_DATE', 'POS_ID', 'NUM_POINTS', 'FIT_ERROR',
+                      'DATA_START_DATE', 'DATA_END_DATE',
+                      'DATA_START_DATE_SEC', 'DATA_END_DATE_SEC']
     output_columns += fitter.all_keys
     output = {col:[] for col in output_columns}
     with multiprocessing.Pool(processes=n_processes_max) as pool:
@@ -323,8 +325,10 @@ def process(mode='static', cases=[], nominals=param_nominals, savedir='.'):
                     n = case[case_enum['final_idx']]                   
                     output['ANALYSIS_DATE'].append(now_str_for_data())
                     output['POS_ID'].append(posid)
-                    output['DATA_START_DATE'].append(tables[posid]['DATE'][m])
-                    output['DATA_END_DATE'].append(tables[posid]['DATE'][n])
+                    for suffix in {'', '_SEC'}:
+                        d = f'DATE{suffix}'
+                        output[f'DATA_START_{d}'].append(tables[posid][d][m])
+                        output[f'DATA_END_{d}'].append(tables[posid][d][n])
                     output['NUM_POINTS'].append(n - m + 1)
                     output['FIT_ERROR'].append(fit_err)
                     for key in params:
