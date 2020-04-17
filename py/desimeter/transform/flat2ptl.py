@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 This module provides coordinate transformation between petal cartesian (x, y)
-and positioner local pseudo-cartesian "flat" (x, y) coordinates.
+and pseudo-cartesian "flat" (x, y) coordinates.
 
     x_ptl, y_ptl   ... Units mm. Cartesian coordinates, relative to petal.
                        Corresponds to ptlXY in postransforms.py.
