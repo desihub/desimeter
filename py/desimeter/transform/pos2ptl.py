@@ -136,7 +136,7 @@ def loc2ext(x_loc, y_loc, r1, r2):
     INPUTS:
         x_loc, y_loc ... positioner local (x,y), as described in module notes
         r1, r2       ... kinematic arms LENGTH_R1 and LENGTH_R2, scalar or vector
-        t_min, t_max ... range limits on t_int
+        t_min, t_max ... [deg] range limits on t_int
         
     OUTPUTS:
         t_ext, p_ext ... externally-measured (theta,phi), see module notes
@@ -158,13 +158,19 @@ def ext2loc(t_ext, p_ext, r1, r2):
     '''Converts (t_ext, p_ext) coordinates to (x_loc, y_loc).
     
     INPUTS:
-        t_ext, p_ext ... externally-measured (theta,phi), see module notes
+        t_ext, p_ext ... [deg] externally-measured (theta,phi), see module notes
         r1, r2       ... kinematic arms LENGTH_R1 and LENGTH_R2, scalar or vector
         
     OUTPUTS:
         x_loc, y_loc ... positioner local (x,y), as described in module notes
     '''
-    pass
+    t = np.radians(t_ext)
+    t_plus_p = t + np.radians(p_ext)
+    r1 = _to_numpy(r1)
+    r2 = _to_numpy(r2)
+    x = r1 * np.cos(t) + r2 * np.cos(t_plus_p)
+    y = r1 * np.sin(t) + r2 * np.sin(t_plus_p)
+    return x, y
 
 def ext2int(u_ext):
     '''Converts t_ext or p_ext coordinate to t_int or p_int.'''
