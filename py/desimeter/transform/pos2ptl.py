@@ -219,13 +219,23 @@ def delta_angle(u0, u1, scale=1.0, direction=None):
     '''
     pass
         
-def addto_angle(t_int, dt_int, t_scale=1.0, t_min=nom_t_min, t_max=nom_t_max):
-    '''Special function for the addition operation on internal theta:
+def addto_angle(u0, du, scale=1.0):
+    '''Special function for the addition operation on angles, like:
         
-        output = t_int + dt_int * scale
+        output = t_int + dt_int * scale, or
+        output = p_int + dp_int * scale
         
+    This is not just "angle1 + angle2", since scale is only applied to the
+    "delta" term, du. See notes in delta_angle() regarding scale.
+    
+    INPUTS:
+        u0    ... initial angle
+        du    ... delta angle
+        scale ... SCALE_T or SCALE_P
+    
+    OUTPUTS:
+        u1    ... result angle
     '''
-    # note determine order of wrapping operations based on sign of du
     pass
     
 def _to_numpy(u):
