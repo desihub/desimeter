@@ -72,6 +72,7 @@ angular range limits are NOT implemented here.
 
 import numpy as np
 import xy2qs
+import tp2xy
 
 def ptl2flat(x_ptl, y_ptl):
     '''Converts (x_ptl, y_ptl) coordinates to (x_ptl, y_ptl).'''
