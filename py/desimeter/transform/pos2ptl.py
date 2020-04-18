@@ -174,27 +174,48 @@ def int2ext(u_int):
     '''Converts t_int or p_int coordinate to t_ext or p_ext.'''
     pass
 
-# user gives direction (+1, -1) or zero or none if not known
-# don't do wraptol here 
-def delta_angle(u0_int, u1_int, u_scale=1.0, wraptol=0):
+def delta_angle(u0, u1, scale=1.0, direction=None):
     '''Special function for the subtraction operation on angles, like:
         
-        output = (t1_int - t0_int) / scale
+        output = (t1_int - t0_int) / scale, or
         output = (p1_int - p0_int) / scale
         
-    For angles crossing the +/-180 deg boundary, the argument wraptol controls
-    whether the delta goes the "short way" or the "long way" around. E.g.:
-    
-        u0 = +179, u1 = -179, wraptol = 0 --> delta_u = -358
-        u0 = +179, u1 = -179, wraptol = 3 --> delta_u = +2
-    
-    This function also provides consistent application of a scale factor,
+    INPUTS:
+        u0        ... start t_int or p_int
+        
+        u1        ... final t_int or p_int
+        
+        scale     ... SCALE_T or SCALE_P (see notes below)
+        
+        direction ... specify direction delta should go around the circle
+                       1 --> counter-clockwise    --> output du >= 0
+                      -1 --> clockwise            --> output du <= 0
+                       0 or None --> unspecificed --> sign(du) = sign(u1-u0)
+        
+        All of the above inputs can be either a scalar or a vector.
+        
+    OUTPUTS:
+        du ... angular distance (signed)
+
+    This function provides consistent application of a factor "scale",
     intended to correspond to SCALE_T and SCALE_P, a.k.a. GEAR_CALIB_T and
-    GEAR_CALIB_P. Understand that on the instrument, these calibrations are
-    applied when converting between number of intended motor rotations and
-    corresponding number of expected output shaft rotations. Therefore:
+    GEAR_CALIB_P.
+    
+    Note: on the DESI instrument, scale calibrations are applied only when
+    converting between number of intended motor rotations and corresponding
+    number of expected output shaft rotations. Therefore:
+        
         1. They don't work in absolute coordinates. Only relative operations.
         2. The postransforms module knows nothing about them.
+        
+    When the caller has definite knowledge of the true direction of rotation,
+    they may specify value for "direction". This is important when modeling
+    behavior of the instrument, because real positioners have theta travel
+    ranges that go a bit beyond +/-180 deg. So specifying "direction" (when
+    known) can cover special case like (b) below:
+    
+        a. u0 = +179, u1 = -179, direction = 0 or -1 --> delta_u = -358
+        b. u0 = +179, u1 = -179, direction = +1      --> delta_u = +2
     '''
     pass
         
