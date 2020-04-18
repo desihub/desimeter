@@ -242,25 +242,6 @@ def _to_numpy(u):
     '''Internal function to cast values to vectors.'''
     return u if isinstance(u, np.ndarray) else np.array(u)
 
-def _wrap_theta(tp0, dtdp, posintT_range):
-    """
-    tp0             : initial TP positions
-    dtdp            : delta TP movement
-    posintT_range   : allowed range of internal theta, tuple or list
-
-    Returns a modified dtdp after appropriately wrapping the delta theta
-    to not cross a physical hardstop. Phi angle is untouched.
-    """
-    ti, dt, dp = tp0[0], dtdp[0], dtdp[1]  # t initial, dt, dp
-    wrapped_dt = dt - 360*pc.sign(dt)
-    tf = ti + dt
-    wrapped_tf = ti + wrapped_dt
-    if min(posintT_range) <= wrapped_tf <= max(posintT_range):
-        if ((min(posintT_range) > tf or max(posintT_range) < tf)
-                or abs(wrapped_dt) < abs(dt)):
-            dt = wrapped_dt
-    return dt, dp
-
 if __name__ == '__main__':
     '''Sample code to generate test values below:
     
