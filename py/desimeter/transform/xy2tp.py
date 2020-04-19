@@ -1,41 +1,30 @@
 # -*- coding: utf-8 -*-
 """
-This module provides the fundamental coordinate transformations between fiber
-positioner (theta, phi) angles and an (x, y) cartesian space.
+This module provides the fundamental coordinate transformation from (x, y)
+cartesian space to fiber positioner (theta, phi) angles.
 
-It is a direct copy of static methods from the postransforms module on SVN:
+As of this writing (2020-04-18), it is a direct copy of the same-named
+static method, taken from the postransforms module on SVN:
+
     /code/focalplane/plate_control/trunk/petal/postransforms.py
     SVN revision r131291
 
 That module generally works with python lists and the math module, rather
 numpy arrays. That is done for speed, since numpy carries tremendous overhead
-in the more atomic operations done on the instrument.
+in the atomic operations commonly done on the instrument.
 
-Since desimeter tends to work with numpy arrays, the usage of these functions
-is not expected to be done directly. Rather one will use the thin wrappers
-in the pos2ptl module.
+Since desimeter tends to work with numpy arrays, the usage of this function
+is not expected to be done directly. Rather one will use the thin wrapper
+function loc2ext provided in the pos2ptl module.
 
-Another reason for the wrappers is that the pos2ptl module uses some more
-specific nomenclature. I.e. there are different kinds of "tp" (internally-
-tracked vs externally-measured) and different kinds of xy (petal vs flat vs
-local, etc.)
+Besides numpy list-handling sugar, another reason for the wrapper is that
+the pos2ptl module uses more specific nomenclature. I.e. there are different
+kinds of "tp" (internally-tracked vs externally-measured) to distinguish,
+and also different kinds of xy (petal vs flat vs local, etc).
 """
 
 import sys.floatinfo.epsilon as epsilon
 import math
-
-def tp2xy(tp, r):
-    """Converts TP angles into XY cartesian coordinates, where arm lengths
-    associated with angles theta and phi are respectively r[1] and r[2].
-    INPUTS:  tp ... [theta,phi], unit degrees
-              r ... [central arm length, eccentric arm length]
-    OUTPUT:  xy ... [x,y]
-    """
-    t = math.radians(tp[0])
-    t_plus_p = t + math.radians(tp[1])
-    x = r[0] * math.cos(t) + r[1] * math.cos(t_plus_p)
-    y = r[0] * math.sin(t) + r[1] * math.sin(t_plus_p)
-    return x, y
 
 def xy2tp(xy, r, ranges):
     """Converts XY cartesian coordinates into TP angles, where arm lengths
