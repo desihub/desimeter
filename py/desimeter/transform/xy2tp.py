@@ -21,8 +21,9 @@ tracked vs externally-measured) and different kinds of xy (petal vs flat vs
 local, etc.)
 """
 
-import sys.floatinfo.epsilon as epsilon
 import math
+import sys
+epsilon = sys.float_info.epsilon
 
 def tp2xy(tp, r):
     """Converts TP angles into XY cartesian coordinates, where arm lengths
