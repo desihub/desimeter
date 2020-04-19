@@ -74,8 +74,8 @@ import numpy as np
 import xy2qs
 import xy2tp
 
-_default_tp_ranges = [[-180. + xy2tp.epsilon, 180.], # theta min, max
-                      [-20., 200.]] # phi min, max
+_default_t_int_range = [-180. + xy2tp.epsilon, 180.] # theta min, max
+_default_p_int_range = [-20., 200.] # phi min, max
 
 def ptl2flat(x_ptl, y_ptl):
     '''Converts (x_ptl, y_ptl) coordinates to (x_ptl, y_ptl).'''
@@ -129,14 +129,14 @@ def loc2flat(u_loc, u_offset):
     u_flat = _add_offset(u_loc, +u_offset)
     return u_flat
 
-def loc2ext(x_loc, y_loc, r1, r2):
+def loc2ext(x_loc, y_loc, r1, r2, t_offset, p_offset):
     '''Converts (x_loc, y_loc) coordinates to (t_ext, p_ext).
     READ THE FINE PRINT: Returned tuple has 3 elements.
     
     INPUTS:
         x_loc, y_loc ... positioner local (x,y), as described in module notes
         r1, r2       ... kinematic arms LENGTH_R1 and LENGTH_R2, scalar or vector
-        t_min, t_max ... [deg] range limits on t_int
+        t_offset, p_offset ... [deg] OFFSET_T and OFFSET_P
         
     OUTPUTS:
         t_ext, p_ext ... externally-measured (theta,phi), see module notes
@@ -165,11 +165,15 @@ def loc2ext(x_loc, y_loc, r1, r2):
     p_ext = []
     unreachable = []
     for i in range(n):
-        tp, unreach = xy2tp.xy2tp(xy=[x_loc[i], y_loc[i]],
-                                  r=[r1[i], r2[i]],
-                                  ranges=_default_tp_ranges)
-        t_ext.append(tp[0])
-        p_ext.append(tp[1])
+        ext_ranges = [[float(int2ext(_default_t_int_range[0], t_offset[i])),
+                       float(int2ext(_default_t_int_range[1], t_offset[i]))],
+                      [float(int2ext(_default_p_int_range[0], p_offset[i])),
+                       float(int2ext(_default_p_int_range[1], p_offset[i]))]]
+        tp_ext, unreach = xy2tp.xy2tp(xy=[x_loc[i], y_loc[i]],
+                                     r=[r1[i], r2[i]],
+                                     ranges=ext_ranges)
+        t_ext.append(tp_ext[0])
+        p_ext.append(tp_ext[1])
         unreachable.append(unreach)
     t_ext = _to_numpy(t_ext)
     p_ext = _to_numpy(p_ext)
@@ -442,7 +446,7 @@ if __name__ == '__main__':
              'loc2flat_x': {'func': loc2flat, 'inputs': ['x_loc', 'OFFSET_X'], 'checks': ['x_flat']},
              'loc2flat_y': {'func': loc2flat, 'inputs': ['y_loc', 'OFFSET_Y'], 'checks': ['y_flat']},
              'ext2loc': {'func': ext2loc, 'inputs': ['t_ext', 'p_ext', 'LENGTH_R1', 'LENGTH_R2'], 'checks': ['x_loc', 'y_loc']},
-             'loc2ext': {'func': loc2ext, 'inputs': ['x_loc', 'y_loc', 'LENGTH_R1', 'LENGTH_R2'], 'checks': ['t_ext', 'p_ext']},
+             'loc2ext': {'func': loc2ext, 'inputs': ['x_loc', 'y_loc', 'LENGTH_R1', 'LENGTH_R2', 'OFFSET_T', 'OFFSET_P'], 'checks': ['t_ext', 'p_ext']},
              'ext2int_t': {'func': ext2int, 'inputs': ['t_ext', 'OFFSET_T'], 'checks': ['t_int']},
              'ext2int_p': {'func': ext2int, 'inputs': ['p_ext', 'OFFSET_P'], 'checks': ['p_int']},
              'int2ext_t': {'func': int2ext, 'inputs': ['t_int', 'OFFSET_T'], 'checks': ['t_ext']},
