@@ -191,24 +191,6 @@ def ext2loc(t_ext, p_ext, r1, r2):
     OUTPUTS:
         x_loc, y_loc ... positioner local (x,y), as described in module notes
     '''
-    # t_ext = _to_list(t_ext)
-    # p_ext = _to_list(p_ext)
-    # r1 = _to_list(r1)
-    # r2 = _to_list(r2)
-    # n = len(t_ext)
-    # if len(r1) != n:
-    #     r1 = [r1[0]]*n
-    # if len(r2) != n:
-    #     r2 = [r2[0]]*n
-    # x_loc = []
-    # y_loc = []
-    # for i in range(n):
-    #     xy_loc = xy2tp.tp2xy([t_ext[i], p_ext[i]], [r1[i], r2[i]])
-    #     x_loc.append(xy_loc[0])
-    #     y_loc.append(xy_loc[1])
-    # x_loc = _to_numpy(x_loc)
-    # y_loc = _to_numpy(y_loc)
-    # return x_loc, y_loc
     t = np.radians(t_ext)
     t_plus_p = t + np.radians(p_ext)
     r1 = _to_numpy(r1)
@@ -376,6 +358,11 @@ if __name__ == '__main__':
     for name, args in tests.items():
         inputs = [u[key] for key in args['inputs']]
         checks = [u[key] for key in args['checks']]
+        if name == 'ext2loc':
+            # only reachable targets are fair tests for this conversion
+            reachable = np.array(u['unreachable']) == False
+            inputs = [np.array(vec)[reachable].tolist() for vec in inputs]
+            checks = [np.array(vec)[reachable].tolist() for vec in checks]
         outputs = args['func'](*inputs)
         if isinstance(outputs, tuple):
             outputs = list(outputs)
