@@ -278,6 +278,12 @@ def delta_angle(u0, u1, scale=1.0, direction=None):
         b. u0 = +179, u1 = -179, direction = +1      --> delta_u = +2
     '''
     pass
+    # FROM POSTRANSFORMS.DELTA_POSINTTP()
+    # dtdp = PosTransforms.vector_delta(posintTP0, posintTP1)
+    # if range_wrap_limits != 'none':
+    #     posintT_range = self.shaft_ranges(range_wrap_limits)[pc.T]
+    #     dtdp = PosTransforms._wrap_theta(posintTP1, dtdp, posintT_range)
+    # return dtdp
         
 def addto_angle(u0, du, scale=1.0):
     '''Special function for the addition operation on angles, like:
@@ -297,6 +303,11 @@ def addto_angle(u0, du, scale=1.0):
         u1    ... result angle
     '''
     pass
+    # FROM POSTRANSFORMS.ADDTO_POSINTTP()
+    # if range_wrap_limits != 'none':
+    #     posintT_range = self.shaft_ranges(range_wrap_limits)[pc.T]
+    #     dtdp = PosTransforms._wrap_theta(posintTP0, dtdp, posintT_range)
+    # return PosTransforms.vector_add(posintTP0, dtdp)
     
 def _to_numpy(u):
     '''Internal function to cast values to consistent numpy vectors.'''
