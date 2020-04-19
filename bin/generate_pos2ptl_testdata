@@ -1,0 +1,69 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Code to generate test data set for pos2ptl transformations.
+
+Uses postransforms module to generate the set of expected values in various
+coordinate systems. This module is managed in the DESI SVN repository.
+
+ /code/focalplane/plate_control/trunk/petal
+
+You will need to grab this directory to your local machine, and then set the
+correct path to it in the first line below.
+"""
+
+path_to_postransforms = 'C:/Users/joe/Desktop/desi_svn/focalplane/plate_control/trunk/petal'
+import sys
+sys.path.append(path_to_postransforms)
+import postransforms
+import numpy as np
+import json
+from pkg_resources import resource_filename
+import os
+
+desimeter_data_dir = resource_filename("desimeter", "data")
+filename = 'pos2ptl_test_data.json'
+path = os.path.join(desimeter_data_dir, filename)
+
+trans = postransforms.PosTransforms(stateless=True)
+r_max = 420
+n_pts = 1000
+def rand(scale=1, offset=0):
+    vector = scale * 2 * (np.random.rand(n_pts) - 0.5) + offset
+    return vector.tolist()
+params = {'LENGTH_R1': rand(scale=0.4, offset=3),
+          'LENGTH_R2': rand(scale=0.4, offset=3),
+          'OFFSET_T': rand(scale=180),
+          'OFFSET_P': rand(scale=20),
+          'OFFSET_X': rand(scale=r_max/np.sqrt(2)),
+          'OFFSET_Y': rand(scale=r_max/np.sqrt(2)),
+          }
+max_patrol = 6.5 # a bit large, to provide some "unreachable" targs
+x_loc = rand(scale=max_patrol/np.sqrt(2))
+y_loc = rand(scale=max_patrol/np.sqrt(2))
+xy_loc_list = [[x_loc[i], y_loc[i]] for i in range(n_pts)]
+xy_ptl_list, xy_flat_list, tp_ext_list, tp_int_list, unreachable = [], [], [], [], []   
+for i in range(n_pts):
+    these_params = {key:params[key][i] for key in params}
+    trans.alt = these_params
+    xy_flat_list.append(trans.poslocXY_to_flatXY(xy_loc_list[i]))
+    xy_ptl_list.append(trans.flatXY_to_ptlXY(xy_flat_list[i]))
+    tp_ext_vals, unreach = trans.poslocXY_to_poslocTP(xy_loc_list[i])
+    tp_ext_list.append(tp_ext_vals)
+    unreachable.append(unreach)
+    tp_int_list.append(trans.poslocTP_to_posintTP(tp_ext_list[i]))
+xy_flat = np.transpose(xy_flat_list).tolist()
+xy_ptl = np.transpose(xy_ptl_list).tolist()
+tp_ext = np.transpose(tp_ext_list).tolist()
+tp_int = np.transpose(tp_int_list).tolist()    
+u = {'x_ptl': xy_ptl[0], 'y_ptl': xy_ptl[1],
+     'x_flat': xy_flat[0], 'y_flat': xy_flat[1],
+     'x_loc': x_loc, 'y_loc': y_loc,
+     't_ext': tp_ext[0], 'p_ext': tp_ext[1],
+     'unreachable': unreachable,
+     't_int': tp_int[0], 'p_int': tp_int[1],
+     }
+u.update(params)
+
+with open(path, 'w') as file:
+    json.dump(u, file, indent=4)
