@@ -38,40 +38,69 @@ import numpy as np
 import time
 import multiprocessing
 import yaml
-#import argparse
 from pkg_resources import resource_filename
 from astropy.table import Table
 from astropy.time import Time
+import argparse
+import glob
 
 # imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
 import desimeter.posparams.fitter as fitter
-import desimeter.posparams.plotter as plotter
 
 # Instrument petaltransforms.py module will be replaced in future by equivalent
 # functionality within the desimeter world.
 sys.path.append(fitter.petal_path)
 import petaltransforms
 
-# paths
-home_dir = os.getenv('HOME')
-main_dir = os.path.join(home_dir, 'Desktop/posparams')
-data_dir = os.path.join(main_dir, 'set0') # where to find data files
-save_dir = main_dir
-desimeter_data_dir = resource_filename("desimeter", "data")
+# command line argument parsing
+description = 'Fits fiber positioner calibration parameters. Fits are ' + \
+              'performed by comparing measured  (x,y) to internally-' + \
+              'tracked (theta,phi).'
+parser = argparse.ArgumentParser(description=description)
+parser.add_argument('-i', '--infiles', type=str, required=True, nargs='*',
+                    help='path(s) to input csv file(s). Regex ok (like M*.csv). ' + \
+                         'Multiple file args also ok (like M0001.csv M0002.csv M01*.csv)')
+parser.add_argument('-o', '--outdir', type=str, required=True,
+                    help='path to directory where to save output files')
+parser.add_argument('-dw', '--data_window', type=int, default=100,
+                    help='minimum width (num pts) for window swept through historical data')
+parser.add_argument('-pd', '--period_days', type=int, default=1,
+                    help='spacing of datum dates at which to run the fit')
+parser.add_argument('-np', '--n_processes_max', type=int, default=None,
+                    help='max number of processors to use')
+parser.add_argument('-sq', '--static_quantile', type=float, default=0.05,
+                    help='sort static param fits by fit error, take this fraction with least error, and median them to decide the single set of best values')
+parser.add_argument('-p', '--profile', action='store_true',
+                    help='profile timing of a single analyis job')
+parser.add_argument('-q', '--quiet', action='store_true',
+                    help='reduce verbosity of print outs at terminal')
+parser.add_argument('-l', '--logging', action='store_true',
+                    help='log terminal print outs to file')
+args = parser.parse_args()
 
-# common options
-verbose = True
-should_log = False
-files_to_process = ['M00282.csv', 'M02498.csv'] # leave empty to process all files found in data_dir
+# paths
+desimeter_data_dir = resource_filename("desimeter", "data")
+infiles = []
+for s in args.infiles:
+    these = glob.glob(s)
+    infiles.extend(these)
+not_found = set(args.infiles).difference(set(infiles))
+if not_found:
+    print('The following argued input files were not found:')
+    for f in not_found:
+        print(f)
+save_dir = args.outdir
+if not os.path.isdir(save_dir):
+    os.path.os.makedirs(save_dir)
+
+# other options which (for now) are not made accessible at command line
 params_to_keep_fixed = [] # see comments in pos_params_bestfit function
 param_overrides = {} # any key:val pairs to override the default params in bestfit module
-period_days = 1 # spacing of datum dates at which to run the fit
-min_slice_width = 100 # minimum number of data points to select for a fit
+
+# renaming some of the args
+profile_one_job = args.profile
+static_params_quantile = args.static_quantile
 static_params_group_func = np.median
-static_params_quantile = 0.05 # sort static param fits by fit error, take this fraction with least error, and "group_func" them to decide the single set of best values 
-n_processes_max = os.cpu_count() - 1 # max number of processors to use
-profile_one_job = False # set True to test and time a single analysis job
-should_plot = True
 
 # parameter overrides
 param_nominals = fitter.default_values
@@ -91,33 +120,31 @@ log_name = file_timestamp_str + '_log.txt'
 log_path = os.path.join(save_dir, log_name)
 def printlog(s):
     s = f'{now_str_for_data()} {s}'
-    if verbose:
+    if not args.quiet:
         print(s)
-    if should_log:
+    if args.logging:
         with open(log_path,'a') as file:
             print(s, file=file)
 
-# find csv files and parse out their positioner ids
-all_files = os.listdir(data_dir)
-if files_to_process:
-    files = set(all_files).intersection(set(files_to_process))
-else:
-    files = all_files
+# parse out the posids from filenames
 csv_files = {}
 posid_str_length = 6
-for name in files:
-    posid, ext = os.path.splitext(name)
+for file in infiles:
+    basename = os.path.basename(file)
+    posid, ext = os.path.splitext(basename)
     posid = posid[:posid_str_length]
     if  ext == '.csv' and len(posid) == posid_str_length and posid[0].isalpha() and posid[1:].isnumeric():
-        csv_files[posid] = name
+        path = os.path.realpath(file)
+        csv_files[posid] = path
+if not csv_files:
+    print('No recognizable csv files found for analysis.')
+    sys.exit()
 
 # read data
 tables = {}
 required_keys = {'DATE', 'POS_P', 'POS_T', 'X_FP', 'Y_FP', 'CTRL_ENABLED',
                  'TOTAL_MOVE_SEQUENCES'}
-for posid in csv_files:
-    path = os.path.join(data_dir, csv_files[posid])
-    path = os.path.realpath(path)
+for posid, path in csv_files.items():
     table = Table.read(path)
     table.sort('DATE')
     key_search = [key in table.columns for key in required_keys]
@@ -150,8 +177,8 @@ with open(petal_alignments_path, 'r') as file:
     petal_alignments = yaml.safe_load(file)
 ptl_trans = {}
 for petal_loc, alignment in petal_alignments.items():
-    args = (alignment[key] for key in ['Tx', 'Ty', 'Tz', 'alpha', 'beta', 'gamma'])
-    ptl_trans[petal_loc] = petaltransforms.PetalTransforms(*args, curved=True)
+    trans_args = (alignment[key] for key in ['Tx', 'Ty', 'Tz', 'alpha', 'beta', 'gamma'])
+    ptl_trans[petal_loc] = petaltransforms.PetalTransforms(*trans_args, curved=True)
 printlog(f'Loaded petal alignments {petal_alignments_path}:\n{petal_alignments}')
 
 # obtain xy in petal coordinate system
@@ -242,7 +269,7 @@ def dict_str(d):
     return s
 
 # find date range of all data and assign datum dates
-period_sec = period_days * 24 * 60 * 60
+period_sec = args.period_days * 24 * 60 * 60
 first = math.inf
 last = -math.inf
 for table in tables.values():
@@ -275,7 +302,7 @@ def process(mode='static', cases=[], nominals=param_nominals, savedir='.'):
                       'DATA_START_DATE_SEC', 'DATA_END_DATE_SEC']
     output_columns += fitter.all_keys
     output = {col:[] for col in output_columns}
-    with multiprocessing.Pool(processes=n_processes_max) as pool:
+    with multiprocessing.Pool(processes=args.n_processes_max) as pool:
         
         # send out jobs
         for case in cases:
@@ -349,13 +376,6 @@ def process(mode='static', cases=[], nominals=param_nominals, savedir='.'):
     return output_table, output_path
 
 if __name__ == '__main__':
-    # argument parsing - TODO
-    #parser = argparse.ArgumentParser()
-    #args = parser.parse_args()
-    #parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    #                                 description="""Get latest calibration""")
-    #parser.add_argument('-o','--outfile', type= str, required=True, help="output csv file name")
-    #args  = parser.parse_args()
     
     # define analysis cases spanning the data history
     cases = []
@@ -373,7 +393,7 @@ if __name__ == '__main__':
             widths.append(final_idxs[-1] - start_idxs[-1])
         for J in range(len(final_idxs)):
             backwards_sum = lambda i: sum(w for w in widths[i:J+1])
-            satisfies_min_width = lambda i: backwards_sum(i) > min_slice_width
+            satisfies_min_width = lambda i: backwards_sum(i) > args.data_window
             should_expand_backwards = lambda i: not(satisfies_min_width(i)) and i > 0
             I = J
             while should_expand_backwards(I):
@@ -433,7 +453,3 @@ if __name__ == '__main__':
         merged[key + '_DYNAMIC'] = dynamic_out[key]
     merged_file = static_file.split('static')[0] + 'merged.csv'
     merged.write(merged_file)
-
-    # plotting
-    if should_plot:
-        plotter.plot(datapath=merged_file, dynamic=dynamic_file)
