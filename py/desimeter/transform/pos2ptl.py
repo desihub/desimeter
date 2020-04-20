@@ -234,80 +234,37 @@ def int2ext(u_int, u_offset):
     u_ext = _add_offset(u_int, u_offset)
     return u_ext
 
-def delta_angle(u0, u1, scale=1.0, direction=None):
-    '''Special function for the subtraction operation on angles, like:
-        
-        output = (t1_int - t0_int) / scale, or
-        output = (p1_int - p0_int) / scale
+def delta_angle(u_start, u_final, direction=0):
+    '''Special function for distance between two angle positions. Allows caller
+    to select the direction of rotation. This is important when modeling
+    behavior of the instrument, because real positioners have theta travel
+    ranges that go a bit beyond +/-180 deg. So specifying "direction" (when
+    known) can cover special cases like (b) below:
+    
+        a. u_start = +179, u_final = -179, direction = 0 or -1 --> delta_u = -358
+        b. u_final = +179, u_final = -179, direction = +1      --> delta_u = +2
         
     INPUTS:
-        u0        ... start t_int or p_int
-        
-        u1        ... final t_int or p_int
-        
-        scale     ... SCALE_T or SCALE_P (see notes below)
-        
-        direction ... specify direction delta should go around the circle
-                       1 --> counter-clockwise    --> output du >= 0
-                      -1 --> clockwise            --> output du <= 0
-                       0 or None --> unspecificed --> sign(du) = sign(u1-u0)
+        u_start   ... start t_int or p_int
+        u_final   ... final t_int or p_int
+        direction ... direction delta should go around the circle
+                       1 --> counter-clockwise --> output du >= 0
+                      -1 --> clockwise         --> output du <= 0
+                       0 --> unspecified       --> sign(du) = sign(u1-u0)
         
         All of the above inputs can be either a scalar or a vector.
         
     OUTPUTS:
         du ... angular distance (signed)
-
-    This function provides consistent application of a factor "scale",
-    intended to correspond to SCALE_T and SCALE_P, a.k.a. GEAR_CALIB_T and
-    GEAR_CALIB_P.
-    
-    Note: on the DESI instrument, scale calibrations are applied only when
-    converting between number of intended motor rotations and corresponding
-    number of expected output shaft rotations. Therefore:
-        
-        1. They don't work in absolute coordinates. Only relative operations.
-        2. The postransforms module knows nothing about them.
-        
-    When the caller has definite knowledge of the true direction of rotation,
-    they may specify value for "direction". This is important when modeling
-    behavior of the instrument, because real positioners have theta travel
-    ranges that go a bit beyond +/-180 deg. So specifying "direction" (when
-    known) can cover special case like (b) below:
-    
-        a. u0 = +179, u1 = -179, direction = 0 or -1 --> delta_u = -358
-        b. u0 = +179, u1 = -179, direction = +1      --> delta_u = +2
     '''
-    pass
-    # FROM POSTRANSFORMS.DELTA_POSINTTP()
-    # dtdp = PosTransforms.vector_delta(posintTP0, posintTP1)
-    # if range_wrap_limits != 'none':
-    #     posintT_range = self.shaft_ranges(range_wrap_limits)[pc.T]
-    #     dtdp = PosTransforms._wrap_theta(posintTP1, dtdp, posintT_range)
-    # return dtdp
-        
-def addto_angle(u0, du, scale=1.0):
-    '''Special function for the addition operation on angles, like:
-        
-        output = t_int + dt_int * scale, or
-        output = p_int + dp_int * scale
-        
-    This is not just "angle1 + angle2", since scale is only applied to the
-    "delta" term, du. See notes in delta_angle() regarding scale.
-    
-    INPUTS:
-        u0    ... initial angle
-        du    ... delta angle
-        scale ... SCALE_T or SCALE_P
-    
-    OUTPUTS:
-        u1    ... result angle
-    '''
-    pass
-    # FROM POSTRANSFORMS.ADDTO_POSINTTP()
-    # if range_wrap_limits != 'none':
-    #     posintT_range = self.shaft_ranges(range_wrap_limits)[pc.T]
-    #     dtdp = PosTransforms._wrap_theta(posintTP0, dtdp, posintT_range)
-    # return PosTransforms.vector_add(posintTP0, dtdp)
+    u_start = _to_numpy(u_start)
+    u_final = _to_numpy(u_final)
+    direction = np.ones(np.shape(u_start)) * _to_numpy(direction)
+    delta = u_final - u_start
+    forced_terms = np.abs(delta) * np.sign(direction)
+    natural_terms = delta * (direction == 0)
+    du = forced_terms + natural_terms
+    return du
     
 def _to_numpy(u):
     '''Internal function to cast values to consistent numpy vectors.'''
@@ -340,7 +297,6 @@ if __name__ == '__main__':
     set of coordinate conversions using postransforms.py. See utility script
     desimeter/bin/generate_pos2ptl_testdata, for code to generate the data set.
     '''
-    from numpy import array
     import json
     from pkg_resources import resource_filename
     import os
