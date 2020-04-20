@@ -245,26 +245,40 @@ def delta_angle(u_start, u_final, direction=0):
         b. u_final = +179, u_final = -179, direction = +1      --> delta_u = +2
         
     INPUTS:
-        u_start   ... start t_int or p_int
-        u_final   ... final t_int or p_int
+        u_start   ... units deg, start t_int or p_int
+        u_final   ... units deg, final t_int or p_int
         direction ... direction delta should go around the circle
-                       1 --> counter-clockwise --> output du >= 0
-                      -1 --> clockwise         --> output du <= 0
-                       0 --> unspecified       --> sign(du) = sign(u1-u0)
         
-        All of the above inputs can be either a scalar or a vector.
+    All of the above inputs can be either a scalar or a vector.        
+    
+    The direction flags work like this:
+        
+         1 --> counter-clockwise --> output du >= 0, and abs(du)
+        -1 --> clockwise         --> output du <= 0, and abs(du)
+         0 --> unspecified       --> sign(du) = sign(u1-u0)
+        
+    For the special case where abs(du) > 360 deg, while at the same time
+    sign(u_final - u_start) != direction, then some decision must be made
+    about how to handle the number of revolutions about the circle. In this
+    case, the opposite-direction output will be kept within magnitude 360 deg.
+    For example,
+    
+        u_start = 0, u_final = 400, direction = 0 or +1 --> delta_u = +400
+        u_start = 0, u_final = 400, direction = -1      --> delta_u = -320
+        u_start = 0, u_final = 800, direction = 0 or +1 --> delta_u = +800
+        u_start = 0, u_final = 800, direction = -1      --> delta_u = -280
         
     OUTPUTS:
-        du ... angular distance (signed)
+        delta_u ... angular distance (signed)
     '''
     u_start = _to_numpy(u_start)
     u_final = _to_numpy(u_final)
     direction = np.ones(np.shape(u_start)) * _to_numpy(direction)
-    delta = u_final - u_start
-    forced_terms = np.abs(delta) * np.sign(direction)
-    natural_terms = delta * (direction == 0)
-    du = forced_terms + natural_terms
-    return du
+    natural_delta = u_final - u_start
+    forced_terms = np.abs(natural_delta) * np.sign(direction)
+    natural_terms = natural_delta * (direction == 0)
+    delta_u = forced_terms + natural_terms
+    return delta_u
     
 def _to_numpy(u):
     '''Internal function to cast values to consistent numpy vectors.'''
@@ -320,6 +334,18 @@ if __name__ == '__main__':
              'int2ext_t': {'func': int2ext, 'inputs': ['t_int', 'OFFSET_T'], 'checks': ['t_ext']},
              'int2ext_p': {'func': int2ext, 'inputs': ['p_int', 'OFFSET_P'], 'checks': ['p_ext']},
              }
+    
+    # test of delta_angle() function defined separately
+    # (there is no exact matching function in postransforms.py)
+    delta = {'u_start':   [15, 15,   15, 0,  90,   90,  90,   0,   0,    0,   0,   0,    0,   0,   0,    0,   0,   0,    0,  800,  800,  800],
+             'u_final':   [45, 45,   45, 0,  45,   45,  45, 180, 180,  180, 360, 360,  360, 400, 400,  400, 800, 800,  800,    0,    0,    0],
+             'direction': [ 0, +1,   -1, 0,   0,   +1,  -1,   0,  +1,   -1,   0,  +1,   -1,   0,  +1,   -1,   0,  +1,   -1,    0,   +1,   -1],
+             'delta_u':   [30, 30, -330, 0, -45, +315, -45, 180, 180, -180, 360, 360, -360, 400, 400, -320, 800, 800, -280, -800, +280, -800]}
+    u.update(delta)
+    delta_test = {'delta_angle': {'func':delta_angle,
+                                  'inputs': ['u_start', 'u_final', 'direction'],
+                                  'checks':['delta_u']}}
+    tests.update(delta_test)
     
     all_out = {}
     for name, args in tests.items():
