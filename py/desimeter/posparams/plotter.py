@@ -3,29 +3,16 @@
 Plot time series of positioner parameters.
 """
 
-import os
 import matplotlib.pyplot as plt
-import tkinter.filedialog as filedialog
-import time
-import multiprocessing
 import numpy as np
-from astropy.table import Table
 from astropy.time import Time
 import astropy.stats as stats
 
-# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
-import desimeter.posparams.fitter as fitter
-
 # common options
 img_ext = '.png'
-max_plots = None # set to integer to limit # of plots (i.e. for debugging) or None to plot for all posids
-home_dir = os.getenv('HOME')
-main_dir = os.path.join(home_dir, 'Desktop/posparams')
-savedir_prefix = os.path.join(main_dir, 'plots_')
 error_series_filename = 'fiterror' + img_ext
 tick_period_days = 7
 day_in_sec = 24*60*60
-n_processes_max = os.cpu_count() - 1 # max number of processors to use
 error_bins = [0, 0.01, 0.05, 0.1, np.inf] # for error_series plot, bin edges in which to categorize positioners
 
 # plot definitions for parameter subplots
@@ -71,65 +58,6 @@ param_subplot_defs = [
      'logscale': False,
      'equal_scales': True},
     ]
-
-def plot(datapath, dynamic='', mode='params'):
-    '''Plot best-fit positioner params data, taken from csv file.
-    
-    Inputs:
-        datapath ... main dataset to plot, csv file path
-        
-        dynamic  ... aux file (for "dynamic" params), csv file path
-        
-        mode     ... valid options are:
-                     'params' ... runs plot_params() on each positoner
-                     'errors' ... runs plot_errors() on all positioners
-                     'all'    ... runs all plotting functions
-        
-    Outputs:
-        Image(s) saved to disk.
-    '''
-    basename = os.path.basename(datapath)
-    timestamp = basename.split('_')[0]
-    savedir = savedir_prefix + timestamp
-    table = Table.read(datapath, format='csv')
-    if 'DATA_END_DATE_SEC' in table.columns: # column not present in 2020-04-15 batch run data
-        table['DATE_SEC'] = table['DATA_END_DATE_SEC']
-    else:
-        table['DATE_SEC'] = Time(table['DATA_END_DATE']).unix
-    if mode in {'params', 'all'}:
-        if dynamic:
-            dynam_table = Table.read(dynamic, format='csv')
-        posids = sorted(set(table['POS_ID']))
-        num_posids = len(posids)
-        num_plots = num_posids if max_plots == None else min(max_plots, num_posids)
-        posids_to_plot = [posids[i] for i in range(num_plots)]
-        if not os.path.exists(savedir):
-            os.makedirs(savedir)
-        mp_results = {}
-        with multiprocessing.Pool(processes=n_processes_max) as pool:
-            for posid in posids_to_plot:
-                subtable = table[table['POS_ID'] == posid]
-                if dynamic:
-                    dynam_subtable = dynam_table[dynam_table['POS_ID'] == posid]
-                    some_row = dynam_subtable[0]
-                    statics_during_dynamic = {key:some_row[key] for key in some_row.columns if key in fitter.static_keys}
-                else:
-                    statics_during_dynamic = {key:None for key in fitter.static_keys}
-                savepath = os.path.join(savedir, posid + img_ext)
-                mp_results[posid] = pool.apply_async(plot_params, args=(subtable, savepath, statics_during_dynamic))
-                print(f'Plot job added: {posid}')
-            while mp_results:
-                completed = set()
-                for posid, result in mp_results.items():
-                    if result.ready():
-                        completed.add(posid)
-                        print(f'Plot saved: {result.get()}')
-                for posid in completed:
-                    del mp_results[posid]
-                time.sleep(0.05)
-    if mode in {'errors', 'all'}:
-        savepath = os.path.join(savedir, error_series_filename)
-        plot_errors(table, savepath)
 
 def plot_params(table, savepath, statics_during_dynamic):
     '''Plot time series of positioner parameters for a single positioner.
@@ -271,12 +199,3 @@ def _save_and_close_plot(fig, savepath):
     image format.'''
     plt.savefig(savepath, bbox_inches='tight')
     plt.close(fig)    
-    
-if __name__ == '__main__':
-    datapath = filedialog.askopenfilename(initialdir=".",
-                                          title="Select csv data file",
-                                          filetypes=(("CSV","*.csv"),("all files","*.*")),
-                                          )
-    dynamic_path = datapath.split('merged.csv')[0] + 'dynamic.csv'
-    plot(datapath, dynamic_path, mode='params')
-
