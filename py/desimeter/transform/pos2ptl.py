@@ -268,16 +268,25 @@ def delta_angle(u_start, u_final, direction=0):
         u_start = 0, u_final = 800, direction = 0 or +1 --> delta_u = +800
         u_start = 0, u_final = 800, direction = -1      --> delta_u = -280
         
+    Integer numbers of exact revolutions are given the same number of revolutions
+    in either direction. For example,
+    
+        u_start = 0, u_final = 720, direction = 0 or +1 or -1 --> delta_u = 720
     OUTPUTS:
         delta_u ... angular distance (signed)
     '''
     u_start = _to_numpy(u_start)
     u_final = _to_numpy(u_final)
     direction = np.ones(np.shape(u_start)) * _to_numpy(direction)
-    natural_delta = u_final - u_start
-    forced_terms = np.abs(natural_delta) * np.sign(direction)
-    natural_terms = natural_delta * (direction == 0)
-    delta_u = forced_terms + natural_terms
+    direction = np.sign(direction) # ensure vals are only +1, 0, or -1
+    natural_delta = u_final - u_start    
+    zero_dir = direction == 0
+    direction[zero_dir] = np.sign(natural_delta)[zero_dir]
+    opposites = direction != np.sign(natural_delta)
+    delta_u = natural_delta.copy()
+    delta_u[opposites] = delta_u[opposites] % (direction[opposites] * 360)
+    exact_circle = natural_delta % 360 == 0
+    delta_u[exact_circle] = np.abs(natural_delta[exact_circle]) * direction[exact_circle]
     return delta_u
     
 def _to_numpy(u):
@@ -337,10 +346,10 @@ if __name__ == '__main__':
     
     # test of delta_angle() function defined separately
     # (there is no exact matching function in postransforms.py)
-    delta = {'u_start':   [15, 15,   15, 0,  90,   90,  90,   0,   0,    0,   0,   0,    0,   0,   0,    0,   0,   0,    0,  800,  800,  800],
-             'u_final':   [45, 45,   45, 0,  45,   45,  45, 180, 180,  180, 360, 360,  360, 400, 400,  400, 800, 800,  800,    0,    0,    0],
-             'direction': [ 0, +1,   -1, 0,   0,   +1,  -1,   0,  +1,   -1,   0,  +1,   -1,   0,  +1,   -1,   0,  +1,   -1,    0,   +1,   -1],
-             'delta_u':   [30, 30, -330, 0, -45, +315, -45, 180, 180, -180, 360, 360, -360, 400, 400, -320, 800, 800, -280, -800, +280, -800]}
+    delta = {'u_start':   [15, 15,   15, 0,  90,   90,  90,   0,   0,    0,   0,   0,    0,   0,   0,    0,   0,   0,    0,  800,  800,  800,    0,  720,  720],
+             'u_final':   [45, 45,   45, 0,  45,   45,  45, 180, 180,  180, 360, 360,  360, 400, 400,  400, 800, 800,  800,    0,    0,    0,  720,    0,    0],
+             'direction': [ 0, +1,   -1, 0,   0,   +1,  -1,   0,  +1,   -1,   0,  +1,   -1,   0,  +1,   -1,   0,  +1,   -1,    0,   +1,   -1,   -1,   -1,   +1],
+             'delta_u':   [30, 30, -330, 0, -45, +315, -45, 180, 180, -180, 360, 360, -360, 400, 400, -320, 800, 800, -280, -800, +280, -800, -720, -720, +720]}
     u.update(delta)
     delta_test = {'delta_angle': {'func':delta_angle,
                                   'inputs': ['u_start', 'u_final', 'direction'],
