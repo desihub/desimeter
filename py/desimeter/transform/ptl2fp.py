@@ -123,12 +123,3 @@ def fp2ptl(petal_loc, x_fp, y_fp, z_fp=None):
     Translation = np.array([params["Tx"],params["Ty"],params["Tz"]])
     xyz_ptl = Rotation.T.dot(xyz_fp - Translation[:,None])
     return xyz_ptl[0], xyz_ptl[1], xyz_ptl[2]
-
-if __name__ == '__main__':
-    loc = 0
-    x0 = 300 * (np.random.rand(10) - 0.5)
-    y0 = 300 * (np.random.rand(10) - 0.5)
-    z0 = 300 * (np.random.rand(10) - 0.5)
-    x1, y1, z1 = ptl2fp(loc, x0, y0, z0)
-    x2, y2, z2 = fp2ptl(loc, x1, y1, z1)
-    print(f'invertibility errors:\n ex --> {x2-x0}\n ey --> {y2-y0}\n ez --> {z2-z0}')
