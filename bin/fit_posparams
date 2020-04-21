@@ -200,7 +200,7 @@ def _np_diff_with_prepend(array, prepend):
     np.diff(array, prepend=prepend). This wrapper function only works for scalar
     values of prepend.'''
     prepend_array = np.array([prepend])
-    prepended = np.concatenate((prepend_array, array))
+    prepended = np.concatenate((prepend_array, np.array(array)))
     return np.diff(prepended)
 
 def _ctrl_not_enabled(table):
