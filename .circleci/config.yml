@@ -22,7 +22,9 @@ commands:
 
 jobs:
   test-38: &test-template
-    executor: python/3.8
+    executor:
+      name: python/default
+      tag: "3.8"
     steps:
       - checkout
       - python/load-cache
@@ -46,7 +48,9 @@ jobs:
 
   test-37:
     <<: *test-template
-    executor: python/3.7
+    executor:
+      name: python/default
+      tag: "3.7"
 
 workflows:
   main:
