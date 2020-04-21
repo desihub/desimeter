@@ -25,9 +25,13 @@ See `desimeter/doc/coordinates.rst` for a definition of the coordinate systems.
 Automated build & testing
 -------------------------
 
-[![Build Status](https://img.shields.io/circleci/project/github/desihub/desimeter.svg)](https://circleci.com/gh/desihub/desimeter)
+.. image:: https://img.shields.io/circleci/project/github/desihub/desimeter.svg
+  :alt: Build
+  :target: https://circleci.com/gh/desihub/desimeter
 
-[![Coverage Status](https://coveralls.io/repos/github/desihub/desimeter/badge.svg?branch=master)](https://coveralls.io/github/desihub/desimeter?branch=master)
+.. image:: https://coveralls.io/repos/github/desihub/desimeter/badge.svg?branch=master
+  :alt: Coverage
+  :target: https://coveralls.io/github/desihub/desimeter?branch=master
   
 Script Examples
 ---------------
