@@ -5,12 +5,11 @@ Utility functions to fit and apply coordinates transformation from PTL (petal lo
 import yaml
 import numpy as np
 from desimeter.log import get_logger
-from astropy.table import Table,Column
 from pkg_resources import resource_filename
 
 petal_alignment_dict = None
 
-# %% rotation matrices
+# rotation matrices
 def Rx(angle):  # all in radians
     Rx = np.array([
         [1.0,           0.0,            0.0],
