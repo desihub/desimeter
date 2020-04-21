@@ -288,6 +288,30 @@ def delta_angle(u_start, u_final, direction=0):
     exact_circle = natural_delta % 360 == 0
     delta_u[exact_circle] = np.abs(natural_delta[exact_circle]) * direction[exact_circle]
     return delta_u
+
+def int2loc(t_int, p_int, r1, r2, t_offset, p_offset):
+    '''Composite of int2ext followed by ext2loc.  See docs of those functions
+    for more details.
+    
+    INPUTS:   t_int, p_int, r1, r2, t_offset, p_offset
+    OUTPUTS:  x_loc, y_loc
+    '''
+    t_ext = int2ext(t_int, t_offset)
+    p_ext = int2ext(p_int, p_offset)
+    x_loc, y_loc = ext2loc(t_ext, p_ext, r1, r2)
+    return x_loc, y_loc
+
+def loc2int(x_loc, y_loc, r1, r2, t_offset, p_offset):
+    '''Composite of loc2ext followed by ext2int. See docs of those functions
+    for more details.
+    
+    INPUTS:   x_loc, y_loc, r1, r2, t_offset, p_offset
+    OUTPUTS:  t_int, p_int, unreachable
+    '''
+    t_ext, p_ext, unreachable = loc2ext(x_loc, y_loc, r1, r2, t_offset, p_offset)
+    t_int = ext2int(t_ext, t_offset)
+    p_int = ext2int(p_ext, p_offset)
+    return t_int, p_int, unreachable
     
 def _to_numpy(u):
     '''Internal function to cast values to consistent numpy vectors.'''
@@ -342,6 +366,8 @@ if __name__ == '__main__':
              'ext2int_p': {'func': ext2int, 'inputs': ['p_ext', 'OFFSET_P'], 'checks': ['p_int']},
              'int2ext_t': {'func': int2ext, 'inputs': ['t_int', 'OFFSET_T'], 'checks': ['t_ext']},
              'int2ext_p': {'func': int2ext, 'inputs': ['p_int', 'OFFSET_P'], 'checks': ['p_ext']},
+             'int2loc': {'func': int2loc, 'inputs': ['t_int', 'p_int', 'LENGTH_R1', 'LENGTH_R2', 'OFFSET_T', 'OFFSET_P'], 'checks': ['x_loc', 'y_loc']},
+             'loc2int': {'func': loc2int, 'inputs': ['x_loc', 'y_loc', 'LENGTH_R1', 'LENGTH_R2', 'OFFSET_T', 'OFFSET_P'], 'checks': ['t_int', 'p_int']},
              }
     
     # test of delta_angle() function defined separately
@@ -360,7 +386,7 @@ if __name__ == '__main__':
     for name, args in tests.items():
         inputs = [u[key] for key in args['inputs']]
         checks = [u[key] for key in args['checks']]
-        if name == 'ext2loc':
+        if name in {'ext2loc', 'int2loc'}:
             # only reachable targets are fair tests for this conversion
             reachable = np.array(u['unreachable']) == False
             inputs = [np.array(vec)[reachable].tolist() for vec in inputs]
