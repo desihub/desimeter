@@ -194,6 +194,15 @@ for posid in tables:
     printlog(f'{posid}: (X_FP, Y_FP) converted to (X_PTL, Y_PTL)')
 
 # filter functions for identifying bad rows
+def _np_diff_with_prepend(array, prepend):
+    '''For numpy users v1.16 and earlier, where no prepend arg available in the
+    diff function. Can perhaps be replaced in future by direct usage of
+    np.diff(array, prepend=prepend). This wrapper function only works for scalar
+    values of prepend.'''
+    prepend_array = np.array([prepend])
+    prepended = np.concatenate((prepend_array, array))
+    return np.diff(prepended)
+
 def _ctrl_not_enabled(table):
     '''Returns array of bools whether control was enabled in each row of table.'''
     return table['CTRL_ENABLED'] == False
@@ -202,7 +211,7 @@ def _no_move_performed(table):
     '''Returns array of bools whether a move was performed in each row of table.
     Always assumed True for first row.'''
     dummy = table['TOTAL_MOVE_SEQUENCES'][0] - 1
-    moveseq_diff = np.diff(table['TOTAL_MOVE_SEQUENCES'], prepend=dummy)
+    moveseq_diff = _np_diff_with_prepend(table['TOTAL_MOVE_SEQUENCES'], prepend=dummy)
     return moveseq_diff == 0
 
 def _no_cruise_performed(table):
@@ -210,8 +219,8 @@ def _no_cruise_performed(table):
     of table. Always assumed True for first row.'''
     dummyT = table['TOTAL_MOVE_SEQUENCES'][0] - 1
     dummyP = table['TOTAL_MOVE_SEQUENCES'][0] - 1
-    cruiseT_diff = np.diff(table['TOTAL_CRUISE_MOVES_T'], prepend=dummyT)
-    cruiseP_diff = np.diff(table['TOTAL_CRUISE_MOVES_P'], prepend=dummyP)
+    cruiseT_diff = _np_diff_with_prepend(table['TOTAL_CRUISE_MOVES_T'], prepend=dummyT)
+    cruiseP_diff = _np_diff_with_prepend(table['TOTAL_CRUISE_MOVES_P'], prepend=dummyP)
     return cruiseT_diff + cruiseP_diff == 0 # these diffs are always >= 0 for sorted table input
 
 # which filter functions to apply
