@@ -71,8 +71,8 @@ angular range limits are NOT implemented here.
 """
 
 import numpy as np
-import xy2qs
-import xy2tp
+import desimeter.transform.xy2qs as xy2qs
+import desimeter.transform.xy2tp as xy2tp
 
 _default_t_int_range = [-180. + xy2tp.epsilon, 180.] # theta min, max
 _default_p_int_range = [-20., 200.] # phi min, max
