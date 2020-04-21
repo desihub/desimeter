@@ -21,8 +21,8 @@ commands:
         - /home/circleci/.local/bin/
 
 jobs:
-  build-and-test:
-    executor: python/default
+  test-38: &test-template
+    executor: python/3.8
     steps:
       - checkout
       - python/load-cache
@@ -44,7 +44,15 @@ jobs:
               # https://circleci.com/gh/desihub/desimeter/edit#env-vars
               COVERALLS_REPO_TOKEN=${COVERALLS_REPO_TOKEN} coveralls
 
+  test-37:
+    <<: *test-template
+    executor: python/3.7
+
 workflows:
   main:
     jobs:
-      - build-and-test
+      - test-38
+      - test-37
+
+# This scheme for running multiple python versions comes from:
+# https://github.com/justinmayer/virtualfish/blob/aa3d6271bcb86ad27b6d24f96b5bd386d176f588/.circleci/config.yml
