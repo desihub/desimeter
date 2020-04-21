@@ -37,7 +37,6 @@ import math
 import numpy as np
 import time
 import multiprocessing
-import yaml
 from pkg_resources import resource_filename
 from astropy.table import Table
 from astropy.time import Time
@@ -46,11 +45,7 @@ import glob
 
 # imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
 import desimeter.posparams.fitter as fitter
-
-# Instrument petaltransforms.py module will be replaced in future by equivalent
-# functionality within the desimeter world.
-sys.path.append(fitter.petal_path)
-import petaltransforms
+import desimeter.transform.ptl2fp as ptl2fp
 
 # command line argument parsing
 description = 'Fits fiber positioner calibration parameters. Fits are ' + \
@@ -84,11 +79,7 @@ infiles = []
 for s in args.infiles:
     these = glob.glob(s)
     infiles.extend(these)
-not_found = set(args.infiles).difference(set(infiles))
-if not_found:
-    print('The following argued input files were not found:')
-    for f in not_found:
-        print(f)
+infiles = [os.path.realpath(p) for p in infiles]
 save_dir = args.outdir
 if not os.path.isdir(save_dir):
     os.path.os.makedirs(save_dir)
@@ -170,27 +161,14 @@ for table in tables.values():
     for key,func in typecast_funcs.items():
         table[key] = [func(val) for val in table[key]]
 
-# load petal alignments
-petal_alignments_file = 'petal-alignments.yaml'
-petal_alignments_path = os.path.join(desimeter_data_dir, petal_alignments_file)
-with open(petal_alignments_path, 'r') as file:
-    petal_alignments = yaml.safe_load(file)
-ptl_trans = {}
-for petal_loc, alignment in petal_alignments.items():
-    trans_args = (alignment[key] for key in ['Tx', 'Ty', 'Tz', 'alpha', 'beta', 'gamma'])
-    ptl_trans[petal_loc] = petaltransforms.PetalTransforms(*trans_args, curved=True)
-printlog(f'Loaded petal alignments {petal_alignments_path}:\n{petal_alignments}')
-
 # obtain xy in petal coordinate system
 for posid in tables:
-    petal_loc = tables[posid]['PETAL_LOC'][0]
-    trans = ptl_trans[petal_loc]
-    obsX = tables[posid]['X_FP']
-    obsY = tables[posid]['Y_FP']
-    obsXY = np.array([obsX, obsY])
-    ptlXY = trans.obsXY_to_ptlXYZ(obsXY, cast=False)
-    tables[posid]['X_PTL'] = ptlXY[0]
-    tables[posid]['Y_PTL'] = ptlXY[1]
+    ptlXYZ = ptl2fp.fp2ptl(petal_loc=tables[posid]['PETAL_LOC'][0],
+                           x_fp=tables[posid]['X_FP'],
+                           y_fp=tables[posid]['Y_FP'],
+                           z_fp=None)
+    tables[posid]['X_PTL'] = ptlXYZ[0]
+    tables[posid]['Y_PTL'] = ptlXYZ[1]
     printlog(f'{posid}: (X_FP, Y_FP) converted to (X_PTL, Y_PTL)')
 
 # filter functions for identifying bad rows
