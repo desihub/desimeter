@@ -3,15 +3,12 @@
 Best-fit calculation module for positioner calibration parameters.
 """
 
-import sys
 import math
 import scipy.optimize
+import numpy as np
 
-# Instrument postransforms.py module will be replaced in future by equivalent
-# functionality within the desimeter world.
-petal_path = 'C:/Users/joe/Desktop/desi_svn/focalplane/plate_control/trunk/petal/'
-sys.path.append(petal_path)
-import postransforms
+# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
+import desimeter.transform.pos2ptl as pos2ptl
 
 # default parameter values and bounds
 default_values = {'LENGTH_R1': 3.0,
@@ -75,11 +72,11 @@ def fit_params(posintT, posintP, ptlX, ptlY,
         2. mode='dynamic', feeding in results from (1)
     
     INPUTS:
-        posintT  ... list of theta angles as internally-tracked (i.e. POS_T)
-        posintP  ... list of phi angles as internally-tracked (i.e. POS_P)
+        posintT  ... list of theta angles as internally-tracked (a.k.a. POS_T, a.k.a. t_ext)
+        posintP  ... list of phi angles as internally-tracked (a.k.a. POS_P, a.k.a. p_ext)
         
-        ptlX     ... list of x as meas with FVC and converted to petal coords (i.e. X_PTL)
-        ptlY     ... list of y as meas with FVC and converted to petal coords (i.e. Y_PTL)
+        ptlX     ... list of x as meas with FVC and converted to petal coords (a.k.a. X_PTL)
+        ptlY     ... list of y as meas with FVC and converted to petal coords (a.k.a. Y_PTL)
         
         mode     ... 'static' or 'dynamic'
                      In static mode, all "dynamic" parameters will be held fixed,
@@ -120,28 +117,41 @@ def fit_params(posintT, posintP, ptlX, ptlY,
     params_to_fit = set(nominals).difference(keep_fixed)
     params_to_fit = sorted(params_to_fit) # because optimizer expects a vector with consistent ordering
     param_idx = {key:params_to_fit.index(key) for key in params_to_fit}
-    
-    # initialize coordinate transformation module
-    trans = postransforms.PosTransforms(stateless=True)
-    trans.alt.update(nominals)
+
+    # some re-names and pre-initializations of numpy arrays
+    t_int = np.array(posintT)
+    p_int = np.array(posintP)
+    x_ptl = np.array(ptlX)
+    y_ptl = np.array(ptlY)
 
     # pre-calculate any one-time coordinate transforms
     n_pts = len(posintT)
-    posintTP = [tp for tp in zip(posintT, posintP)]
-    flatXY = [trans.ptlXY_to_flatXY([ptlX[i], ptlY[i]]) for i in range(n_pts)]
+    x_flat, y_flat = pos2ptl.ptl2flat(x_ptl, y_ptl)
     if mode == 'dynamic':
         n_pts -= 1 # since in dynamic mode we are using delta values
-        # note how measured_posintTP0 depends on having been fed good "static" param values
-        # also note the extraction of just posintTP from the tuple flatXY_to_posintTP (the 2nd element is the "unreachable" bool, ignored here)
-        measured_posintTP0 = [trans.flatXY_to_posintTP(flatXY[i])[0] for i in range(n_pts)]
-        posintdTdP = [trans.delta_posintTP(posintTP[i+1], posintTP[i], range_wrap_limits='none') for i in range(n_pts)]
-        flatXY = flatXY[1:] # now remove first point, to match up with lists of deltas
+        # Note how measured_int0 depends on having been fed good "static" param
+        # values. Also note extraction of only theta and phi from the tuple
+        # returned by loc2int. The 2nd element is the "unreachable" boolean
+        # flags, ignored here.
+        measured_x_loc_0 = pos2ptl.flat2loc(x_flat, nominals['OFFSET_X'])
+        measured_y_loc_0 = pos2ptl.flat2loc(y_flat, nominals['OFFSET_Y'])
+        measured_t_int_0, measured_p_int_0, unreachable = pos2ptl.loc2int(
+            measured_x_loc_0, measured_y_loc_0,
+            nominals['LENGTH_R1'], nominals['LENGTH_R2'],
+            nominals['OFFSET_T'], nominals['OFFSET_P']
+            )
+        dt_int = pos2ptl.delta_angle(u_start=t_int[:-1], u_final=t_int[1:], direction=0)
+        dp_int = pos2ptl.delta_angle(u_start=p_int[:-1], u_final=p_int[1:], direction=0)
+        x_flat = x_flat[1:] # now remove first point, to match up with lists of deltas
+        y_flat = y_flat[1:]
 
     # set up the consumer function for the variable parameters vector
     if mode == 'static':
         def expected_xy(params):
             for key, idx in param_idx.items():
                 trans.alt[key] = params[idx]
+            # int2loc
+            # loc2flat
             expected_flatXY = [trans.posintTP_to_flatXY(tp) for tp in posintTP]
             return expected_flatXY
     else:
