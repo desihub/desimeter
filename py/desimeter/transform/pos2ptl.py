@@ -222,11 +222,11 @@ def int2ext(u_int, u_offset):
     READ THE FINE PRINT: Args here are not  like "(t,p)". More like "(t,to)".
         
     INPUTS:
-        u_ext    ... t_ext or p_ext
+        u_int    ... t_int or p_int
         u_offset ... OFFSET_T or OFFSET_P
         
     OUTPUTS:
-        u_int   ... t_int or p_int
+        u_ext   ... t_int or p_int
     
     u_offset may either be a scalar (will be applied to all points), or
     a vector of unique values per point.
