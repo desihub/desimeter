@@ -21,3 +21,8 @@ default-fvc2fp.json
 default transformation from FVC to FP, used to init the match
 
 .. _`DESI-5421`: https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=5421
+
+pos2ptl_test_data.json
+--------------------------------------
+* generated using postransforms.py from SVN
+* used to validate equivalency of pos2ptl coordinate transformations
