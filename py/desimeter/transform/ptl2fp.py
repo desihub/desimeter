@@ -5,6 +5,7 @@ Utility functions to fit and apply coordinates transformation from PTL (petal lo
 import yaml
 import numpy as np
 from desimeter.log import get_logger
+from desimeter.transform import rszn_lookups
 from pkg_resources import resource_filename
 
 petal_alignment_dict = None
@@ -81,9 +82,11 @@ def apply_ptl2fp(spots) :
     return spots
     
     
-def ptl2fp(petal_loc,xptl,yptl,zptl=None) :
+def ptl2fp(petal_loc, xptl, yptl, zptl=None) :
     
-    if zptl is None : zptl=np.zeros(xptl.shape)
+    if zptl is None:
+        radius = np.hypot(xptl, yptl)
+        zptl = rszn_lookups.r2z(radius) # estimate as approx nominal echo22
     xyzptl = np.vstack([xptl,yptl,zptl])
 
     # global focal plane coordinates 'FP'
