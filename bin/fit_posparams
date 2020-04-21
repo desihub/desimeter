@@ -428,7 +428,7 @@ if __name__ == '__main__':
             best_static[posid] = param_nominals.copy()
             subtable = static_out[static_out['POS_ID'] == posid]
             errors = subtable['FIT_ERROR']
-            quantile = np.quantile(errors, static_params_quantile)
+            quantile = np.percentile(errors, static_params_quantile * 100)
             selection = subtable[errors <= quantile]
             these_best = {key:static_params_group_func(selection[key]) for key in fitter.static_keys}
             best_static[posid].update(these_best)
