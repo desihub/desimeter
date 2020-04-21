@@ -8,14 +8,22 @@ coordinate systems. This module is managed in the DESI SVN repository.
 
  /code/focalplane/plate_control/trunk/petal
 
-You will need to grab this directory to your local machine, and then set the
-correct path to it in the first line below.
+You may need to grab this directory to your local machine, and then set the
+correct path to it below.
 """
 
-path_to_postransforms = 'C:/Users/joe/Desktop/desi_svn/focalplane/plate_control/trunk/petal'
-import sys
-sys.path.append(path_to_postransforms)
-import postransforms
+try:
+    import postransforms
+except:
+    import sys
+    response = input('Module postransforms.py not found. Try sys.path.append() on hard-coded directory? (y/n) >> ')
+    if response.lower() in {'y', 'yes'}:
+        path_to_postransforms = 'C:/Users/joe/Desktop/desi_svn/focalplane/plate_control/trunk/petal'
+        sys.path.append(path_to_postransforms)
+        import postransforms
+    else:
+        print('No postransforms.py found. Must quit.')
+        sys.exit()
 import numpy as np
 import json
 from pkg_resources import resource_filename
