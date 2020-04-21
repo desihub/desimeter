@@ -3,6 +3,23 @@ version: 2.1
 orbs:
   python: circleci/python@0.2.1
 
+# The default circleci cache does not save ~/.local/bin!
+# (which we need for the 'coverage' program)
+commands:
+  save-cache-bin:
+    description: Save Pip packages to cache (with bin).
+    parameters:
+      key:
+        default: pip
+        description: The cache key to use. The key is immutable.
+        type: string
+    steps:
+    - save_cache:
+        key: << parameters.key >>-{{ checksum "requirements.txt"  }}
+        paths:
+        - /home/circleci/.local/lib/
+        - /home/circleci/.local/bin/
+
 jobs:
   build-and-test:
     executor: python/default
@@ -13,18 +30,19 @@ jobs:
       - run:
           name: Coverage deps
           command: |
-              pip install coveralls
-      - python/save-cache
+              pip install coverage coveralls pyyaml
+      - save-cache-bin
       - run:
-          command: coverage run setup.py test
+          command: |
+              coverage run setup.py test
           name: Tests
       - run:
           name: Coveralls
           command: |
-              # set in the circleci build config,
-              # https://circleci.com/gh/legacysurvey/legacypipe/edit#env-vars
-              echo "COVERALLS_REPO_TOKEN=${COVERALLS_REPO_TOKEN} bundle exec rspec spec" > .coveralls.yml
-              coveralls
+              # first set up project in coveralls.io, then
+              # set this env.var in the circleci build config,
+              # https://circleci.com/gh/desihub/desimeter/edit#env-vars
+              COVERALLS_REPO_TOKEN=${COVERALLS_REPO_TOKEN} coveralls
 
 workflows:
   main:
