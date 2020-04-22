@@ -85,7 +85,7 @@ workflows:
       - runtests:
           name: runtests-36
           pyver: "3.6"
-      - runtests:
-          name: runtests-35
-          pyver: "3.5"
+#       - runtests:
+#           name: runtests-35
+#           pyver: "3.5"
 
