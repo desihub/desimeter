@@ -1,5 +1,8 @@
 [run]
 branch = True
 #include = py/desimeter/*
-omit =  /home/circleci/.local/*
-
+omit =
+    */.local/*
+    /usr/*
+    py/desimeter/test/*
+    setup.py
