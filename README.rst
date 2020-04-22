@@ -121,6 +121,8 @@ Dependencies
 
 desimeter requires numpy, scipy, astropy, fitsio, and matplotlib.
 
+Python 3.6 or greater is required.
+
 It purposefully does *not* require desiutil, desimodel, or any other
 offline desidata packages to facilitate integration with the DESI online
 environment and to minimize getting started overhead for non-desidata users.
