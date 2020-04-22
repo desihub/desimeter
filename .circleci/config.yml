@@ -1,5 +1,20 @@
 version: 2.1
 
+# Very handy tools for working with this file:
+# - the circleci command-line tool:
+#    https://circleci.com/docs/2.0/local-cli/#installation
+#    eg:
+#      circleci config validate
+#      circleci config process .circleci/config.yml
+#
+#      circleci config process .circleci/config.yml > process.yml
+#      circleci local execute -c process.yml --job test-36
+#
+# - docs:
+#    https://circleci.com/docs/2.0/reusing-config/
+# - the python "orb" we're using:
+#    https://circleci.com/orbs/registry/orb/circleci/python
+
 orbs:
   python: circleci/python@0.2.1
 
@@ -21,10 +36,13 @@ commands:
         - /home/circleci/.local/bin/
 
 jobs:
-  testing:
+  runtests:
     parameters:
       pyver:
         type: string
+      coveralls:
+        type: boolean
+        default: false
     executor:
       name: python/default
       tag: << parameters.pyver >>
@@ -43,54 +61,31 @@ jobs:
           command: |
               coverage run setup.py test
           name: Tests
-      - run:
-          name: Coveralls
-          command: |
-              # first set up project in coveralls.io, then
-              # set this env.var in the circleci build config,
-              # https://circleci.com/gh/desihub/desimeter/edit#env-vars
-              COVERALLS_REPO_TOKEN=${COVERALLS_REPO_TOKEN} coveralls
-
-
-#jobs:
-  test-38: &test-template
-    executor:
-      name: python/default
-      tag: "3.8"
-    steps:
-      - checkout
-      - python/load-cache
-      - python/install-deps
-      - run:
-          name: Coverage deps
-          command: |
-              pip install coverage coveralls pyyaml
-      - save-cache-bin
-      - run:
-          command: |
-              coverage run setup.py test
-          name: Tests
-      - run:
-          name: Coveralls
-          command: |
-              # first set up project in coveralls.io, then
-              # set this env.var in the circleci build config,
-              # https://circleci.com/gh/desihub/desimeter/edit#env-vars
-              COVERALLS_REPO_TOKEN=${COVERALLS_REPO_TOKEN} coveralls
-
-  test-37:
-    <<: *test-template
-    executor:
-      name: python/default
-      tag: "3.7"
+      - when:
+          condition: << parameters.coveralls >>
+          steps:
+            - run:
+                name: Coveralls
+                command: |
+                 # first set up project in coveralls.io, then
+                 # set this env.var in the circleci build config,
+                 # https://circleci.com/gh/desihub/desimeter/edit#env-vars
+                 COVERALLS_REPO_TOKEN=${COVERALLS_REPO_TOKEN} coveralls
 
 workflows:
   main:
     jobs:
-      - test-38
-      - test-37
-      - testing:
+      - runtests:
+          name: runtests-38
+          pyver: "3.8"
+          coveralls: true
+      - runtests:
+          name: runtests-37
+          pyver: "3.7"
+      - runtests:
+          name: runtests-36
           pyver: "3.6"
+      - runtests:
+          name: runtests-35
+          pyver: "3.5"
 
-# This scheme for running multiple python versions comes from:
-# https://github.com/justinmayer/virtualfish/blob/aa3d6271bcb86ad27b6d24f96b5bd386d176f588/.circleci/config.yml
