@@ -32,18 +32,7 @@ args = parser.parse_args()
 
 # read up on yer data thar, kiddo
 merged_path = args.infile
-if os.path.exists(merged_path):
-    merged = Table.read(merged_path, format='csv')
-    dynamic_path = merged_path.split('merged.csv')[0] + 'dynamic.csv'
-    if os.path.exists(dynamic_path):
-        dynamic = Table.read(dynamic_path, format='csv')
-    else:
-        dynamic = None
-        print('No "dynamic" results file found to match the "merged". This ' +
-              'isn\'t catastrophic, but limits some information available to plot.')
-else:
-    print('File not found: ' + merged_path)
-    sys.exit()
+merged, dynamic = plotter.read(merged_path)
 
 # save path
 save_dir = args.outdir
@@ -51,15 +40,11 @@ if not os.path.isdir(save_dir):
     os.path.os.makedirs(save_dir)
 analysis_timestamp = merged_path.split('_')[0]
     
-if 'DATA_END_DATE_SEC' in merged.columns: # column not present in 2020-04-15 batch run data
-    merged['DATE_SEC'] = merged['DATA_END_DATE_SEC']
-else:
-    merged['DATE_SEC'] = Time(merged['DATA_END_DATE']).unix
+# do plots (mulitprocess-enabled)
 posids = sorted(set(merged['POS_ID']))
 num_posids = len(posids)
 num_plots = num_posids if not args.test_mode else 1
 posids_to_plot = [posids[i] for i in range(num_plots)]
-
 if __name__ == '__main__':
     mp_results = {}
     with multiprocessing.Pool(processes=args.n_processes_max) as pool:
