@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Plots fiber positioner parameters as best-fit by fit_params.
+Plots fiber positioner parameters as best-fit by fit_posparams. Also plots
+cumulative positioner errors over time, as calculated when performing those
+best-fits.
 """
 import os
 import argparse
@@ -13,8 +15,7 @@ import desimeter.posparams.plotter as plotter
 import desimeter.posparams.fitter as fitter
 
 # command line argument parsing
-description = 'Plots fiber positioner parameters as best-fit by fit_params.'
-parser = argparse.ArgumentParser(description=description)
+parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('-i', '--infile', type=str, required=True,
                     help='path(s) to input csv file containing "merged" data from fit_params')
 parser.add_argument('-o', '--outdir', type=str, required=True,
@@ -25,6 +26,9 @@ parser.add_argument('-q', '--quiet', action='store_true',
                     help='reduce verbosity of print outs at terminal')
 parser.add_argument('-t', '--test_mode', action='store_true',
                     help='test mode, only plots results for the first positioner')
+parser.add_argument('-bf', '--plot_best_fits') # default True
+parser.add_argument('-err', '--plot_errors') # default True
+parser.add_argument('-bins', '--error_bins') # default as in plotter
 args = parser.parse_args()
 
 # read up on yer data thar, kiddo
