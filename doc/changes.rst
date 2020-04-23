@@ -2,10 +2,13 @@
 desimeter change Log
 ====================
 
-0.2.2 (unreleased)
+0.3.0 (unreleased)
 ------------------
 
-* No changes yet
+* Added `fit_posparams` and `desimeter.transform.pos2ptl` for fitting
+  positioner parameters [PR `#54`_].
+
+.. _`#54`: https://github.com/desihub/desimeter/pull/54
 
 0.2.1 (2020-04-15)
 ------------------
