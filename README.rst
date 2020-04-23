@@ -21,6 +21,17 @@ It comprises
 
 See `desimeter/doc/coordinates.rst` for a definition of the coordinate systems.
 
+
+Automated build & testing
+-------------------------
+
+.. image:: https://img.shields.io/circleci/project/github/desihub/desimeter.svg
+  :alt: Build
+  :target: https://circleci.com/gh/desihub/desimeter
+
+.. image:: https://coveralls.io/repos/github/desihub/desimeter/badge.svg?branch=master
+  :alt: Coverage
+  :target: https://coveralls.io/github/desihub/desimeter?branch=master
   
 Script Examples
 ---------------
@@ -109,6 +120,8 @@ Dependencies
 ------------
 
 desimeter requires numpy, scipy, astropy, fitsio, and matplotlib.
+
+Python 3.6 or greater is required.
 
 It purposefully does *not* require desiutil, desimodel, or any other
 offline desidata packages to facilitate integration with the DESI online

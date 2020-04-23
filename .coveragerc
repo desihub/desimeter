@@ -1,0 +1,8 @@
+[run]
+branch = True
+#include = py/desimeter/*
+omit =
+    */.local/*
+    /usr/*
+    py/desimeter/test/*
+    setup.py
