@@ -142,33 +142,42 @@ def fit_params(posintT, posintP, ptlX, ptlY,
             )
         dt_int = pos2ptl.delta_angle(u_start=t_int[:-1], u_final=t_int[1:], direction=0)
         dp_int = pos2ptl.delta_angle(u_start=p_int[:-1], u_final=p_int[1:], direction=0)
-        x_flat = x_flat[1:] # now remove first point, to match up with lists of deltas
+        # now remove first point, to match up with lists of deltas
+        x_flat = x_flat[1:]
         y_flat = y_flat[1:]
+        measured_t_int_0 = measured_t_int_0[:-1]
+        measured_p_int_0 = measured_p_int_0[:-1]
 
     # set up the consumer function for the variable parameters vector
-    if mode == 'static':
-        def expected_xy(params):
+    p0 = nominals.copy()
+    def expected_xy(params):
+        if mode =='static':
             for key, idx in param_idx.items():
-                trans.alt[key] = params[idx]
-            # int2loc
-            # loc2flat
-            expected_flatXY = [trans.posintTP_to_flatXY(tp) for tp in posintTP]
-            return expected_flatXY
-    else:
-        def expected_xy(params):
-            scales = [params[param_idx[key]] for key in ['SCALE_T', 'SCALE_P']]
-            scaled_posintdTdP = [[dtdp[0]*scales[0], dtdp[1]*scales[1]] for dtdp in posintdTdP]
-            expected_posintTP = [trans.addto_posintTP(measured_posintTP0[i], scaled_posintdTdP[i], range_wrap_limits='none') for i in range(n_pts)]
-            expected_flatXY = [trans.posintTP_to_flatXY(tp) for tp in expected_posintTP]
-            return expected_flatXY
+                p0[key] = params[idx]
+            t_int_expected = t_int
+            p_int_expected = p_int
+        else:
+            dt_int_scaled = dt_int * params[param_idx['SCALE_T']]
+            dp_int_scaled = dp_int * params[param_idx['SCALE_P']]
+            t_int_expected = measured_t_int_0 + dt_int_scaled
+            p_int_expected = measured_p_int_0 + dp_int_scaled
+        x_loc, y_loc = pos2ptl.int2loc(t_int=t_int_expected,
+                                       p_int=p_int_expected,
+                                       r1=p0['LENGTH_R1'],
+                                       r2=p0['LENGTH_R2'],
+                                       t_offset=p0['OFFSET_T'],
+                                       p_offset=p0['OFFSET_P'])
+        x_flat_expected = pos2ptl.loc2flat(x_loc, p0['OFFSET_X'])
+        y_flat_expected = pos2ptl.loc2flat(y_loc, p0['OFFSET_Y'])
+        return x_flat_expected, y_flat_expected
 
     # define error function and run optimizer
     def err_norm(params):
-        expected = expected_xy(params)
-        err_x = [expected[i][0] - flatXY[i][0] for i in range(n_pts)]
-        err_y = [expected[i][1] - flatXY[i][1] for i in range(n_pts)]
-        sumsq = sum([err_x[i]**2 + err_y[i]**2 for i in range(n_pts)])
-        return math.sqrt(sumsq / n_pts)
+        x_exp, y_exp = expected_xy(params)
+        err_x = x_exp - x_flat
+        err_y = y_exp - y_flat
+        sumsq = np.sum(err_x**2 + err_y**2)
+        return (sumsq / n_pts)**0.5
 
     initial_params = [nominals[key] for key in params_to_fit]
     bounds_vector = [bounds[key] for key in params_to_fit]
