@@ -157,11 +157,13 @@ def loc2ext(x_loc, y_loc, r1, r2, t_offset, p_offset):
     y_loc = _to_list(y_loc)
     r1 = _to_list(r1)
     r2 = _to_list(r2)
+    t_offset = _to_list(t_offset)
+    p_offset = _to_list(p_offset)
     n = len(x_loc)
-    if len(r1) != n:
-        r1 = [r1[0]]*n
-    if len(r2) != n:
-        r2 = [r2[0]]*n
+    r1 = _extend_list(r1, n)
+    r2 = _extend_list(r2, n)
+    t_offset = _extend_list(t_offset, n)
+    p_offset = _extend_list(p_offset, n)
     t_ext = []
     p_ext = []
     unreachable = []
@@ -338,3 +340,9 @@ def _add_offset(u, offset):
     u = _to_numpy(u)
     offset = _to_numpy(offset)
     return u + offset
+
+def _extend_list(L, n):
+    '''Extend list L to length n, copying values as necessary.'''
+    if len(L) != n:
+        L = [L[0]]*n
+    return L
