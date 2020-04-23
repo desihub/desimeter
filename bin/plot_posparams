@@ -49,7 +49,8 @@ else:
 save_dir = args.outdir
 if not os.path.isdir(save_dir):
     os.path.os.makedirs(save_dir)
- 
+analysis_timestamp = merged_path.split('_')[0]
+    
 if 'DATA_END_DATE_SEC' in merged.columns: # column not present in 2020-04-15 batch run data
     merged['DATE_SEC'] = merged['DATA_END_DATE_SEC']
 else:
@@ -70,7 +71,7 @@ if __name__ == '__main__':
                 statics_during_dynamic = {key:some_row[key] for key in some_row.columns if key in fitter.static_keys}
             else:
                 statics_during_dynamic = {key:0 for key in fitter.static_keys}
-            save_path = os.path.join(save_dir, posid + plotter.img_ext)
+            save_path = os.path.join(save_dir, analysis_timestamp + '_' + posid + plotter.img_ext)
             save_path = os.path.realpath(save_path)
             plot_args = (subtable, save_path, statics_during_dynamic)
             mp_results[posid] = pool.apply_async(plotter.plot_params, args=plot_args)
