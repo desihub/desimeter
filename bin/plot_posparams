@@ -4,10 +4,7 @@
 Plots fiber positioner parameters as best-fit by fit_params.
 """
 import os
-import sys
 import argparse
-from astropy.table import Table
-from astropy.time import Time
 import multiprocessing
 import time
 
