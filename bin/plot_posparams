@@ -1,0 +1,89 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Plots fiber positioner parameters as best-fit by fit_params.
+"""
+import os
+import sys
+import argparse
+from astropy.table import Table
+from astropy.time import Time
+import multiprocessing
+import time
+
+# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
+import desimeter.posparams.plotter as plotter
+import desimeter.posparams.fitter as fitter
+
+# command line argument parsing
+description = 'Plots fiber positioner parameters as best-fit by fit_params.'
+parser = argparse.ArgumentParser(description=description)
+parser.add_argument('-i', '--infile', type=str, required=True,
+                    help='path(s) to input csv file containing "merged" data from fit_params')
+parser.add_argument('-o', '--outdir', type=str, required=True,
+                    help='path to directory where to save output plot files')
+parser.add_argument('-np', '--n_processes_max', type=int, default=None,
+                    help='max number of processors to use')
+parser.add_argument('-q', '--quiet', action='store_true',
+                    help='reduce verbosity of print outs at terminal')
+parser.add_argument('-t', '--test_mode', action='store_true',
+                    help='test mode, only plots results for the first positioner')
+args = parser.parse_args()
+
+# read up on yer data thar, kiddo
+merged_path = args.infile
+if os.path.exists(merged_path):
+    merged = Table.read(merged_path, format='csv')
+    dynamic_path = merged_path.split('merged.csv')[0] + 'dynamic.csv'
+    if os.path.exists(dynamic_path):
+        dynamic = Table.read(dynamic_path, format='csv')
+    else:
+        dynamic = None
+        print('No "dynamic" results file found to match the "merged". This ' +
+              'isn\'t catastrophic, but limits some information available to plot.')
+else:
+    print('File not found: ' + merged_path)
+    sys.exit()
+
+# save path
+save_dir = args.outdir
+if not os.path.isdir(save_dir):
+    os.path.os.makedirs(save_dir)
+analysis_timestamp = merged_path.split('_')[0]
+    
+if 'DATA_END_DATE_SEC' in merged.columns: # column not present in 2020-04-15 batch run data
+    merged['DATE_SEC'] = merged['DATA_END_DATE_SEC']
+else:
+    merged['DATE_SEC'] = Time(merged['DATA_END_DATE']).unix
+posids = sorted(set(merged['POS_ID']))
+num_posids = len(posids)
+num_plots = num_posids if not args.test_mode else 1
+posids_to_plot = [posids[i] for i in range(num_plots)]
+
+if __name__ == '__main__':
+    mp_results = {}
+    with multiprocessing.Pool(processes=args.n_processes_max) as pool:
+        for posid in posids_to_plot:
+            subtable = merged[merged['POS_ID'] == posid]
+            if dynamic:
+                dynam_subtable = dynamic[dynamic['POS_ID'] == posid]
+                some_row = dynam_subtable[0]
+                statics_during_dynamic = {key:some_row[key] for key in some_row.columns if key in fitter.static_keys}
+            else:
+                statics_during_dynamic = {key:0 for key in fitter.static_keys}
+            save_path = os.path.join(save_dir, analysis_timestamp + '_' + posid + plotter.img_ext)
+            save_path = os.path.realpath(save_path)
+            plot_args = (subtable, save_path, statics_during_dynamic)
+            mp_results[posid] = pool.apply_async(plotter.plot_params, args=plot_args)
+            if not args.quiet:
+                print(f'Plot job added: {posid}')
+        while mp_results:
+            completed = set()
+            for posid, result in mp_results.items():
+                if result.ready():
+                    completed.add(posid)
+                    if not args.quiet:
+                        print(f'Plot saved: {result.get()}')
+            for posid in completed:
+                del mp_results[posid]
+            time.sleep(0.05)

@@ -5,12 +5,12 @@ Utility functions to fit and apply coordinates transformation from PTL (petal lo
 import yaml
 import numpy as np
 from desimeter.log import get_logger
-from astropy.table import Table,Column
+from desimeter.transform import rszn_lookups
 from pkg_resources import resource_filename
 
 petal_alignment_dict = None
 
-# %% rotation matrices
+# rotation matrices
 def Rx(angle):  # all in radians
     Rx = np.array([
         [1.0,           0.0,            0.0],
@@ -82,9 +82,11 @@ def apply_ptl2fp(spots) :
     return spots
     
     
-def ptl2fp(petal_loc,xptl,yptl,zptl=None) :
+def ptl2fp(petal_loc, xptl, yptl, zptl=None) :
     
-    if zptl is None : zptl=np.zeros(xptl.shape)
+    if zptl is None:
+        radius = np.hypot(xptl, yptl)
+        zptl = rszn_lookups.r2z(radius) # estimate as approx nominal echo22
     xyzptl = np.vstack([xptl,yptl,zptl])
 
     # global focal plane coordinates 'FP'
@@ -95,3 +97,29 @@ def ptl2fp(petal_loc,xptl,yptl,zptl=None) :
     
     return xyzfp[0],xyzfp[1],xyzfp[2]
 
+def fp2ptl(petal_loc, x_fp, y_fp, z_fp=None):
+    '''Converts from global focal plane coordinates (labeled "fp") to system
+    local to a given petal (labeled "ptl").
+    
+    INPUTS:
+        petal_loc ... integer petal location id (*not* the petal serial id)
+        x_fp      ... (mm) global x coordinate (a.k.a. FPA_X a.k.a. OBS_X)
+        y_fp      ... (mm) global y coordinate (a.k.a. FPA_Y a.k.a. OBS_Y)
+        z_fp      ... (mm) global z coordinate (optional. nominal echo22 value
+                      will be used if z_fp is not specified)
+        
+    OUTPUTS:
+        x_ptl, y_ptl, z_ptl ... converted into petal's local coordinate system
+        
+    This function corresponds to the method obsXYZ_to_ptlXYZ() in petaltransforms.py.
+    c.f. https://desi.lbl.gov/trac/browser/code/focalplane/plate_control/trunk/petal/petaltransforms.py
+    '''
+    if z_fp is None:
+        radius = np.hypot(x_fp, y_fp)
+        z_fp = rszn_lookups.r2z(radius) # estimate as approx nominal echo22
+    xyz_fp = np.vstack([x_fp, y_fp, z_fp])
+    params = get_petal_alignment_data()[petal_loc]
+    Rotation = Rxyz(params["alpha"],params["beta"],params["gamma"])
+    Translation = np.array([params["Tx"],params["Ty"],params["Tz"]])
+    xyz_ptl = Rotation.T.dot(xyz_fp - Translation[:,None])
+    return xyz_ptl[0], xyz_ptl[1], xyz_ptl[2]
