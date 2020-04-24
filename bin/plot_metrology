@@ -3,11 +3,9 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from astropy.table import Table
-from pkg_resources import resource_filename
+from desimeter.io import load_metrology
 
-filename = resource_filename('desimeter',"data/fp-metrology.csv")
-spots    = Table.read(filename,format="csv")
+spots    = load_metrology()
 
 print(spots.dtype.names)
 print(np.unique(spots["DEVICE_TYPE"]))
