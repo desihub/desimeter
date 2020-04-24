@@ -11,7 +11,7 @@ import argparse
 import math
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('-i', '--infile', type=str, required=True,
-                    help='path to input csv file containing "merged" data from fit_params')
+                    help='path to input csv file containing "merged" data from fit_posparams')
 parser.add_argument('-o', '--outdir', type=str, required=True,
                     help='path to directory where to save output plot files')
 parser.add_argument('-np', '--n_processes_max', type=int, default=None,
