@@ -43,7 +43,8 @@ parser.add_argument('--field-model', type = str, default = None, required = Fals
                     help = 'use this json file as field model to convert fiber coordinates to RA Dec')
 parser.add_argument('--fvc-psf-sigma', type = float, default = 1., required = False,
                     help = 'use this PSF sigma for the centroid measurement')
-
+parser.add_argument('--nomatch', action = 'store_true',
+                    help = 'do not try to match data, just write FVC coordinates of detected spots')
 args  = parser.parse_args()
 log   = get_logger()
 
@@ -89,6 +90,17 @@ elif filename.find(".csv")>0 :
 else :
     log.info("sorry, I don't know what to do with input file {} because not .fits nor .csv".format(filename))
     sys.exit(12)
+
+if args.nomatch :
+    # write spots
+    for seqid,spots in enumerate(spots_list) :
+        if not args.sequence :
+            outfile=args.outfile
+        else :
+            outfile=args.outfile.replace(".csv","-F{:04d}.csv".format(seqid))
+        spots.write(outfile,format="csv",overwrite=True)
+        print("wrote {}".format(outfile))
+    sys.exit(0)
 
 for seqid,spots in enumerate(spots_list) :
     spots = findfiducials(spots,input_transform=args.input_transform)
