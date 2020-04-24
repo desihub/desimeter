@@ -211,9 +211,10 @@ for posid, table in tables.items():
     for func in bad_row_funcs:
         bad_rows = func(table)
         table.remove_rows(bad_rows)
+        _drop_empty_tables()
     final_len = len(table)
     printlog(f'{posid}: dropped {initial_len - final_len} of {initial_len} non-conforming data rows')
-_drop_empty_tables() # in case the row filtering left any tables newly empty
+
 
 # add column for seconds-since-epoch version of date to data frames
 for posid, table in tables.items():
