@@ -2,11 +2,11 @@
 Utility functions to fit and apply coordinates transformation from PTL (petal local) to FP (focal plane ~ CS5)
 """
 
-import yaml
+
 import numpy as np
 from desimeter.log import get_logger
+from desimeter.io import load_petal_alignement
 from desimeter.transform import rszn_lookups
-from pkg_resources import resource_filename
 
 petal_alignment_dict = None
 
@@ -44,10 +44,7 @@ def Rxyz(alpha, beta, gamma):  # yaw-pitch-roll system, all in radians
 def get_petal_alignment_data() :
     global petal_alignment_dict
     if petal_alignment_dict is None :
-        filename = resource_filename('desimeter',"data/petal-alignments.yaml")
-        ifile=open(filename)
-        petal_alignment_dict = yaml.safe_load(ifile)
-        ifile.close()
+        petal_alignment_dict = load_petal_alignement()
     return petal_alignment_dict
 
 def apply_ptl2fp(spots) :
