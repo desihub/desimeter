@@ -5,18 +5,9 @@ Plots fiber positioner parameters as best-fit by fit_posparams. Also plots
 cumulative positioner errors over time, as calculated when performing those
 best-fits.
 """
-import os
-import argparse
-import multiprocessing
-import time
-import numpy as np
-import json
-
-# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
-import desimeter.posparams.plotter as plotter
-import desimeter.posparams.fitter as fitter
 
 # command line argument parsing
+import argparse
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('-i', '--infile', type=str, required=True,
                     help='path to input csv file containing "merged" data from fit_params')
@@ -37,6 +28,17 @@ parser.add_argument('-b', '--bins', default=[0, 0.03, 0.1, 0.2, 0.5, 1.0, np.inf
 parser.add_argument('-d', '--dynamic_passfail', action='store_true',
                     help='uses "dynamic" best-fit error (variable SCALE_T and SCALE_P) for pass/fail binning')
 args = parser.parse_args()
+
+# proceed with the rest
+import os
+import multiprocessing
+import time
+import numpy as np
+import json
+
+# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
+import desimeter.posparams.plotter as plotter
+import desimeter.posparams.fitter as fitter
 
 # read up on yer data thar, kiddo
 merged_path = os.path.realpath(args.infile)

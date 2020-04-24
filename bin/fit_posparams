@@ -30,24 +30,8 @@ Data sources:
         /global/cfs/cdirs/desi/engineering/fvc/desimeter/v0.2.0/positioners-3/
 """
 
-import os
-import sys
-import cProfile, pstats
-import math
-import numpy as np
-import time
-import multiprocessing
-from pkg_resources import resource_filename
-from astropy.table import Table
-from astropy.time import Time
-import argparse
-import glob
-
-# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
-import desimeter.posparams.fitter as fitter
-import desimeter.transform.ptl2fp as ptl2fp
-
 # command line argument parsing
+import argparse
 description = 'Fits fiber positioner calibration parameters. Fits are ' + \
               'performed by comparing measured  (x,y) to internally-' + \
               'tracked (theta,phi).'
@@ -72,6 +56,23 @@ parser.add_argument('-q', '--quiet', action='store_true',
 parser.add_argument('-l', '--logging', action='store_true',
                     help='log terminal print outs to file')
 args = parser.parse_args()
+
+# proceed with the rest
+import os
+import sys
+import cProfile, pstats
+import math
+import numpy as np
+import time
+import multiprocessing
+from pkg_resources import resource_filename
+from astropy.table import Table
+from astropy.time import Time
+import glob
+
+# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
+import desimeter.posparams.fitter as fitter
+import desimeter.transform.ptl2fp as ptl2fp
 
 # paths
 desimeter_data_dir = resource_filename("desimeter", "data")
