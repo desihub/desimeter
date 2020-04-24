@@ -8,6 +8,7 @@ best-fits.
 
 # command line argument parsing
 import argparse
+import math
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('-i', '--infile', type=str, required=True,
                     help='path to input csv file containing "merged" data from fit_params')
@@ -23,7 +24,7 @@ parser.add_argument('-sb', '--skip_bestfits', action='store_true',
                     help='skip generating plot of best-fit results for each positioner')
 parser.add_argument('-sp', '--skip_passfail', action='store_true',
                     help='skip generating single plot binning historical pass/fail for all positioners (also saves bins as json)')
-parser.add_argument('-b', '--bins', default=[0, 0.03, 0.1, 0.2, 0.5, 1.0, np.inf],
+parser.add_argument('-b', '--bins', default=[0, 0.03, 0.1, 0.2, 0.5, 1.0, math.inf],
                     help='set error bins, int or sequence, works approx like "bins" arg of numpy.hist() function (c.f. desimeter/posparams/plotter.py)')
 parser.add_argument('-d', '--dynamic_passfail', action='store_true',
                     help='uses "dynamic" best-fit error (variable SCALE_T and SCALE_P) for pass/fail binning')
@@ -31,9 +32,9 @@ args = parser.parse_args()
 
 # proceed with the rest
 import os
+import numpy as np
 import multiprocessing
 import time
-import numpy as np
 import json
 
 # imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
