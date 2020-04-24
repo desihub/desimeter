@@ -109,13 +109,18 @@ def plot_passfail(binned, savepath, title=''):
         y = binned[p['key']]
         fig = _init_plot(figsize=(15,10))
         for ceiling, counts in y.items():
-            plt.plot(x, counts, label=f'fit err <= {ceiling:5.3f}')
+            plt.plot(x, counts, label=f'fit err <= {ceiling:5.3f}', linewidth=2)
         tick_values, tick_labels = _ticks(x)
         plt.xticks(tick_values, tick_labels, rotation=90, horizontalalignment='center')
-        plt.ylabel(p['ylabel'])
+        plt.ylabel(p['ylabel'], fontsize=14)
         plt.legend(title='THRESHOLDS (mm)')
         path = split[0] + p['suffix'] + split[1]
         plt.title(title)
+        plt.grid(color='0.9')
+        plt.minorticks_on()
+        plt.gca().tick_params(axis='x', which='minor', bottom=False)
+        plt.gca().tick_params(axis='y', which='minor', right=True)
+        plt.gca().tick_params(axis='y', which='both', labelleft='on', labelright='on')
         _save_and_close_plot(fig, savepath=path)
         print(f'Pass/fail plot saved to: {path}')
     
