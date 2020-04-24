@@ -3,19 +3,18 @@
 Plot time series of positioner parameters.
 """
 
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.time import Time
 import astropy.stats as stats
 from astropy.table import Table
-import os, sys
 
 # common options
 img_ext = '.png'
 error_series_filename = 'fiterror' + img_ext
 tick_period_days = 7
 day_in_sec = 24*60*60
-error_bins = [0, 0.01, 0.05, 0.1, np.inf] # for error_series plot, bin edges in which to categorize positioners
 
 # plot definitions for parameter subplots
 param_subplot_defs = [
@@ -83,8 +82,7 @@ def plot_params(table, savepath, statics_during_dynamic):
     posid = table['POS_ID'][0]
     fig.subplots_adjust(wspace=.3, hspace=.3)
     times = table['DATE_SEC']
-    tick_values = np.arange(times[0], times[-1]+day_in_sec, tick_period_days*day_in_sec)
-    tick_labels = [Time(t, format='unix', out_subfmt='date').iso for t in tick_values]
+    tick_values, tick_labels = _ticks(times)
     n_pts = len(table)
     marker = ''
     for p in param_subplot_defs:
@@ -135,7 +133,7 @@ def plot_params(table, savepath, statics_during_dynamic):
     _save_and_close_plot(fig, savepath)
     return savepath
 
-def plot_errors(table, savepath):
+def plot_errors(table, savepath, bins=5):
     '''Plot time series of posparam fit errors, summing up at each time point
     for all postioners represented in table.
     
@@ -145,47 +143,104 @@ def plot_errors(table, savepath):
         
         savepath ... Where to save output plot file. Extension determines image
                      format.
+                     
+        bins     ... int or sequence of scalars. Works like "bins: arg in numpy
+                     histogram(). If bins is an int, it defines the number of
+                     equal-width error bins to accumulate positioner counts. If
+                     bins is a sequence, it defines the bin edges, including
+                     the rightmost edge, allowing for non-uniform bin widths.
         
     Outputs:
         The plot image file is saved to savepath.
     '''
     fig = _init_plot()
-
-    # This is very much in-progress code. Idea is:
-    #
-    #   for any pos_id with multiple rows on the same day:
-    #       select row with lowest FIT_ERROR value and delete the others
-    #   for each threshold level: (like "ceiling" in proto code below)
-    #       select just the rows within that threshold zone
-    #       set up daily bins
-    #       histogram the dates-in-seconds into those bins
-    #
-    #   This yields a count of how many positioners were measured during each
-    #   day as meeting the threshold conditions.
-    #
-    #   Finally, cumulatively sum the bins.
-    #
-    #   Merits: easy / quick to write
-    #   Demerits: awkward to capture positioners failing out of the cumulative
-    #             counts, because losing track of posids.
-    #
-    # Alternate method:
-    #   
-    #   A bit more ploddingly, make a dict carrying an empty set for each day.
-    #   These are the bins. Now just march through the goddamned table, chucking
-    #   posids into these sets if they meet the threshold criteria.
-    #
-    #   Merits: keeps track of POS_IDs
-    #   Demerits: not fancy (probably a merit)
-    ceiling = 0.02
+    min_err = min(table['FIT_ERROR_DYNAMIC'])
+    max_err = max(table['FIT_ERROR_DYNAMIC'])
+    try:
+        n_bins = int(bins)
+        edges = np.linspace(min_err, max_err, n_bins + 1)
+    except:
+        n_bins = len(bins) - 1
+        edges = np.array(bins)
+    left_edges = edges[:-1]
+    right_edges = edges[1:]
+    centers = left_edges + np.diff(edges)/2
     time_min = min(table['DATE_SEC'])
     time_max = max(table['DATE_SEC'])
-    nbins = int(np.ceil((time_max - time_min) / day_in_sec))
-    time_range = (time_min, time_min + nbins * day_in_sec)
-    d = table[table['FIT_ERROR_DYNAMIC'] <= ceiling]
-    h = stats.histogram(d['DATE_SEC'], bins=nbins, range=time_range)
-        
+    period_duration = day_in_sec
+    #periods = np.arange(time_min, time_max, step=period_duration)
+    #periods = np.append(periods[1:], periods[-1] + period_duration)
+    times = sorted(set(table['DATE_SEC']))
+    periods = times
+    posids = sorted(set(table['POS_ID']))
+    subtables = {posid: table[table['POS_ID'] == posid] for posid in posids}
+    errors = {}
+    for period in periods:
+        errors[period] = {}
+        end = period
+        start = end - period_duration
+        for posid, subtable in subtables.items():
+            selected = (start < subtable['DATE_SEC']) & (end >= subtable['DATE_SEC'])
+            if any(selected):
+                period_error = max(subtable[selected]['FIT_ERROR_DYNAMIC'])
+                errors[period][posid] = period_error
+        print(f'Errors binned for period {period} ({periods.index(period)} of {len(periods)})')
+    passing = {}
+    failing = {}
+    for ceiling in right_edges:
+        passing[ceiling] = {}
+        failing[ceiling] = {}
+        for i in range(len(periods)): 
+            period = periods[i]
+            passing[ceiling][period] = set()
+            failing[ceiling][period] = set()
+            for posid in posids:
+                if posid in errors[period]:
+                    if errors[period][posid] <= ceiling:
+                        passing[ceiling][period].add(str(posid))
+                    else:
+                        failing[ceiling][period].add(str(posid))
+                elif i > 0:
+                    previous = periods[i-1]
+                    previously_passed = posid in passing[ceiling][previous]
+                    previously_failed = posid in failing[ceiling][previous]
+                    if previously_passed:
+                        passing[ceiling][period].add(posid)
+                    elif previously_failed:
+                        failing[ceiling][period].add(posid)
+                    else:
+                        pass # positioner not measured yet by this period
+                else:
+                    pass # positioner not measured yet in first period
+        print(f'Pass/fails binned for ceiling {ceiling} ({right_edges.tolist().index(ceiling):.3f} of {len(right_edges)})')
+    passing_counts = {}
+    failing_counts = {}
+    total_known = {}
+    passing_fracs = {}
+    failing_fracs = {}
+    for ceiling in right_edges:
+        passing_counts[ceiling] = []
+        failing_counts[ceiling] = []
+        for period in periods:
+            n_pass = len(passing[ceiling][period])
+            n_fail = len(failing[ceiling][period])
+            passing_counts[ceiling].append(n_pass)
+            failing_counts[ceiling].append(n_fail)
+        passing_counts[ceiling] = np.array(passing_counts[ceiling])
+        failing_counts[ceiling] = np.array(failing_counts[ceiling])
+        total_known[ceiling] = passing_counts[ceiling] + failing_counts[ceiling]
+        passing_fracs[ceiling] = passing_counts[ceiling] / total_known[ceiling]
+        failing_fracs[ceiling] = failing_counts[ceiling] / total_known[ceiling]
+    plt.subplot(2,2,1)
+    _plot_error_series(periods, passing_counts, 'NUM PASSING')
+    plt.subplot(2,2,2)
+    _plot_error_series(periods, failing_counts, 'NUM FAILING')
+    plt.subplot(2,2,3)
+    _plot_error_series(periods, passing_fracs, 'FRACTION PASSING')
+    plt.subplot(2,2,4)
+    _plot_error_series(periods, failing_fracs, 'FRACTION FAILING')
     _save_and_close_plot(fig, savepath)
+    return errors, passing_counts, failing_counts, total_known, passing_fracs, failing_fracs
     
 def read(path):
     '''Reads in data for plotting, from csv files generated by fit_posparams.
@@ -219,4 +274,24 @@ def _save_and_close_plot(fig, savepath):
     handle to close, and the path where to save the image. Extension determines
     image format.'''
     plt.savefig(savepath, bbox_inches='tight')
-    plt.close(fig)    
+    plt.close(fig)
+
+def _plot_error_series(x, y, ylabel=''):
+    '''Internal common plotting for error series. x is vector of dates in
+    seconds since epoch. y is dict with keys = error ceilings and values =
+    vectors of some count or fraction to be plotted. ylabel is self-explanatory.
+    '''
+    for ceiling, counts in y.items():
+        plt.plot(x, counts, label=f'fit err <= {ceiling:5.3f}')
+    tick_values, tick_labels = _ticks(x)
+    plt.xticks(tick_values, tick_labels, rotation=90, horizontalalignment='center', fontsize=8)
+    plt.ylabel(ylabel)
+    plt.legend()
+    
+def _ticks(times):
+    '''Internal common function to generate tick values and labels, given a
+    vector of dates in seconds since epoch.'''
+    tick_values = np.arange(times[0], times[-1]+day_in_sec, tick_period_days*day_in_sec)
+    tick_labels = [Time(t, format='unix', out_subfmt='date').iso for t in tick_values]
+    return tick_values, tick_labels
+   
