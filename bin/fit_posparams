@@ -30,24 +30,8 @@ Data sources:
         /global/cfs/cdirs/desi/engineering/fvc/desimeter/v0.2.0/positioners-3/
 """
 
-import os
-import sys
-import cProfile, pstats
-import math
-import numpy as np
-import time
-import multiprocessing
-from pkg_resources import resource_filename
-from astropy.table import Table
-from astropy.time import Time
-import argparse
-import glob
-
-# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
-import desimeter.posparams.fitter as fitter
-import desimeter.transform.ptl2fp as ptl2fp
-
 # command line argument parsing
+import argparse
 description = 'Fits fiber positioner calibration parameters. Fits are ' + \
               'performed by comparing measured  (x,y) to internally-' + \
               'tracked (theta,phi).'
@@ -72,6 +56,23 @@ parser.add_argument('-q', '--quiet', action='store_true',
 parser.add_argument('-l', '--logging', action='store_true',
                     help='log terminal print outs to file')
 args = parser.parse_args()
+
+# proceed with the rest
+import os
+import sys
+import cProfile, pstats
+import math
+import numpy as np
+import time
+import multiprocessing
+from pkg_resources import resource_filename
+from astropy.table import Table
+from astropy.time import Time
+import glob
+
+# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
+import desimeter.posparams.fitter as fitter
+import desimeter.transform.ptl2fp as ptl2fp
 
 # paths
 desimeter_data_dir = resource_filename("desimeter", "data")
@@ -135,13 +136,14 @@ if not csv_files:
 tables = {}
 required_keys = {'DATE', 'POS_P', 'POS_T', 'X_FP', 'Y_FP', 'CTRL_ENABLED',
                  'TOTAL_MOVE_SEQUENCES'}
+printlog(f'Now reading {len(csv_files)} csv data files...')
 for posid, path in csv_files.items():
     table = Table.read(path)
     table.sort('DATE')
     key_search = [key in table.columns for key in required_keys]
     if all(key_search):
         tables[posid] = table
-        printlog(f'{posid}: Read from {path}')
+        # printlog(f'{posid}: Read from {path}') # something buggy about this particular print, ghosts of it keep appearing in stdout later on
 posids = sorted(csv_files.keys())
 
 def _drop_empty_tables():
@@ -210,15 +212,17 @@ for posid, table in tables.items():
     for func in bad_row_funcs:
         bad_rows = func(table)
         table.remove_rows(bad_rows)
+        if len(table) == 0:
+            break
     final_len = len(table)
     printlog(f'{posid}: dropped {initial_len - final_len} of {initial_len} non-conforming data rows')
-_drop_empty_tables() # in case the row filtering left any tables newly empty
+_drop_empty_tables()
 
 # add column for seconds-since-epoch version of date to data frames
 for posid, table in tables.items():
     dates = table['DATE']
     table['DATE_SEC'] = Time(dates, format='iso').unix
-    printlog(f'{posid}: generated seconds-since-epoch column (\'TIME\')')
+    printlog(f'{posid}: generated seconds-since-epoch column (\'DATE_SEC\')')
 
 # data selectors
 def select_by_index(table, start=0, final=-1):
@@ -399,13 +403,13 @@ if __name__ == '__main__':
     printlog(f'Total analysis cases: {len(cases)}')
     cases = list(set(cases))
     printlog(f'Reduced to: {len(cases)} unique cases')
-	
+
     # FIRST-PASS:  STATIC PARAMETERS
     static_out, static_file = process(mode='static',
                                       cases=cases,
                                       nominals=param_nominals.copy(),
                                       savedir=save_dir)
-
+	
     # DECIDE ON BEST STATIC PARAMS
     if profile_one_job:
         best_static = static_out
@@ -420,13 +424,13 @@ if __name__ == '__main__':
             these_best = {key:static_params_group_func(selection[key]) for key in fitter.static_keys}
             best_static[posid].update(these_best)
             printlog(f'{posid}: Selected best static params = {dict_str(best_static[posid])}')
-
+	
     # SECOND-PASS:  DYNAMIC PARAMETERS
     dynamic_out, dynamic_file = process(mode='dynamic',
                                         cases=cases,
                                         nominals=best_static,
                                         savedir=save_dir)
-
+	
     if profile_one_job:
         sys.exit()  # in this case our work is done
 

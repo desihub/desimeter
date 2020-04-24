@@ -1,25 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Plots fiber positioner parameters as best-fit by fit_params.
+Plots fiber positioner parameters as best-fit by fit_posparams. Also plots
+cumulative positioner errors over time, as calculated when performing those
+best-fits.
 """
-import os
-import sys
-import argparse
-from astropy.table import Table
-from astropy.time import Time
-import multiprocessing
-import time
-
-# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
-import desimeter.posparams.plotter as plotter
-import desimeter.posparams.fitter as fitter
 
 # command line argument parsing
-description = 'Plots fiber positioner parameters as best-fit by fit_params.'
-parser = argparse.ArgumentParser(description=description)
+import argparse
+import math
+parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('-i', '--infile', type=str, required=True,
-                    help='path(s) to input csv file containing "merged" data from fit_params')
+                    help='path to input csv file containing "merged" data from fit_posparams')
 parser.add_argument('-o', '--outdir', type=str, required=True,
                     help='path to directory where to save output plot files')
 parser.add_argument('-np', '--n_processes_max', type=int, default=None,
@@ -28,39 +20,56 @@ parser.add_argument('-q', '--quiet', action='store_true',
                     help='reduce verbosity of print outs at terminal')
 parser.add_argument('-t', '--test_mode', action='store_true',
                     help='test mode, only plots results for the first positioner')
+parser.add_argument('-sb', '--skip_bestfits', action='store_true',
+                    help='skip generating plot of best-fit results for each positioner')
+parser.add_argument('-sp', '--skip_passfail', action='store_true',
+                    help='skip generating single plot binning historical pass/fail for all positioners (also saves bins as json)')
+parser.add_argument('-b', '--bins', default=[0, 0.03, 0.1, 0.2, 0.5, 1.0, math.inf],
+                    help='set error bins, int or sequence, works approx like "bins" arg of numpy.hist() function (c.f. desimeter/posparams/plotter.py)')
+parser.add_argument('-d', '--dynamic_passfail', action='store_true',
+                    help='uses "dynamic" best-fit error (variable SCALE_T and SCALE_P) for pass/fail binning')
 args = parser.parse_args()
 
+# proceed with the rest
+import os
+import numpy as np
+import multiprocessing
+import time
+import json
+
+# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
+import desimeter.posparams.plotter as plotter
+import desimeter.posparams.fitter as fitter
+
 # read up on yer data thar, kiddo
-merged_path = args.infile
-if os.path.exists(merged_path):
-    merged = Table.read(merged_path, format='csv')
-    dynamic_path = merged_path.split('merged.csv')[0] + 'dynamic.csv'
-    if os.path.exists(dynamic_path):
-        dynamic = Table.read(dynamic_path, format='csv')
-    else:
-        dynamic = None
-        print('No "dynamic" results file found to match the "merged". This ' +
-              'isn\'t catastrophic, but limits some information available to plot.')
-else:
-    print('File not found: ' + merged_path)
-    sys.exit()
+merged_path = os.path.realpath(args.infile)
+merged, dynamic = plotter.read(merged_path)
 
 # save path
-save_dir = args.outdir
+save_dir = os.path.realpath(args.outdir)
 if not os.path.isdir(save_dir):
     os.path.os.makedirs(save_dir)
-analysis_timestamp = merged_path.split('_')[0]
-    
-if 'DATA_END_DATE_SEC' in merged.columns: # column not present in 2020-04-15 batch run data
-    merged['DATE_SEC'] = merged['DATA_END_DATE_SEC']
-else:
-    merged['DATE_SEC'] = Time(merged['DATA_END_DATE']).unix
-posids = sorted(set(merged['POS_ID']))
-num_posids = len(posids)
-num_plots = num_posids if not args.test_mode else 1
-posids_to_plot = [posids[i] for i in range(num_plots)]
+analysis_timestamp = os.path.basename(merged_path).split('_')[0]
 
-if __name__ == '__main__':
+if not args.skip_passfail:
+    mode = 'dynamic' if args.dynamic_passfail else 'static'
+    prefix =  os.path.join(save_dir, analysis_timestamp + '_' + mode)
+    plot_path = prefix + plotter.img_ext
+    binned = plotter.bin_errors(merged, bins=args.bins, mode=mode)
+    title = 'POSITIONER PASS/FAIL COUNTS\n'
+    title += f'errors calculated by best-fit of {mode} calibration parameters\n'
+    title += f'analysis data source: {analysis_timestamp}'
+    plotter.plot_passfail(binned, savepath=plot_path, title=title)
+    binned_path = prefix + '.json'
+    with open(binned_path, 'w') as file:
+        json.dump(binned, file, indent=4)
+    print(f'Pass/fail binned data saved to: {binned_path}')
+
+if __name__ == '__main__' and not args.skip_bestfits:
+    posids = sorted(set(merged['POS_ID']))
+    num_posids = len(posids)
+    num_plots = num_posids if not args.test_mode else 1
+    posids_to_plot = [posids[i] for i in range(num_plots)]
     mp_results = {}
     with multiprocessing.Pool(processes=args.n_processes_max) as pool:
         for posid in posids_to_plot:
