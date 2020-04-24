@@ -176,19 +176,19 @@ class TestZhaoBurge(_TestFVC2FP, unittest.TestCase):
         cls.TransformClass = FVCFP_ZhaoBurge
 
     def test_reduce_expand(self):
-        from desimeter.transform.fvc2fp.zb import _reduce_xyfvc, _expand_xyfvc
+        from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
+        trans = FVCFP_ZhaoBurge()
         x1, y1 = np.random.uniform(2000,4000, size=(2,100))
-        rx, ry = _reduce_xyfvc(x1, y1)
-        x2, y2 = _expand_xyfvc(rx, ry)
+        rx, ry = trans._reduce_xyfvc(x1, y1)
+        x2, y2 = trans._expand_xyfvc(rx, ry)
         self.assertTrue(np.all(np.abs(rx)<1))
         self.assertTrue(np.all(np.abs(ry)<1))
         self.assertTrue(np.allclose(x1, x2))
         self.assertTrue(np.allclose(y1, y2))
 
-        from desimeter.transform.fvc2fp.zb import _reduce_xyfp, _expand_xyfp
         x1, y1 = np.random.uniform(-300, 300, size=(2,100))
-        rx, ry = _reduce_xyfp(x1, y1)
-        x2, y2 = _expand_xyfp(rx, ry)
+        rx, ry = trans._reduce_xyfp(x1, y1)
+        x2, y2 = trans._expand_xyfp(rx, ry)
         self.assertTrue(np.all(np.abs(rx)<1))
         self.assertTrue(np.all(np.abs(ry)<1))
         self.assertTrue(np.allclose(x1, x2))

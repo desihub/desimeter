@@ -4,8 +4,7 @@ Utility functions to fit and apply coordinates transformation from FVC to FP
 
 import os
 import json
-from pkg_resources import resource_filename
-
+from desimeter.io import load_metrology
 import numpy as np
 from astropy.table import Table,Column
 
@@ -15,43 +14,54 @@ from desimeter.log import get_logger
 from .base import FVC2FP_Base
 from desimeter.transform.zhaoburge import getZhaoBurgeXY, getZhaoBurgeTerm, transform, fit_scale_rotation_offset, fitZhaoBurge
 
-#- Utility transforms to/from reduced [-1,1] coordinates
-def _reduce_xyfp(x, y):
-    """
-    Rescale FP xy coordinates [-420,420] -> [-1,1] and flip x axis
-    """
-    a = 420.0
-    return -x/a, y/a
 
-def _expand_xyfp(x, y):
-    """
-    Undo _redux_xyfp() transform
-    """
-    a = 420.0
-    return -x*a, y*a
-
-def _reduce_xyfvc(x, y):
-    """
-    Rescale FVC xy pix coords [0,6000] -> [-1,1]
-    """
-    c = 3000.0
-    return (x-c)/c, (y-c)/c
-
-def _expand_xyfvc(x, y):
-    """
-    Undo _redux_xyfvc() transform
-    """
-    c = 3000.0
-    return (x+1)*c, (y+1)*c
 
 
 #-------------------------------------------------------------------------
 
 class FVCFP_ZhaoBurge(FVC2FP_Base):
+
+    def __init__(self):
+        self.xfvc_scale  = -3000.
+        self.yfvc_scale  = 3000.
+        self.xfvc_offset = 3000.
+        self.yfvc_offset = 3000.
+        
+    #- Utility transforms to/from reduced [-1,1] coordinates
+    def _reduce_xyfp(self, x, y):
+        """
+        Rescale FP xy coordinates [-420,420] -> [-1,1] and flip x axis
+        """
+        a = 420.0
+        return x/a, y/a
+
+    def _expand_xyfp(self, x, y):
+        """
+        Undo _redux_xyfp() transform
+        """
+        a = 420.0
+        return x*a, y*a
+    
+    def _reduce_xyfvc(self, x, y):
+        """
+        Rescale FVC xy pix coords  -> [-1,1]
+        """
+        return (x-self.xfvc_offset)/self.xfvc_scale, (y-self.yfvc_offset)/self.yfvc_scale
+
+    def _expand_xyfvc(self, x, y):
+        """
+        Undo _redux_xyfvc() transform
+        """
+        return x*self.xfvc_scale+self.xfvc_offset, y*self.yfvc_scale+self.yfvc_offset
+    
     def tojson(self):
         params = dict()
         params['method'] = 'Zhao-Burge'
         params['version'] = '2'
+        params['xfvc_scale'] = self.xfvc_scale
+        params['yfvc_scale'] = self.yfvc_scale
+        params['xfvc_offset'] = self.xfvc_offset
+        params['yfvc_offset'] = self.yfvc_offset
         params['scale'] = self.scale
         params['rotation'] = self.rotation
         params['offset_x'] = self.offset_x
@@ -81,6 +91,12 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
             tx.zbcoeffs = np.asarray(params['zbcoeffs'])
         else :
             raise RuntimeError("don't know version {}".format(version))
+
+        if 'xfvc_scale' in params  : tx.xfvc_scale = params['xfvc_scale']
+        if 'yfvc_scale' in params  : tx.yfvc_scale = params['yfvc_scale']
+        if 'xfvc_offset' in params : tx.xfvc_offset = params['xfvc_offset']
+        if 'yfvc_offset' in params : tx.yfvc_offset = params['yfvc_offset']
+        
         return tx
 
     def fit(self, spots, metrology=None, update_spots=False):
@@ -89,12 +105,7 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         if metrology is not None:
             self.metrology = metrology
         else:
-            filename = resource_filename('desimeter',"data/fp-metrology.csv")
-            if not os.path.isfile(filename) :
-                log.error("cannot find {}".format(filename))
-                raise IOError("cannot find {}".format(filename))
-            log.info("reading fiducials metrology in {}".format(filename))
-            self.metrology = Table.read(filename,format="csv")
+            self.metrology = load_metrology()
 
         #- Trim spots to just fiducial spots (not posioners, not unmatchs spots)
         ii = (spots['LOCATION']>0) & (spots['PINHOLE_ID']>0)
@@ -113,8 +124,8 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         assert np.all(fidspots['PINHOLE_ID'] == metrology['PINHOLE_ID'])
 
         #- Get reduced coordinates
-        rxpix, rypix = _reduce_xyfvc(fidspots['XPIX'], fidspots['YPIX'])
-        rxfp, ryfp = _reduce_xyfp(metrology['X_FP'], metrology['Y_FP'])
+        rxpix, rypix = self._reduce_xyfvc(fidspots['XPIX'], fidspots['YPIX'])
+        rxfp, ryfp = self._reduce_xyfp(metrology['X_FP'], metrology['Y_FP'])
 
         #- Perform fit
         #- Perform fit
@@ -170,17 +181,17 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         """
         Converts fiber view camera pixel x,y -> focal plane x,y
         """
-        rx, ry = _reduce_xyfvc(xpix, ypix)
+        rx, ry = self._reduce_xyfvc(xpix, ypix)
         rxfp, ryfp = transform(rx, ry, self.scale, self.rotation,
             self.offset_x, self.offset_y, self.zbpolids, self.zbcoeffs)
-        xfp, yfp = _expand_xyfp(rxfp, ryfp)
+        xfp, yfp = self._expand_xyfp(rxfp, ryfp)
         return xfp, yfp
 
     def fp2fvc(self, xfp, yfp):
         """
         Converts focal plane x,y -> fiber view camera pixel x,y
         """
-        rxfp, ryfp = _reduce_xyfp(xfp, yfp)
+        rxfp, ryfp = self._reduce_xyfp(xfp, yfp)
 
         #- first undo Zhao-Burge terms
         #- Iteratively find the correction, since we aren't interested
@@ -207,6 +218,6 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         xx -= self.offset_x
         yy -= self.offset_y
 
-        xpix, ypix = _expand_xyfvc(xx, yy)
+        xpix, ypix = self._expand_xyfvc(xx, yy)
 
         return xpix, ypix
