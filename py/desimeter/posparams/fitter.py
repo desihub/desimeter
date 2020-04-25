@@ -62,7 +62,6 @@ def fit_params(posintT, posintP, ptlX, ptlY,
                nominals=default_values,
                bounds=default_bounds,
                keep_fixed=[],
-               description='',
                ):
     '''Best-fit function for parameters used in the transformation between
     internally-tracked (theta,phi) and externally measured (x,y).
@@ -91,14 +90,10 @@ def fit_params(posintT, posintP, ptlX, ptlY,
         
         keep_fixed  ... list of any parameters you want forced to their nominal
                         values, and then never varied, when doing the best-fit.
-                        
-        description ... pass-thru for optional string, allows easier job-tracking
-                        when multiprocessing
                               
     OUTPUTS:
         best_params ... dict of best-fit results, keys = param names
         final_err   ... numeric error of the best-fit params
-        description ... unchanged from input arg
     '''
     # arg checking
     assert len(posintT) == len(posintP) == len(ptlX) == len(ptlY)
@@ -191,7 +186,7 @@ def fit_params(posintT, posintP, ptlX, ptlY,
     best_params.update(fixed_params)
     best_params['OFFSET_T'] = wrap_at_180(best_params['OFFSET_T'])
     err = err_norm(optimizer_result.x)
-    return best_params, err, description
+    return best_params, err
 
 def wrap_at_180(angle):
     angle %= 360
