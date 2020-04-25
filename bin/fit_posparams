@@ -53,6 +53,13 @@ parser.add_argument('-q', '--quiet', action='store_true',
                     help='reduce verbosity of print outs at terminal')
 args = parser.parse_args()
 
+# verbosity control
+verbose = not args.quiet
+import builtins
+def print(*args, **kwargs):
+    if verbose:
+        return builtins.print(*args, **kwargs)
+
 # proceed with the rest
 import os
 import sys
@@ -205,12 +212,14 @@ if __name__ == '__main__':
                       'data_window': args.data_window,
                       'savedir': args.outdir,
                       'static_quantile': args.static_quantile,
-                      'verbose': not(args.quiet)
                       }
             if args.n_processes_max == 1:
-                fithandler.run_best_fits(**kwargs)
+                logstr = fithandler.run_best_fits(**kwargs)
+                print(logstr)
             else:
-                pool.apply_async(fithandler.run_best_fits, kwds=kwargs)
+                result = pool.apply_async(fithandler.run_best_fits,
+                                          kwds=kwargs,
+                                          callback=print)
         pool.close()
         pool.join()
     print('Complete.')
