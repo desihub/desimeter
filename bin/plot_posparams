@@ -24,7 +24,7 @@ parser.add_argument('-sb', '--skip_bestfits', action='store_true',
                     help='skip generating plot of best-fit results for each positioner')
 parser.add_argument('-sp', '--skip_passfail', action='store_true',
                     help='skip generating single plot binning historical pass/fail for all positioners (also saves bins as json)')
-parser.add_argument('-b', '--bins', default=[0, 0.03, 0.1, 0.2, 0.5, 1.0, math.inf],
+parser.add_argument('-b', '--bins', default=[0, 0.05, 0.1, 0.25, 0.5, .75, 1.0, math.inf],
                     help='set error bins, int or sequence, works approx like "bins" arg of numpy.hist() function (c.f. desimeter/posparams/plotter.py)')
 parser.add_argument('-d', '--dynamic_passfail', action='store_true',
                     help='uses "dynamic" best-fit error (variable SCALE_T and SCALE_P) for pass/fail binning')
@@ -32,10 +32,10 @@ args = parser.parse_args()
 
 # proceed with the rest
 import os
-import numpy as np
 import multiprocessing
 import time
 import json
+import gzip
 
 # imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
 import desimeter.posparams.plotter as plotter
@@ -60,9 +60,9 @@ if not args.skip_passfail:
     title += f'errors calculated by best-fit of {mode} calibration parameters\n'
     title += f'analysis data source: {analysis_timestamp}'
     plotter.plot_passfail(binned, savepath=plot_path, title=title)
-    binned_path = prefix + '.json'
-    with open(binned_path, 'w') as file:
-        json.dump(binned, file, indent=4)
+    binned_path = prefix + '.json.gzip'
+    with gzip.open(binned_path, 'wt', encoding='ascii') as zipfile:
+        json.dump(binned, zipfile)
     print(f'Pass/fail binned data saved to: {binned_path}')
 
 if __name__ == '__main__' and not args.skip_bestfits:
