@@ -336,18 +336,18 @@ param_subplot_defs = [
 # plot definitions for pass/fail subplots
 passfail_plot_defs = [
     {'key': 'passing_counts',
-     'ylabel': 'NUM PASSING',
+     'ylabel': 'NUM WITHIN THRESHOLD',
      'suffix': '_pass_num'},
     
     {'key': 'failing_counts',
-     'ylabel': 'NUM FAILING',
+     'ylabel': 'NUM EXCEEDING THRESHOLD',
      'suffix': '_fail_num'},
     
     {'key': 'passing_fracs',
-     'ylabel': 'FRACTION PASSING',
+     'ylabel': 'FRACTION WITHIN THRESHOLD',
      'suffix': '_pass_frac'},
     
     {'key': 'failing_fracs',
-     'ylabel': 'FRACTION FAILING',
+     'ylabel': 'FRACTION EXCEEDING THRESHOLD',
      'suffix': '_fail_frac'},
     ]
