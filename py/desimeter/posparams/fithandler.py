@@ -136,6 +136,8 @@ def _process_cases(table, cases, mode, param_nominals):
                                         posintP=xytp_data['posintP'],
                                         ptlX=xytp_data['ptlX'],
                                         ptlY=xytp_data['ptlY'],
+                                        gearT=xytp_data['gearT'],
+                                        gearP=xytp_data['gearP'],
                                         mode=mode,
                                         nominals=param_nominals,
                                         bounds=fitter.default_bounds,
@@ -184,6 +186,8 @@ def _select_by_index(table, start=0, final=-1):
     data['posintP'] = subtable['POS_P'].tolist()
     data['ptlX'] = subtable['X_PTL'].tolist()
     data['ptlY'] = subtable['Y_PTL'].tolist()
+    data['gearT'] = subtable['GEAR_CALIB_T'].tolist()
+    data['gearP'] = subtable['GEAR_CALIB_P'].tolist()    
     return data, subtable
 
 def _dict_str(d):
