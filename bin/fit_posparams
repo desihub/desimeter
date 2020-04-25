@@ -211,4 +211,6 @@ if __name__ == '__main__':
                 fithandler.run_best_fits(**kwargs)
             else:
                 pool.apply_async(fithandler.run_best_fits, kwds=kwargs)
+        pool.close()
+        pool.join()
     print('Complete.')
