@@ -63,10 +63,6 @@ def run_best_fits(table, datum_dates, data_window, savedir, static_quantile):
                                  param_nominals=best_static)
 
     # MERGED STATIC + DYNAMIC
-    #static_out.sort(['POS_ID','DATA_END_DATE'])
-    #dynamic_out.sort(['POS_ID','DATA_END_DATE'])
-    # why non-unique rows in output?
-    # I think because i lost my dict of cases --> unique cases only logic
     merged = join(static_out, dynamic_out, keys=['POS_ID', 'DATA_END_DATE_SEC'])
     merged.sort(['POS_ID','DATA_END_DATE_SEC'])
     merged_filepath = os.path.join(savedir, posid + '_paramfits.csv')
@@ -110,7 +106,8 @@ def _define_cases(table, datum_dates, data_window):
             continue  # skip ahead and try the next datum date
         case = {'start_idx': start_idxs[I],
                 'final_idx': final_idxs[J]}
-        cases.append(case)
+        if case not in cases:
+            cases.append(case)
     posid = table['POS_ID'][0]
     print(f'{posid}: {len(cases):5d} analysis cases defined')
     return cases
