@@ -63,16 +63,11 @@ def print(*args, **kwargs):
 # proceed with the rest
 import os
 import sys
-import math
-import numpy as np
 import multiprocessing
 from pkg_resources import resource_filename
-from astropy.table import Table
-from astropy.time import Time
 import glob
 
 # imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
-import desimeter.transform.ptl2fp as ptl2fp
 import desimeter.posparams.fithandler as fithandler
 
 # paths
@@ -84,10 +79,6 @@ for s in args.infiles:
 infiles = [os.path.realpath(p) for p in infiles]
 if not os.path.isdir(args.outdir):
     os.path.os.makedirs(args.outdir)
-def now_str_for_file():
-    '''Returns a string verson of current time with format like yyyymmddTHHMMSS.'''
-    return Time.now().isot.replace('-','').replace(':','')[:-4]
-file_timestamp_str = now_str_for_file()
 
 # parse out the posids from filenames
 csv_files = {}
@@ -103,112 +94,13 @@ if not csv_files:
     print('No recognizable csv files found for analysis.')
     sys.exit()
 
-# read data
-tables = {}
-required_keys = {'DATE', 'POS_P', 'POS_T', 'X_FP', 'Y_FP', 'CTRL_ENABLED',
-                 'TOTAL_MOVE_SEQUENCES'}
-print(f'Now reading {len(csv_files)} csv data files...')
-for posid, path in csv_files.items():
-    table = Table.read(path)
-    table.sort('DATE')
-    key_search = [key in table.columns for key in required_keys]
-    if all(key_search):
-        tables[posid] = table
-        print(f'{posid}: Read from {path}')
-posids = sorted(csv_files.keys())
-
-def _drop_empty_tables():
-    '''Eliminates any empty tables.'''
-    for posid in set(tables.keys()):
-        if len(tables[posid]) == 0:
-            del posids[posids.index(posid)]
-            del tables[posid]
-            print(f'{posid}: dropped from analysis (no data)')
-_drop_empty_tables()
-
-# fix types, since astropy seems to kind of suck at this
-def str2bool(s):
-    return s in {'True', 'true', 'TRUE', True, 1, 'Yes', 'yes', 'YES'}
-typecast_funcs = {'CTRL_ENABLED':str2bool}
-for table in tables.values():
-    for key,func in typecast_funcs.items():
-        table[key] = [func(val) for val in table[key]]
-
-# obtain xy in petal coordinate system
-for posid in tables:
-    ptlXYZ = ptl2fp.fp2ptl(petal_loc=tables[posid]['PETAL_LOC'][0],
-                           x_fp=tables[posid]['X_FP'],
-                           y_fp=tables[posid]['Y_FP'],
-                           z_fp=None)
-    tables[posid]['X_PTL'] = ptlXYZ[0]
-    tables[posid]['Y_PTL'] = ptlXYZ[1]
-    print(f'{posid}: (X_FP, Y_FP) converted to (X_PTL, Y_PTL)')
-
-# filter functions for identifying bad rows
-def _np_diff_with_prepend(array, prepend):
-    '''For numpy users v1.16 and earlier, where no prepend arg available in the
-    diff function. Can perhaps be replaced in future by direct usage of
-    np.diff(array, prepend=prepend). This wrapper function only works for scalar
-    values of prepend.'''
-    prepend_array = np.array([prepend])
-    prepended = np.concatenate((prepend_array, np.array(array)))
-    return np.diff(prepended)
-
-def _ctrl_not_enabled(table):
-    '''Returns array of bools whether control was enabled in each row of table.'''
-    return table['CTRL_ENABLED'] == False
-
-def _no_move_performed(table):
-    '''Returns array of bools whether a move was performed in each row of table.
-    Always assumed True for first row.'''
-    dummy = table['TOTAL_MOVE_SEQUENCES'][0] - 1
-    moveseq_diff = _np_diff_with_prepend(table['TOTAL_MOVE_SEQUENCES'], prepend=dummy)
-    return moveseq_diff == 0
-
-def _no_cruise_performed(table):
-    '''Returns array of bools whether a cruise move was performed in each row
-    of table. Always assumed True for first row.'''
-    dummyT = table['TOTAL_MOVE_SEQUENCES'][0] - 1
-    dummyP = table['TOTAL_MOVE_SEQUENCES'][0] - 1
-    cruiseT_diff = _np_diff_with_prepend(table['TOTAL_CRUISE_MOVES_T'], prepend=dummyT)
-    cruiseP_diff = _np_diff_with_prepend(table['TOTAL_CRUISE_MOVES_P'], prepend=dummyP)
-    return cruiseT_diff + cruiseP_diff == 0 # these diffs are always >= 0 for sorted table input
-
-# which filter functions to apply
-bad_row_funcs = [_ctrl_not_enabled, _no_move_performed] # JHS 2020-04-16 Intentionally not including no_cruise_performed()
-
-# remove bad rows
-for posid, table in tables.items():
-    initial_len = len(table)
-    for func in bad_row_funcs:
-        bad_rows = func(table)
-        table.remove_rows(bad_rows)
-        if len(table) == 0:
-            break
-    final_len = len(table)
-    print(f'{posid}: dropped {initial_len - final_len} of {initial_len} non-conforming data rows')
-_drop_empty_tables()
-
-# add column for seconds-since-epoch version of date to data frames
-for posid, table in tables.items():
-    dates = table['DATE']
-    table['DATE_SEC'] = Time(dates, format='iso').unix
-    print(f'{posid}: generated seconds-since-epoch column (\'DATE_SEC\')')
-
-# find date range of all data and assign datum dates
-period_sec = args.period_days * 24 * 60 * 60
-first = math.inf
-last = -math.inf
-for table in tables.values():
-    first = min(first, table['DATE_SEC'][0])
-    last = max(last, table['DATE_SEC'][-1])
-datum_dates = np.arange(first, last, period_sec).tolist()
-
 if __name__ == '__main__':
+    print(f'Now processing {len(csv_files)} csv data files...')
     with multiprocessing.Pool(processes=args.n_processes_max) as pool:
-        for posid, table in tables.items():
-            kwargs = {'table': table,
-                      'datum_dates': datum_dates,
+        for posid, path in csv_files.items():
+            kwargs = {'posid': posid,
+                      'path': path,
+                      'period_days': args.period_days,
                       'data_window': args.data_window,
                       'savedir': args.outdir,
                       'static_quantile': args.static_quantile,

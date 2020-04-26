@@ -13,6 +13,7 @@ from astropy.table import join
 
 # imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
 import desimeter.posparams.fitter as fitter
+import desimeter.transform.ptl2fp as ptl2fp
 
 # column headers for processed results of best-fits
 # boolean says whether it has "STATIC"/"DYNAMIC" options
@@ -27,12 +28,13 @@ output_keys = {'POS_ID': False,
                }
 output_keys.update({key:True for key in fitter.all_keys})
 
-def run_best_fits(table, datum_dates, data_window, savedir, static_quantile):
+def run_best_fits(posid, path, period_days, data_window, savedir, static_quantile):
     '''Define best-fit analysis cases for one positioner.
     
     INPUTS:
-        table ... astropy table of measured vs commanded data, for just one positioner
-        datum_dates ... keypoint dates at which to evaluate a window of data
+        posid ... positioner id string
+        path ... file path to csv containing measured (x,y) vs internal (t,p) data
+        period_days ... minimum number of days per best-fit
         data_window ... mininum number of data points per best-fit
         savedir ... directory to save result files
         static_quantile ... least-error group of static params to median --> overall best
@@ -41,8 +43,17 @@ def run_best_fits(table, datum_dates, data_window, savedir, static_quantile):
         logstr ... string describing (very briefly) what was done. suitable for
                    printing to stdout, etc
     '''
-    posid = table['POS_ID'][0]
-    table.sort('DATE_SEC')  # for speed, this pre-sort is ASSUMED by some sub-functions
+    table = _read(posid, path)
+    if not table:
+        return f'{posid}: dropped from analysis (invalid table)'
+    _make_petal_xy(table)
+    _apply_filters(table)
+    if not table:
+        return f'{posid}: dropped from analysis (no data remaining after filters applied)'
+    _make_sec_from_epoch(table)
+    period_sec = period_days * 24 * 60 * 60
+    datum_dates = np.arange(min(table['DATE_SEC']), max(table['DATE_SEC']), period_sec)
+    datum_dates = datum_dates.tolist()
     cases = _define_cases(table, datum_dates, data_window)
     
     # FIRST-PASS:  STATIC PARAMETERS
@@ -71,6 +82,85 @@ def run_best_fits(table, datum_dates, data_window, savedir, static_quantile):
     logstr = f'{posid}: Best-fit results on {len(cases)} data windows written to {merged_filepath}'
     return logstr
 
+def _read(posid, path):
+    '''Read csv file at path. File should contain positioner measured vs
+    commanded data. Data is appropriately type cast as necessary.
+    
+    INPUTS:  posid ... expected unique POS_ID string to be found within table
+             path ... file path to csv file for one positioner's data
+    
+    OUTPUT:  table ... astropy table or None if no valid table found
+    '''
+    required_keys = {'DATE', 'POS_P', 'POS_T', 'X_FP', 'Y_FP', 'CTRL_ENABLED',
+                     'TOTAL_MOVE_SEQUENCES', 'GEAR_CALIB_T', 'GEAR_CALIB_P',
+                     'POS_ID', 'PETAL_LOC'}
+    typecast_funcs = {'CTRL_ENABLED': _str2bool}
+    table = Table.read(path)
+    table.sort('DATE')
+    key_search = [key in table.columns for key in required_keys]
+    if table and all(key_search) and str(posid) == _get_posid(table):
+        print(f'{_get_posid(table)}: Read from {path}')
+        for key,func in typecast_funcs.items():
+            table[key] = [func(val) for val in table[key]]
+        return table
+    return None
+
+def _make_petal_xy(table):
+    '''Produces new columns for X_PTL and Y_PTL coordinates of measured (x,y)
+    data. Input is an astropy table, which is altered in-place.'''
+    ptlXYZ = ptl2fp.fp2ptl(petal_loc=table['PETAL_LOC'][0],
+                           x_fp=table['X_FP'],
+                           y_fp=table['Y_FP'],
+                           z_fp=None)
+    table['X_PTL'] = ptlXYZ[0]
+    table['Y_PTL'] = ptlXYZ[1]
+    print(f'{_get_posid(table)}: (X_FP, Y_FP) converted to (X_PTL, Y_PTL)')
+
+# Data filtering functions
+# Typically applied using the _apply_filters() function below
+def _ctrl_not_enabled(table):
+    '''Returns array of bools whether control was enabled in each row of table.'''
+    return table['CTRL_ENABLED'] == False
+
+def _no_move_performed(table):
+    '''Returns array of bools whether a move was performed in each row of table.
+    Always assumed True for first row.'''
+    table.sort('TOTAL_MOVE_SEQUENCES')
+    dummy = table['TOTAL_MOVE_SEQUENCES'][0] - 1
+    moveseq_diff = _np_diff_with_prepend(table['TOTAL_MOVE_SEQUENCES'], prepend=dummy)
+    return moveseq_diff == 0
+
+def _no_cruise_performed(table):
+    '''Returns array of bools whether a cruise move was performed in each row
+    of table. Always assumed True for first row.'''
+    table.sort('TOTAL_MOVE_SEQUENCES')
+    dummyT = table['TOTAL_MOVE_SEQUENCES'][0] - 1
+    dummyP = table['TOTAL_MOVE_SEQUENCES'][0] - 1
+    cruiseT_diff = _np_diff_with_prepend(table['TOTAL_CRUISE_MOVES_T'], prepend=dummyT)
+    cruiseP_diff = _np_diff_with_prepend(table['TOTAL_CRUISE_MOVES_P'], prepend=dummyP)
+    return cruiseT_diff + cruiseP_diff == 0 # these diffs are always >= 0 for sorted table input
+
+def _apply_filters(table, bad_row_funcs=[_ctrl_not_enabled, _no_move_performed]):
+    '''Removes bad rows from table, according to filter functions specified
+    in the list bad_row_funcs. Note as of 2020-04-16, default bad_row_funcs
+    intentionally deoes not include no_cruise_performed().
+    '''
+    initial_len = len(table)
+    for func in bad_row_funcs:
+        bad_rows = func(table)
+        table.remove_rows(bad_rows)
+        if len(table) == 0:
+            break
+    final_len = len(table)
+    print(f'{_get_posid(table)}: dropped {initial_len - final_len} of {initial_len} non-conforming data rows')
+
+def _make_sec_from_epoch(table):
+    '''Produces new column for seconds-since-epoch version of date. Input is
+    an astropy table containing column 'DATE'. The table is altered in-place.'''
+    dates = table['DATE']
+    table['DATE_SEC'] = Time(dates, format='iso').unix
+    print(f'{_get_posid(table)}: generated seconds-since-epoch column (\'DATE_SEC\')')
+
 def _define_cases(table, datum_dates, data_window):
     '''Define best-fit analysis cases for one positioner.
     
@@ -84,6 +174,7 @@ def _define_cases(table, datum_dates, data_window):
                     'start_idx' ... first data index in analyis window
                     'final_idx' ... last data index in analysis window
     '''
+    table.sort('DATE_SEC')  # for speed, _row_idx_for_time() ASSUMEs this pre-sort has been done 
     cases = []
     widths = []
     start_idxs = []
@@ -108,7 +199,7 @@ def _define_cases(table, datum_dates, data_window):
                 'final_idx': final_idxs[J]}
         if case not in cases:
             cases.append(case)
-    posid = table['POS_ID'][0]
+    posid = _get_posid(table)
     print(f'{posid}: {len(cases):5d} analysis cases defined')
     return cases
 
@@ -126,7 +217,8 @@ def _process_cases(table, cases, mode, param_nominals):
                    However any key 'X' with output_key['X'] == True gets a
                    suffix for the mode ('_STATIC' or '_DYNAMIC') appended.
     '''
-    posid = table['POS_ID'][0]
+    table.sort('DATE_SEC') # to ensure consistent ordering as in _define_cases
+    posid = _get_posid(table)
     output = {col:[] for col in output_keys}
     for case in cases:
         m = case['start_idx']
@@ -196,6 +288,15 @@ def _select_by_index(table, start=0, final=-1):
     data['gearP'] = subtable['GEAR_CALIB_P'].tolist()    
     return data, subtable
 
+def _np_diff_with_prepend(array, prepend):
+    '''For numpy users v1.16 and earlier, where no prepend arg available in the
+    diff function. Can perhaps be replaced in future by direct usage of
+    np.diff(array, prepend=prepend). This wrapper function only works for scalar
+    values of prepend.'''
+    prepend_array = np.array([prepend])
+    prepended = np.concatenate((prepend_array, np.array(array)))
+    return np.diff(prepended)
+
 def _dict_str(d):
     '''Return a string displaying formatted values in dict d.'''
     s = '{'
@@ -209,3 +310,15 @@ def _mode_suffix(mode):
     '''Return a common suffix string for mode.'''
     assert mode in {'static', 'STATIC', 'dynamic', 'DYNAMIC'}
     return '_' + mode.upper()
+
+def _str2bool(s):
+    '''Converts common string representations of booleans to bool.'''
+    return s in {'True', 'true', 'TRUE', True, 1, 'Yes', 'yes', 'YES'}
+
+def _get_posid(table):
+    '''Grabs the positioner id from an astropy table. Returns set if more than
+    one or zero posids found in table.'''
+    posid = set(table['POS_ID'])
+    if len(posid) == 1:
+        posid = posid.pop()
+    return posid
