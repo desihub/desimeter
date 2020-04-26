@@ -24,12 +24,12 @@ parser.add_argument('-sb', '--skip_bestfits', action='store_true',
                     help='skip generating plot of best-fit results for each positioner')
 parser.add_argument('-sp', '--skip_passfail', action='store_true',
                     help='skip generating single plot binning historical pass/fail for all positioners (also saves bins as json)')
-parser.add_argument('-b', '--bins', default=[0, 0.05, 0.1, 0.25, 0.5, .75, 1.0, math.inf],
+parser.add_argument('-b', '--bins', default=[0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, math.inf],
                     help='set error bins, int or sequence, works approx like "bins" arg of numpy.hist() function (c.f. desimeter/posparams/plotter.py)')
 parser.add_argument('-d', '--dynamic_passfail', action='store_true',
                     help='uses "dynamic" best-fit error (variable SCALE_T and SCALE_P) for pass/fail binning')
-parser.add_argument('-q', '--quiet', action='store_true',
-                    help='reduce verbosity of print outs at terminal')
+parser.add_argument('-v', '--verbose', action='store_true',
+                    help='extra verbosity of print outs at terminal')
 args = parser.parse_args()
 
 # proceed with the rest
@@ -47,11 +47,11 @@ import desimeter.posparams.plotter as plotter
 import desimeter.posparams.fitter as fitter
 
 # verbosity control
-if args.quiet:
-    def printf(*args, **kwargs):
-        pass
-else:
+if args.verbose:
     printf = print
+else:
+    def printf(*args, **kwargs):
+        pass    
 
 # paths
 infiles = []
@@ -65,6 +65,7 @@ if not os.path.isdir(save_dir):
     
 # read in data tables and stack into one
 tables = []
+print(f'Reading {len(infiles)} input files...')
 for path in infiles:
     if 'csv' in os.path.splitext(path)[-1]:
         this_table = Table.read(path, format='csv')
@@ -94,7 +95,7 @@ if not args.skip_passfail:
     binned_path = prefix + '.json.gzip'
     with gzip.open(binned_path, 'wt', encoding='ascii') as zipfile:
         json.dump(binned, zipfile)
-    printf(f'Pass/fail binned data saved to: {binned_path}')
+    print(f'Pass/fail binned data saved to: {binned_path}')
 
 if __name__ == '__main__' and not args.skip_bestfits:
     posids = sorted(set(table['POS_ID']))
@@ -112,7 +113,7 @@ if __name__ == '__main__' and not args.skip_bestfits:
             plot_args = (subtable, save_path, statics_during_dynamic)
             pool.apply_async(plotter.plot_params,
                              args=plot_args,
-                             callback=printf)
-            printf(f'Plot job added: {posid}')
+                             callback=print)
+            print(f'Plot job added: {posid}')
         pool.close()
         pool.join()

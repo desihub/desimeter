@@ -5,6 +5,7 @@ Plot time series of positioner parameters.
 
 import os
 import matplotlib.pyplot as plt
+import matplotlib.colors
 import numpy as np
 from astropy.time import Time
 
@@ -72,14 +73,14 @@ def plot_params(table, savepath, statics_during_dynamic):
                 ax_right.set_ylim((min_y, max_y))
             plt.xticks(tick_values, tick_labels, rotation=90, horizontalalignment='center', fontsize=8)
             plt.yticks(fontsize=8)
-            if key == 'SCALE_P':
+            if 'SCALE_P_DYNAMIC' in key:
                 s = statics_during_dynamic
                 plt.text(min(plt.xlim()), min(plt.ylim()),
                          f' Using static params:\n'
-                         f' LENGTH_R1 = {s["LENGTH_R1"]:>5.3f}, LENGTH_R2 = {s["LENGTH_R2"]:>5.3f}\n'
+                         f' LENGTH_R1 = {s["LENGTH_R1"]:>7.3f}, LENGTH_R2 = {s["LENGTH_R2"]:>7.3f}\n'
                          f' OFFSET_X = {s["OFFSET_X"]:>8.3f}, OFFSET_Y = {s["OFFSET_Y"]:>8.3f}\n'
                          f' OFFSET_T = {s["OFFSET_T"]:>8.3f}, OFFSET_P = {s["OFFSET_P"]:>8.3f}\n',
-                         verticalalignment='bottom')
+                         verticalalignment='bottom', fontfamily='monospace')
     analysis_date = table['ANALYSIS_DATE_DYNAMIC'][-1]
     title = f'{posid}'
     title += f'\nbest-fits to historical data'
@@ -109,9 +110,14 @@ def plot_passfail(binned, savepath, title='', printf=print):
     split = os.path.splitext(savepath)
     for p in passfail_plot_defs:
         y = binned[p['key']]
+        ceilings = list(y.keys())
+        colors = _colors(ceilings)
         fig = _init_plot(figsize=(15,10))
         for ceiling, counts in y.items():
-            plt.plot(x, counts, label=f'fit err <= {ceiling:5.3f}', linewidth=2)
+            i = ceilings.index(ceiling)
+            plt.plot(x, counts, label=f'fit err <= {ceiling:5.3f}',
+                     color=colors[i],
+                     linewidth=2)
         tick_values, tick_labels = _ticks(x)
         plt.xticks(tick_values, tick_labels, rotation=90, horizontalalignment='center')
         plt.ylabel(p['ylabel'], fontsize=14)
@@ -270,6 +276,17 @@ def _ticks(times):
     tick_values = np.arange(times[0], times[-1]+day_in_sec, tick_period_days*day_in_sec)
     tick_labels = [Time(t, format='unix', out_subfmt='date').iso for t in tick_values]
     return tick_values, tick_labels
+
+def _colors(v):
+    '''Generate colors for vector v of scalar values.'''
+    V = np.abs(v)
+    finite = np.isfinite(V)
+    Vmax = max(V[finite])
+    scaled = V / Vmax * 0.7 + 0.25
+    scaled[~finite] = np.sign(scaled[~finite])
+    hsv = [(s, 0.7, 0.7) for s in scaled]
+    colors = matplotlib.colors.hsv_to_rgb(hsv)
+    return colors
 
 # plot definitions for parameter subplots
 param_subplot_defs = [
