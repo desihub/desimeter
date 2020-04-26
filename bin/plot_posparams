@@ -18,8 +18,6 @@ parser.add_argument('-o', '--outdir', type=str, required=True,
                     help='path to directory where to save output plot files')
 parser.add_argument('-np', '--n_processes_max', type=int, default=None,
                     help='max number of processors to use')
-parser.add_argument('-q', '--quiet', action='store_true',
-                    help='reduce verbosity of print outs at terminal')
 parser.add_argument('-t', '--test_mode', action='store_true',
                     help='test mode, only plots results for the first positioner')
 parser.add_argument('-sb', '--skip_bestfits', action='store_true',
@@ -30,21 +28,30 @@ parser.add_argument('-b', '--bins', default=[0, 0.05, 0.1, 0.25, 0.5, .75, 1.0, 
                     help='set error bins, int or sequence, works approx like "bins" arg of numpy.hist() function (c.f. desimeter/posparams/plotter.py)')
 parser.add_argument('-d', '--dynamic_passfail', action='store_true',
                     help='uses "dynamic" best-fit error (variable SCALE_T and SCALE_P) for pass/fail binning')
+parser.add_argument('-q', '--quiet', action='store_true',
+                    help='reduce verbosity of print outs at terminal')
 args = parser.parse_args()
 
 # proceed with the rest
 import os
 import multiprocessing
-import time
 import json
 import gzip
 import glob
 from astropy.table import Table
 from astropy.table import vstack
+from astropy.time import Time
 
 # imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
 import desimeter.posparams.plotter as plotter
 import desimeter.posparams.fitter as fitter
+
+# verbosity control
+if args.quiet:
+    def printf(*args, **kwargs):
+        pass
+else:
+    printf = print
 
 # paths
 infiles = []
@@ -64,21 +71,30 @@ for path in infiles:
         tables += [this_table]
 table = vstack(tables)
 table.sort('POS_ID', 'DATA_END_DATE_SEC')
-analysis_timestamp = min(table['ANALYSIS_DATE_STATIC'])
+analysis_timestamp = Time(min(table['ANALYSIS_DATE_STATIC'])).iso.split('.')[0]
+analysis_timestamp_for_filename = Time(analysis_timestamp).isot.replace('-','').replace(':','')[:-4]
 
 if not args.skip_passfail:
     mode = 'dynamic' if args.dynamic_passfail else 'static'
-    prefix = os.path.join(save_dir, 'pf_' + mode)
+    prefix = os.path.join(save_dir, analysis_timestamp_for_filename + '_passfail_' + mode)
     plot_path = prefix + plotter.img_ext
-    binned = plotter.bin_errors(table, bins=args.bins, mode=mode)
-    title = 'POSITIONER PASS/FAIL COUNTS\n'
-    title += f'errors calculated by best-fit of {mode} calibration parameters\n'
-    title += f'best-fits analysis date: {analysis_timestamp}'
-    plotter.plot_passfail(binned, savepath=plot_path, title=title)
+    binned = plotter.bin_errors(table, bins=args.bins, mode=mode, printf=printf)
+    title_lines = ['POSITIONER PASS/FAIL COUNTS']
+    title_lines += [f'Errors (rms) calculated by best-fit of {mode.upper()} calib params.']
+    title_lines += [f'Best-fits analysis date: {analysis_timestamp}']
+    n_pts = table['NUM_POINTS']
+    title_lines += [f'Data windows num points: max={max(n_pts):5.1f}, min={min(n_pts):5.1f}, mean={n_pts.mean():5.1f}']
+    time_windows_sec = table['DATA_END_DATE_SEC'] - table['DATA_START_DATE_SEC']
+    time_windows_day = time_windows_sec / 60 / 60 / 24
+    title_lines += [f'Data windows num days:   max={max(time_windows_day):5.1f}, min={min(time_windows_day):5.1f}, mean={time_windows_day.mean():5.1f}']
+    max_line_len = max(len(line) for line in title_lines)
+    align = lambda string: format(string, str(max_line_len) + 's')
+    title = '\n'.join([align(line) for line in title_lines])
+    plotter.plot_passfail(binned, savepath=plot_path, title=title, printf=printf)
     binned_path = prefix + '.json.gzip'
     with gzip.open(binned_path, 'wt', encoding='ascii') as zipfile:
         json.dump(binned, zipfile)
-    print(f'Pass/fail binned data saved to: {binned_path}')
+    printf(f'Pass/fail binned data saved to: {binned_path}')
 
 if __name__ == '__main__' and not args.skip_bestfits:
     posids = sorted(set(table['POS_ID']))
@@ -94,16 +110,9 @@ if __name__ == '__main__' and not args.skip_bestfits:
             save_path = os.path.join(save_dir, posid + '_paramfits' + plotter.img_ext)
             save_path = os.path.realpath(save_path)
             plot_args = (subtable, save_path, statics_during_dynamic)
-            mp_results[posid] = pool.apply_async(plotter.plot_params, args=plot_args)
-            if not args.quiet:
-                print(f'Plot job added: {posid}')
-        while mp_results:
-            completed = set()
-            for posid, result in mp_results.items():
-                if result.ready():
-                    completed.add(posid)
-                    if not args.quiet:
-                        print(f'Plot saved: {result.get()}')
-            for posid in completed:
-                del mp_results[posid]
-            time.sleep(0.05)
+            pool.apply_async(plotter.plot_params,
+                             args=plot_args,
+                             callback=printf)
+            printf(f'Plot job added: {posid}')
+        pool.close()
+        pool.join()

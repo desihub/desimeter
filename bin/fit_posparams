@@ -110,9 +110,9 @@ if __name__ == '__main__':
                 logstr = fithandler.run_best_fits(**kwargs)
                 print(logstr)
             else:
-                result = pool.apply_async(fithandler.run_best_fits,
-                                          kwds=kwargs,
-                                          callback=print)
+                pool.apply_async(fithandler.run_best_fits,
+                                 kwds=kwargs,
+                                 callback=print)
         pool.close()
         pool.join()
     print('Complete.')

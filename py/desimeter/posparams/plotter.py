@@ -29,9 +29,8 @@ def plot_params(table, savepath, statics_during_dynamic):
                      dynamic params best-fit
         
     Outputs:
-        The plot image file is saved to savepath. Also the savepath string is
-        returned unaltered (for ease of tracking progress during multi-
-        processing).
+        The plot image file is saved to savepath. A log string is returned
+        suitable for print to stdout, stating what was done.
     '''
     fig = _init_plot()
     table.sort(DATE_SEC)
@@ -87,9 +86,9 @@ def plot_params(table, savepath, statics_during_dynamic):
     title += f'\nanalysis date: {analysis_date}'
     plt.suptitle(title)
     _save_and_close_plot(fig, savepath)
-    return savepath
+    return f'{posid}: plot saved to {savepath}'
 
-def plot_passfail(binned, savepath, title=''):
+def plot_passfail(binned, savepath, title='', printf=print):
     '''Plot time series of positioenr pass/fail groups, binned by error
     ceilings.
     
@@ -100,6 +99,8 @@ def plot_passfail(binned, savepath, title=''):
                      format.
         
         title    ... str to print at top of plot
+        
+        printf ... print function (so you can control how this module spits any messages)
         
     Outputs:
         The plot image file is saved to savepath.
@@ -116,16 +117,16 @@ def plot_passfail(binned, savepath, title=''):
         plt.ylabel(p['ylabel'], fontsize=14)
         plt.legend(title='THRESHOLDS (mm)')
         path = split[0] + p['suffix'] + split[1]
-        plt.title(title)
+        plt.title(title, fontfamily='monospace')
         plt.grid(color='0.9')
         plt.minorticks_on()
         plt.gca().tick_params(axis='x', which='minor', bottom=False)
         plt.gca().tick_params(axis='y', which='minor', right=True)
         plt.gca().tick_params(axis='y', which='both', labelleft='on', labelright='on')
         _save_and_close_plot(fig, savepath=path)
-        print(f'Pass/fail plot saved to: {path}')
+        printf(f'Pass/fail plot saved to: {path}')
     
-def bin_errors(table, bins=5, mode='static'):
+def bin_errors(table, bins=5, mode='static', printf=print):
     '''Bin the positioners over time by best-fit error.
     
     Inputs:
@@ -140,6 +141,8 @@ def bin_errors(table, bins=5, mode='static'):
         
         mode  ... 'static' or 'dynamic', indicating which best-fit error data
                   to use. (static --> SCALE_T and SCALE_P forced to 1.0)
+                  
+        printf ... print function (so you can control how this module spits any messages)
                      
     Outputs:
         binned ... dict data structure containing:
@@ -212,7 +215,7 @@ def bin_errors(table, bins=5, mode='static'):
                 fail_set |= keep_prev_fail
             passing[ceiling][period] = pass_set
             failing[ceiling][period] = fail_set
-        print(f'Pass/fails binned for ceiling {ceiling:.3f} ({bin_ceilings.tolist().index(ceiling) + 1} of {len(bin_ceilings)})')
+        printf(f'Pass/fails binned for ceiling {ceiling:.3f} ({bin_ceilings.tolist().index(ceiling) + 1} of {len(bin_ceilings)})')
     passing_counts = {}
     failing_counts = {}
     total_known = {}
