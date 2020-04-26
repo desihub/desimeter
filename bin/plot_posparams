@@ -10,8 +10,10 @@ best-fits.
 import argparse
 import math
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('-i', '--infile', type=str, required=True,
-                    help='path to input csv file containing "merged" data from fit_posparams')
+parser.add_argument('-i', '--infiles', type=str, required=True, nargs='*',
+                    help='path to input csv file(s) containing results from fit_posparams. ' \
+                         'Regex ok (like M*_paramfits.csv). Multiple file args also ok (like ' \
+                         'M0001_paramfis.csv M0002_paramfits.csv M01*.csv)')
 parser.add_argument('-o', '--outdir', type=str, required=True,
                     help='path to directory where to save output plot files')
 parser.add_argument('-np', '--n_processes_max', type=int, default=None,
@@ -36,29 +38,42 @@ import multiprocessing
 import time
 import json
 import gzip
+import glob
+from astropy.table import Table
+from astropy.table import vstack
 
 # imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
 import desimeter.posparams.plotter as plotter
 import desimeter.posparams.fitter as fitter
 
-# read up on yer data thar, kiddo
-merged_path = os.path.realpath(args.infile)
-merged, dynamic = plotter.read(merged_path)
-
-# save path
+# paths
+infiles = []
+for s in args.infiles:
+    these = glob.glob(s)
+    infiles.extend(these)
+infiles = [os.path.realpath(p) for p in infiles]
 save_dir = os.path.realpath(args.outdir)
 if not os.path.isdir(save_dir):
     os.path.os.makedirs(save_dir)
-analysis_timestamp = os.path.basename(merged_path).split('_')[0]
+    
+# read in data tables and stack into one
+tables = []
+for path in infiles:
+    if 'csv' in os.path.splitext(path)[-1]:
+        this_table = Table.read(path, format='csv')
+        tables += [this_table]
+table = vstack(tables)
+table.sort('POS_ID', 'DATA_END_DATE_SEC')
+analysis_timestamp = min(table['ANALYSIS_DATE_STATIC'])
 
 if not args.skip_passfail:
     mode = 'dynamic' if args.dynamic_passfail else 'static'
-    prefix =  os.path.join(save_dir, analysis_timestamp + '_' + mode)
+    prefix = os.path.join(save_dir, 'pf_' + mode)
     plot_path = prefix + plotter.img_ext
-    binned = plotter.bin_errors(merged, bins=args.bins, mode=mode)
+    binned = plotter.bin_errors(table, bins=args.bins, mode=mode)
     title = 'POSITIONER PASS/FAIL COUNTS\n'
     title += f'errors calculated by best-fit of {mode} calibration parameters\n'
-    title += f'analysis data source: {analysis_timestamp}'
+    title += f'best-fits analysis date: {analysis_timestamp}'
     plotter.plot_passfail(binned, savepath=plot_path, title=title)
     binned_path = prefix + '.json.gzip'
     with gzip.open(binned_path, 'wt', encoding='ascii') as zipfile:
@@ -66,21 +81,17 @@ if not args.skip_passfail:
     print(f'Pass/fail binned data saved to: {binned_path}')
 
 if __name__ == '__main__' and not args.skip_bestfits:
-    posids = sorted(set(merged['POS_ID']))
+    posids = sorted(set(table['POS_ID']))
     num_posids = len(posids)
     num_plots = num_posids if not args.test_mode else 1
     posids_to_plot = [posids[i] for i in range(num_plots)]
     mp_results = {}
     with multiprocessing.Pool(processes=args.n_processes_max) as pool:
         for posid in posids_to_plot:
-            subtable = merged[merged['POS_ID'] == posid]
-            if dynamic:
-                dynam_subtable = dynamic[dynamic['POS_ID'] == posid]
-                some_row = dynam_subtable[0]
-                statics_during_dynamic = {key:some_row[key] for key in some_row.columns if key in fitter.static_keys}
-            else:
-                statics_during_dynamic = {key:0 for key in fitter.static_keys}
-            save_path = os.path.join(save_dir, analysis_timestamp + '_' + posid + plotter.img_ext)
+            subtable = table[table['POS_ID'] == posid]
+            some_row = subtable[0]
+            statics_during_dynamic = {key:some_row[key + '_DYNAMIC'] for key in fitter.static_keys}
+            save_path = os.path.join(save_dir, posid + '_paramfits' + plotter.img_ext)
             save_path = os.path.realpath(save_path)
             plot_args = (subtable, save_path, statics_during_dynamic)
             mp_results[posid] = pool.apply_async(plotter.plot_params, args=plot_args)
