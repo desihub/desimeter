@@ -49,16 +49,9 @@ parser.add_argument('-np', '--n_processes_max', type=int, default=None,
                     help='max number of processors to use. Note: can argue 1 to avoid multiprocessing pool (useful for debugging)')
 parser.add_argument('-sq', '--static_quantile', type=float, default=0.05,
                     help='sort static param fits by fit error, take this fraction with least error, and median them to decide the single set of best values')
-parser.add_argument('-q', '--quiet', action='store_true',
-                    help='reduce verbosity of print outs at terminal')
+parser.add_argument('-v', '--verbose', action='store_true',
+                    help='extra verbosity of print outs at terminal')
 args = parser.parse_args()
-
-# verbosity control
-verbose = not args.quiet
-import builtins
-def print(*args, **kwargs):
-    if verbose:
-        return builtins.print(*args, **kwargs)
 
 # proceed with the rest
 import os
@@ -93,6 +86,13 @@ for file in infiles:
 if not csv_files:
     print('No recognizable csv files found for analysis.')
     sys.exit()
+    
+# verbosity control
+if args.verbose:
+    printf = print
+else:
+    def printf(*args, **kwargs):
+        pass
 
 if __name__ == '__main__':
     print(f'Now processing {len(csv_files)} csv data files...')
@@ -104,6 +104,7 @@ if __name__ == '__main__':
                       'data_window': args.data_window,
                       'savedir': args.outdir,
                       'static_quantile': args.static_quantile,
+                      'printf': printf,
                       }
             if args.n_processes_max == 1:
                 logstr = fithandler.run_best_fits(**kwargs)

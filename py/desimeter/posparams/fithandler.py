@@ -28,7 +28,8 @@ output_keys = {'POS_ID': False,
                }
 output_keys.update({key:True for key in fitter.all_keys})
 
-def run_best_fits(posid, path, period_days, data_window, savedir, static_quantile):
+def run_best_fits(posid, path, period_days, data_window, savedir,
+                  static_quantile, printf=print):
     '''Define best-fit analysis cases for one positioner.
     
     INPUTS:
@@ -38,27 +39,29 @@ def run_best_fits(posid, path, period_days, data_window, savedir, static_quantil
         data_window ... mininum number of data points per best-fit
         savedir ... directory to save result files
         static_quantile ... least-error group of static params to median --> overall best
+        printf ... print function (so you can control how this module spits any messages)
         
     OUTPUTS:
         logstr ... string describing (very briefly) what was done. suitable for
                    printing to stdout, etc
     '''
-    table = _read(posid, path)
+    table = _read(posid=posid, path=path, printf=printf)
     if not table:
         return f'{posid}: dropped from analysis (invalid table)'
-    _make_petal_xy(table)
-    _apply_filters(table)
+    _make_petal_xy(table, printf=printf)
+    _apply_filters(table, printf=printf)
     if not table:
         return f'{posid}: dropped from analysis (no data remaining after filters applied)'
-    _make_sec_from_epoch(table)
+    _make_sec_from_epoch(table, printf=printf)
     period_sec = period_days * 24 * 60 * 60
     datum_dates = np.arange(min(table['DATE_SEC']), max(table['DATE_SEC']), period_sec)
     datum_dates = datum_dates.tolist()
-    cases = _define_cases(table, datum_dates, data_window)
+    cases = _define_cases(table, datum_dates, data_window, printf=printf)
     
     # FIRST-PASS:  STATIC PARAMETERS
-    static_out = _process_cases(table, cases, mode='static',
-                                param_nominals=fitter.default_values.copy())
+    static_out = _process_cases(table, cases, printf=printf, mode='static',
+                                param_nominals=fitter.default_values.copy(),
+                                )
 	
     # DECIDE ON BEST STATIC PARAMS
     best_static = fitter.default_values.copy()
@@ -67,10 +70,10 @@ def run_best_fits(posid, path, period_days, data_window, savedir, static_quantil
     selection = static_out[errors <= quantile]
     these_best = {key:np.median(selection[key + _mode_suffix('static')]) for key in best_static}
     best_static.update(these_best)
-    print(f'{posid}: Selected best static params = {_dict_str(best_static)}')
+    printf(f'{posid}: Selected best static params = {_dict_str(best_static)}')
 	
     # SECOND-PASS:  DYNAMIC PARAMETERS
-    dynamic_out = _process_cases(table, cases, mode='dynamic',
+    dynamic_out = _process_cases(table, cases, printf=printf, mode='dynamic',
                                  param_nominals=best_static)
 
     # MERGED STATIC + DYNAMIC
@@ -82,12 +85,13 @@ def run_best_fits(posid, path, period_days, data_window, savedir, static_quantil
     logstr = f'{posid}: Best-fit results on {len(cases)} data windows written to {merged_filepath}'
     return logstr
 
-def _read(posid, path):
+def _read(posid, path, printf=print):
     '''Read csv file at path. File should contain positioner measured vs
     commanded data. Data is appropriately type cast as necessary.
     
     INPUTS:  posid ... expected unique POS_ID string to be found within table
              path ... file path to csv file for one positioner's data
+             printf ... print function
     
     OUTPUT:  table ... astropy table or None if no valid table found
     '''
@@ -99,13 +103,13 @@ def _read(posid, path):
     table.sort('DATE')
     key_search = [key in table.columns for key in required_keys]
     if table and all(key_search) and str(posid) == _get_posid(table):
-        print(f'{_get_posid(table)}: Read from {path}')
+        printf(f'{_get_posid(table)}: Read from {path}')
         for key,func in typecast_funcs.items():
             table[key] = [func(val) for val in table[key]]
         return table
     return None
 
-def _make_petal_xy(table):
+def _make_petal_xy(table, printf=print):
     '''Produces new columns for X_PTL and Y_PTL coordinates of measured (x,y)
     data. Input is an astropy table, which is altered in-place.'''
     ptlXYZ = ptl2fp.fp2ptl(petal_loc=table['PETAL_LOC'][0],
@@ -114,7 +118,7 @@ def _make_petal_xy(table):
                            z_fp=None)
     table['X_PTL'] = ptlXYZ[0]
     table['Y_PTL'] = ptlXYZ[1]
-    print(f'{_get_posid(table)}: (X_FP, Y_FP) converted to (X_PTL, Y_PTL)')
+    printf(f'{_get_posid(table)}: (X_FP, Y_FP) converted to (X_PTL, Y_PTL)')
 
 # Data filtering functions
 # Typically applied using the _apply_filters() function below
@@ -140,7 +144,7 @@ def _no_cruise_performed(table):
     cruiseP_diff = _np_diff_with_prepend(table['TOTAL_CRUISE_MOVES_P'], prepend=dummyP)
     return cruiseT_diff + cruiseP_diff == 0 # these diffs are always >= 0 for sorted table input
 
-def _apply_filters(table, bad_row_funcs=[_ctrl_not_enabled, _no_move_performed]):
+def _apply_filters(table, bad_row_funcs=[_ctrl_not_enabled, _no_move_performed], printf=print):
     '''Removes bad rows from table, according to filter functions specified
     in the list bad_row_funcs. Note as of 2020-04-16, default bad_row_funcs
     intentionally deoes not include no_cruise_performed().
@@ -152,22 +156,23 @@ def _apply_filters(table, bad_row_funcs=[_ctrl_not_enabled, _no_move_performed])
         if len(table) == 0:
             break
     final_len = len(table)
-    print(f'{_get_posid(table)}: dropped {initial_len - final_len} of {initial_len} non-conforming data rows')
+    printf(f'{_get_posid(table)}: dropped {initial_len - final_len} of {initial_len} non-conforming data rows')
 
-def _make_sec_from_epoch(table):
+def _make_sec_from_epoch(table, printf=print):
     '''Produces new column for seconds-since-epoch version of date. Input is
     an astropy table containing column 'DATE'. The table is altered in-place.'''
     dates = table['DATE']
     table['DATE_SEC'] = Time(dates, format='iso').unix
-    print(f'{_get_posid(table)}: generated seconds-since-epoch column (\'DATE_SEC\')')
+    printf(f'{_get_posid(table)}: generated seconds-since-epoch column (\'DATE_SEC\')')
 
-def _define_cases(table, datum_dates, data_window):
+def _define_cases(table, datum_dates, data_window, printf=print):
     '''Define best-fit analysis cases for one positioner.
     
     INPUTS:
         table ... astropy table of measured vs commanded data, for just one positioner
         datum_dates ... keypoint dates at which to evaluate a window of data
         data_window ... mininum number of data points per best-fit
+        printf ... print function
         
     OUTPUT:
         cases ... list of dicts defining the analysis cases, with keys:
@@ -200,10 +205,10 @@ def _define_cases(table, datum_dates, data_window):
         if case not in cases:
             cases.append(case)
     posid = _get_posid(table)
-    print(f'{posid}: {len(cases):5d} analysis cases defined')
+    printf(f'{posid}: {len(cases):5d} analysis cases defined')
     return cases
 
-def _process_cases(table, cases, mode, param_nominals):
+def _process_cases(table, cases, mode, param_nominals, printf=print):
     '''Feed analysis cases for a positioner through the best-fit function.
     
     INPUTS:
@@ -211,6 +216,7 @@ def _process_cases(table, cases, mode, param_nominals):
         cases ... List of analysis cases as generated by _define_cases()
         mode ... 'static' or 'dynamic'
         param_nominals ... Dict of nominal parameter values, structured like fitter.default_values
+        printf ... print function
 
     OUTPUT:
         output ... Astropy table of results, headers given by output_keys.
@@ -224,10 +230,10 @@ def _process_cases(table, cases, mode, param_nominals):
         m = case['start_idx']
         n = case['final_idx']                   
         xytp_data, subtable = _select_by_index(table, start=m, final=n+1)
-        print(f'{posid}: fitting {mode.upper()} params for over data period:')
-        print(f'  start idx = {m:5d}, date = {subtable["DATE"][0]}')
-        print(f'  final idx = {n:5d}, date = {subtable["DATE"][-1]}')
-        print(f'  num points = {n-m+1:5d}')
+        printf(f'{posid}: fitting {mode.upper()} params over data period:')
+        printf(f'  start idx = {m:5d}, date = {subtable["DATE"][0]}')
+        printf(f'  final idx = {n:5d}, date = {subtable["DATE"][-1]}')
+        printf(f'  num points = {n-m+1:5d}')
         params, err = fitter.fit_params(posintT=xytp_data['posintT'],
                                         posintP=xytp_data['posintP'],
                                         ptlX=xytp_data['ptlX'],
@@ -252,8 +258,8 @@ def _process_cases(table, cases, mode, param_nominals):
             output[key].append(params[key])
         for key in fitter.dynamic_keys:
             output[key].append(params[key])
-        print(f'{posid}: best params = {_dict_str(params)}')
-        print(f'  fit error = {err:.3f}')
+        printf(f'{posid}: best params = {_dict_str(params)}')
+        printf(f'  fit error = {err:.3f}')
     for key in list(output):
         if not output[key]:
             output[key] = [None]*len(cases)
