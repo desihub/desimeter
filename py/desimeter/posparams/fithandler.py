@@ -77,7 +77,8 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
                                  param_nominals=best_static)
 
     # MERGED STATIC + DYNAMIC
-    merged = join(static_out, dynamic_out, keys=['POS_ID', 'DATA_END_DATE_SEC'])
+    same_keys = [key for key, is_variable in output_keys.items() if not is_variable]
+    merged = join(static_out, dynamic_out, keys=same_keys)
     merged.sort(['POS_ID','DATA_END_DATE_SEC'])
     merged_filepath = os.path.join(savedir, posid + '_paramfits.csv')
     merged_filepath = os.path.realpath(merged_filepath)
