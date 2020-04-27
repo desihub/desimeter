@@ -91,7 +91,7 @@ if not args.skip_passfail:
     max_line_len = max(len(line) for line in title_lines)
     align = lambda string: format(string, str(max_line_len) + 's')
     title = '\n'.join([align(line) for line in title_lines])
-    plotter.plot_passfail(binned, savepath=plot_path, title=title, printf=printf)
+    plotter.plot_passfail(binned, savepath=plot_path, title=title, printf=print)
     binned_path = prefix + '.json.gzip'
     with gzip.open(binned_path, 'wt', encoding='ascii') as zipfile:
         json.dump(binned, zipfile)
