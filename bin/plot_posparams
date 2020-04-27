@@ -1,0 +1,98 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Plots fiber positioner parameters as best-fit by fit_posparams. Also plots
+cumulative positioner errors over time, as calculated when performing those
+best-fits.
+"""
+
+# command line argument parsing
+import argparse
+import math
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('-i', '--infile', type=str, required=True,
+                    help='path to input csv file containing "merged" data from fit_posparams')
+parser.add_argument('-o', '--outdir', type=str, required=True,
+                    help='path to directory where to save output plot files')
+parser.add_argument('-np', '--n_processes_max', type=int, default=None,
+                    help='max number of processors to use')
+parser.add_argument('-q', '--quiet', action='store_true',
+                    help='reduce verbosity of print outs at terminal')
+parser.add_argument('-t', '--test_mode', action='store_true',
+                    help='test mode, only plots results for the first positioner')
+parser.add_argument('-sb', '--skip_bestfits', action='store_true',
+                    help='skip generating plot of best-fit results for each positioner')
+parser.add_argument('-sp', '--skip_passfail', action='store_true',
+                    help='skip generating single plot binning historical pass/fail for all positioners (also saves bins as json)')
+parser.add_argument('-b', '--bins', default=[0, 0.03, 0.1, 0.2, 0.5, 1.0, math.inf],
+                    help='set error bins, int or sequence, works approx like "bins" arg of numpy.hist() function (c.f. desimeter/posparams/plotter.py)')
+parser.add_argument('-d', '--dynamic_passfail', action='store_true',
+                    help='uses "dynamic" best-fit error (variable SCALE_T and SCALE_P) for pass/fail binning')
+args = parser.parse_args()
+
+# proceed with the rest
+import os
+import numpy as np
+import multiprocessing
+import time
+import json
+
+# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
+import desimeter.posparams.plotter as plotter
+import desimeter.posparams.fitter as fitter
+
+# read up on yer data thar, kiddo
+merged_path = os.path.realpath(args.infile)
+merged, dynamic = plotter.read(merged_path)
+
+# save path
+save_dir = os.path.realpath(args.outdir)
+if not os.path.isdir(save_dir):
+    os.path.os.makedirs(save_dir)
+analysis_timestamp = os.path.basename(merged_path).split('_')[0]
+
+if not args.skip_passfail:
+    mode = 'dynamic' if args.dynamic_passfail else 'static'
+    prefix =  os.path.join(save_dir, analysis_timestamp + '_' + mode)
+    plot_path = prefix + plotter.img_ext
+    binned = plotter.bin_errors(merged, bins=args.bins, mode=mode)
+    title = 'POSITIONER PASS/FAIL COUNTS\n'
+    title += f'errors calculated by best-fit of {mode} calibration parameters\n'
+    title += f'analysis data source: {analysis_timestamp}'
+    plotter.plot_passfail(binned, savepath=plot_path, title=title)
+    binned_path = prefix + '.json'
+    with open(binned_path, 'w') as file:
+        json.dump(binned, file, indent=4)
+    print(f'Pass/fail binned data saved to: {binned_path}')
+
+if __name__ == '__main__' and not args.skip_bestfits:
+    posids = sorted(set(merged['POS_ID']))
+    num_posids = len(posids)
+    num_plots = num_posids if not args.test_mode else 1
+    posids_to_plot = [posids[i] for i in range(num_plots)]
+    mp_results = {}
+    with multiprocessing.Pool(processes=args.n_processes_max) as pool:
+        for posid in posids_to_plot:
+            subtable = merged[merged['POS_ID'] == posid]
+            if dynamic:
+                dynam_subtable = dynamic[dynamic['POS_ID'] == posid]
+                some_row = dynam_subtable[0]
+                statics_during_dynamic = {key:some_row[key] for key in some_row.columns if key in fitter.static_keys}
+            else:
+                statics_during_dynamic = {key:0 for key in fitter.static_keys}
+            save_path = os.path.join(save_dir, analysis_timestamp + '_' + posid + plotter.img_ext)
+            save_path = os.path.realpath(save_path)
+            plot_args = (subtable, save_path, statics_during_dynamic)
+            mp_results[posid] = pool.apply_async(plotter.plot_params, args=plot_args)
+            if not args.quiet:
+                print(f'Plot job added: {posid}')
+        while mp_results:
+            completed = set()
+            for posid, result in mp_results.items():
+                if result.ready():
+                    completed.add(posid)
+                    if not args.quiet:
+                        print(f'Plot saved: {result.get()}')
+            for posid in completed:
+                del mp_results[posid]
+            time.sleep(0.05)

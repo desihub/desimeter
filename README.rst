@@ -21,6 +21,17 @@ It comprises
 
 See `desimeter/doc/coordinates.rst` for a definition of the coordinate systems.
 
+
+Automated build & testing
+-------------------------
+
+.. image:: https://img.shields.io/circleci/project/github/desihub/desimeter.svg
+  :alt: Build
+  :target: https://circleci.com/gh/desihub/desimeter
+
+.. image:: https://coveralls.io/repos/github/desihub/desimeter/badge.svg?branch=master
+  :alt: Coverage
+  :target: https://coveralls.io/github/desihub/desimeter?branch=master
   
 Script Examples
 ---------------
@@ -110,6 +121,8 @@ Dependencies
 
 desimeter requires numpy, scipy, astropy, fitsio, and matplotlib.
 
+Python 3.6 or greater is required.
+
 It purposefully does *not* require desiutil, desimodel, or any other
 offline desidata packages to facilitate integration with the DESI online
 environment and to minimize getting started overhead for non-desidata users.
@@ -131,6 +144,13 @@ If you want to use desimeter but don't intend to actively develop it::
 
 For developers, we recommend adding `desimeter/py` to `$PYTHONPATH`
 and `desimeter/bin` to `$PATH` instead of installing desimeter.
+
+For developers in a Windows + Anaconda environment, add a new user variable
+`PYTHONPATH` in the Environment Variables GUI editor. Include the path (for
+your machine) ending in `desimeter\\py` in the Value field. (Note: after an
+admittedly non-exhaustive search, no obvious equivalent was found for adding
+`desimeter\bin` to `Path`. You'll have to type out
+:code:`python <full path to command>` at the Anaconda Prompt terminal.)
 
 Other Notes
 -----------

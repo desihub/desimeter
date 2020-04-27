@@ -19,14 +19,6 @@ parser.add_argument('-o','--outfile', type = str, default = None, required = Tru
 args  = parser.parse_args()
 log = get_logger()
 
-log.info("reading petal alignment data")
-filename = resource_filename('desimeter',"data/petal-alignments.yaml")
-log.info(" in {}".format(filename))
-
-ifile=open(filename)
-petal_alignment_dict = yaml.safe_load(ifile)
-ifile.close()
-
 log.info("reading petal metrology")
 filename = resource_filename('desimeter',"data/UMT-DESI-5421.csv")
 log.info(" in {}".format(filename))
@@ -58,7 +50,7 @@ for i in ii :
     log.warning("BAD DATA {} {} type={} xptl={} yptl={} xmnt={} ymnt={}".format(spots["PETAL_LOC"][i],spots["DEVICE_LOC"][i],spots["DEVICE_TYPE"][i],spots["X_PTL"][i],spots["Y_PTL"][i],spots["X_MNT"][i],spots["Y_MNT"][i]))
 spots=spots[:][r>1.] # exclude bad data??
 
-spots = apply_ptl2fp(spots,petal_alignment_dict)
+spots = apply_ptl2fp(spots)
 
 spots["LOCATION"] = spots["PETAL_LOC"]*1000+spots["DEVICE_LOC"]
 
