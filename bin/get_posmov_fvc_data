@@ -17,6 +17,7 @@ parser.add_argument('--date-max', type = str, default = "2030-01-01", required =
 parser.add_argument('--deltat-max', type = float, default = "25", required = False, help="max delay between FVC image and posmovedb entry in seconds")
 parser.add_argument('--fvc-file-list', type = str, default = "/global/cfs/cdirs/desi/engineering/fvc/desimeter/v0.2.0/fvc-desimeter-and-dates.csv", required = False, help="file with the fvc file list")
 parser.add_argument('--outdir', type = str, default = "None", required = True, help="output directory where MXXXX.csv files are saved")
+parser.add_argument('--nocalib', action = 'store_true', help="do not save matching calib")
 
 args  = parser.parse_args()
 
@@ -135,16 +136,25 @@ for petalid in petalids :
     print("now for each positioner read pos_t and pos_p in db...")
     for posid,deviceloc in zip(posids,devicelocs) :
         #cx.execute("select pos_t,pos_p,time_recorded,pos_id,petal_id,device_loc,log_note from posmovedb.positioner_moves_p{} where pos_id='{}' and time_recorded BETWEEN date '{}' and date '{}'".format(petalid,posid,args.date_min,args.date_max))
-        cx.execute("select petal_id,device_loc,pos_id,pos_move_index,time_recorded,bus_id,pos_t,pos_p,last_meas_obs_x,last_meas_obs_y,last_meas_peak,last_meas_fwhm,total_move_sequences,total_cruise_moves_t,total_cruise_moves_p,total_creep_moves_t,total_creep_moves_p,ctrl_enabled from posmovedb.positioner_moves_p{} where pos_id='{}' and time_recorded BETWEEN date '{}' and date '{}'".format(petalid,posid,args.date_min,args.date_max))
+        cx.execute("select petal_id,device_loc,pos_id,pos_move_index,time_recorded,bus_id,pos_t,pos_p,last_meas_obs_x,last_meas_obs_y,last_meas_peak,last_meas_fwhm,total_move_sequences,total_cruise_moves_t,total_cruise_moves_p,total_creep_moves_t,total_creep_moves_p,ctrl_enabled,move_cmd,move_val1,move_val2,log_note from posmovedb.positioner_moves_p{} where pos_id='{}' and time_recorded BETWEEN date '{}' and date '{}'".format(petalid,posid,args.date_min,args.date_max))
         data=cx.fetchall()
         res=dict()
         for i,desc in enumerate(cx.description) :
             res[desc[0]]=np.array([d[i] for d in data])
         date = res["time_recorded"]
+
+        # make sure there is no coma
+        for i in range(res["log_note"].size) :
+            if res["log_note"][i] is not None:
+                res["log_note"][i]=str(res["log_note"][i]).replace(",",";")
+                
         for i in range(len(date)) :
             #date[i].tzinfo = None  # does this help?
             date[i] = datetime.datetime(date[i].year,date[i].month,date[i].day,date[i].hour,date[i].minute,date[i].second) # get rid of time zone
         tstamp =  np.array([d.timestamp() for d in date])
+
+
+            
         
         jj = np.where(np.in1d(tstamp,posid_tstamp[posid]))[0]
         print("for {} got {} entries in db, with {} matched to desimeter data".format(posid,len(data),jj.size))
@@ -159,6 +169,36 @@ for petalid in petalids :
         y_dmt = posid_y_dmt[posid][jj]
         deltat = posid_deltat[posid][jj]
         
+        if not args.nocalib :
+            
+            # adding calib info
+            
+            cmd="select * from posmovedb.positioner_calibration_p{} where pos_id='{}' order by time_recorded".format(petalid,posid)
+            cx.execute(cmd)
+            data2=cx.fetchall()
+            res2=dict()
+            for i,desc in enumerate(cx.description) :
+                res2[desc[0]]=[d[i] for d in data2]
+            date2 = res2["time_recorded"]
+            for i in range(len(date2)) :
+                date2[i] = datetime.datetime(date2[i].year,date2[i].month,date2[i].day,date2[i].hour,date2[i].minute,date2[i].second) # get rid of time zone
+            tstamp2 =  np.array([d.timestamp() for d in date2])
+
+            ckeys=['pos_calib_index','calib_date','length_r1','length_r2','offset_x','offset_y','offset_t','offset_p','physical_range_t','physical_range_p','gear_calib_t','gear_calib_p','total_limit_seeks_t', 'total_limit_seeks_p', 'last_primary_hardstop_dir_t', 'last_primary_hardstop_dir_p', 'keepout_expansion_phi_radial', 'keepout_expansion_phi_angular', 'keepout_expansion_theta_radial', 'keepout_expansion_theta_angular']
+            for k in ckeys :
+                res[k]=[]
+            
+            for t in tstamp :
+                j=np.where(tstamp2<t)[0][-1]
+                for k in ckeys :
+                    if k=='calib_date' :
+                        k2='time_recorded'
+                    else :
+                        k2=k
+                    res[k].append(res2[k2][j])
+            for k in ckeys :
+                res[k]=np.array(res[k])
+            
         # save this
         jj=np.where(x_dmt!=0)[0]
         ot = Table()
