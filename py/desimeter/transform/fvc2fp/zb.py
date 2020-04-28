@@ -25,6 +25,8 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         self.yfvc_scale  = 3000.
         self.xfvc_offset = 3000.
         self.yfvc_offset = 3000.
+        self.zbpolids = np.array([0,1,2,3,4,5,6,9,20,27,28,29,30],dtype=int)
+        self.zbcoeffs = np.zeros(self.zbpolids.shape,dtype=float)
         
     #- Utility transforms to/from reduced [-1,1] coordinates
     def _reduce_xyfp(self, x, y):
