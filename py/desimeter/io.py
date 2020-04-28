@@ -2,6 +2,7 @@ import os
 from pkg_resources import resource_filename
 from astropy.table import Table
 import yaml
+from desimeter.log import get_logger
 
 def desimeter_data_dir():
     '''
@@ -17,7 +18,9 @@ def load_metrology():
     Returns metrology table
     '''
     filename = os.path.join(desimeter_data_dir(),'fp-metrology.csv')
-    print(filename)
+    log=get_logger()
+    log.debug("loading {}".format(filename))
+    
     metrology = Table.read(filename)
     return metrology
 
@@ -27,3 +30,5 @@ def load_petal_alignement():
         petal_alignment_dict = yaml.safe_load(ifile)
     return petal_alignment_dict
 
+def fvc2fp_filename():
+    return os.path.join(desimeter_data_dir(),'init-fvc2fp.json')
