@@ -5,15 +5,16 @@ Plot time series of positioner parameters.
 
 import os
 import matplotlib.pyplot as plt
+import matplotlib.colors
 import numpy as np
 from astropy.time import Time
-from astropy.table import Table
 
 # common options
 img_ext = '.png'
 error_series_filename = 'fiterror' + img_ext
 tick_period_days = 7
 day_in_sec = 24*60*60
+DATE_SEC = 'DATA_END_DATE_SEC'
 
 def plot_params(table, savepath, statics_during_dynamic):
     '''Plot time series of positioner parameters for a single positioner.
@@ -29,14 +30,14 @@ def plot_params(table, savepath, statics_during_dynamic):
                      dynamic params best-fit
         
     Outputs:
-        The plot image file is saved to savepath. Also the savepath string is
-        returned unaltered (for ease of tracking progress during multi-
-        processing).
+        The plot image file is saved to savepath. A log string is returned
+        suitable for print to stdout, stating what was done.
     '''
     fig = _init_plot()
+    table.sort(DATE_SEC)
     posid = table['POS_ID'][0]
     fig.subplots_adjust(wspace=.3, hspace=.3)
-    times = table['DATE_SEC']
+    times = table[DATE_SEC]
     tick_values, tick_labels = _ticks(times)
     n_pts = len(table)
     marker = ''
@@ -72,23 +73,23 @@ def plot_params(table, savepath, statics_during_dynamic):
                 ax_right.set_ylim((min_y, max_y))
             plt.xticks(tick_values, tick_labels, rotation=90, horizontalalignment='center', fontsize=8)
             plt.yticks(fontsize=8)
-            if key == 'SCALE_P':
+            if 'SCALE_P_DYNAMIC' in key:
                 s = statics_during_dynamic
                 plt.text(min(plt.xlim()), min(plt.ylim()),
                          f' Using static params:\n'
-                         f' LENGTH_R1 = {s["LENGTH_R1"]:>5.3f}, LENGTH_R2 = {s["LENGTH_R2"]:>5.3f}\n'
+                         f' LENGTH_R1 = {s["LENGTH_R1"]:>7.3f}, LENGTH_R2 = {s["LENGTH_R2"]:>7.3f}\n'
                          f' OFFSET_X = {s["OFFSET_X"]:>8.3f}, OFFSET_Y = {s["OFFSET_Y"]:>8.3f}\n'
                          f' OFFSET_T = {s["OFFSET_T"]:>8.3f}, OFFSET_P = {s["OFFSET_P"]:>8.3f}\n',
-                         verticalalignment='bottom')
+                         verticalalignment='bottom', fontfamily='monospace')
     analysis_date = table['ANALYSIS_DATE_DYNAMIC'][-1]
     title = f'{posid}'
     title += f'\nbest-fits to historical data'
     title += f'\nanalysis date: {analysis_date}'
     plt.suptitle(title)
     _save_and_close_plot(fig, savepath)
-    return savepath
+    return f'{posid}: plot saved to {savepath}'
 
-def plot_passfail(binned, savepath, title=''):
+def plot_passfail(binned, savepath, title='', printf=print):
     '''Plot time series of positioenr pass/fail groups, binned by error
     ceilings.
     
@@ -100,6 +101,8 @@ def plot_passfail(binned, savepath, title=''):
         
         title    ... str to print at top of plot
         
+        printf ... print function (so you can control how this module spits any messages)
+        
     Outputs:
         The plot image file is saved to savepath.
     '''
@@ -107,24 +110,29 @@ def plot_passfail(binned, savepath, title=''):
     split = os.path.splitext(savepath)
     for p in passfail_plot_defs:
         y = binned[p['key']]
+        ceilings = list(y.keys())
+        colors = _colors(ceilings)
         fig = _init_plot(figsize=(15,10))
         for ceiling, counts in y.items():
-            plt.plot(x, counts, label=f'fit err <= {ceiling:5.3f}', linewidth=2)
+            i = ceilings.index(ceiling)
+            plt.plot(x, counts, label=f'fit err <= {ceiling:5.3f}',
+                     color=colors[i],
+                     linewidth=2)
         tick_values, tick_labels = _ticks(x)
         plt.xticks(tick_values, tick_labels, rotation=90, horizontalalignment='center')
         plt.ylabel(p['ylabel'], fontsize=14)
         plt.legend(title='THRESHOLDS (mm)')
         path = split[0] + p['suffix'] + split[1]
-        plt.title(title)
+        plt.title(title, fontfamily='monospace')
         plt.grid(color='0.9')
         plt.minorticks_on()
         plt.gca().tick_params(axis='x', which='minor', bottom=False)
         plt.gca().tick_params(axis='y', which='minor', right=True)
         plt.gca().tick_params(axis='y', which='both', labelleft='on', labelright='on')
         _save_and_close_plot(fig, savepath=path)
-        print(f'Pass/fail plot saved to: {path}')
+        printf(f'Pass/fail plot saved to: {path}')
     
-def bin_errors(table, bins=5, mode='static'):
+def bin_errors(table, bins=5, mode='static', printf=print):
     '''Bin the positioners over time by best-fit error.
     
     Inputs:
@@ -139,6 +147,8 @@ def bin_errors(table, bins=5, mode='static'):
         
         mode  ... 'static' or 'dynamic', indicating which best-fit error data
                   to use. (static --> SCALE_T and SCALE_P forced to 1.0)
+                  
+        printf ... print function (so you can control how this module spits any messages)
                      
     Outputs:
         binned ... dict data structure containing:
@@ -170,22 +180,20 @@ def bin_errors(table, bins=5, mode='static'):
         edges = np.linspace(min_err, max_err, n_bins + 1)
     except:
         n_bins = len(bins) - 1
-        #bins[0] = max(min_err, bins[0])
-        #bins[-1] = min(max_err, bins[-1])
         edges = np.array(bins)
     bin_ceilings = edges[1:]
     period_duration = day_in_sec
-    periods = sorted(set(table['DATE_SEC']))
+    periods = sorted(set(table[DATE_SEC]))
     posids = set(table['POS_ID'])
     subtables = {}
     for i in range(len(periods)):
         period = periods[i]
         start = period - period_duration
         if i == 0:
-            after = start <= table['DATE_SEC']
+            after = start <= table[DATE_SEC]
         else:
-            after = start < table['DATE_SEC']
-        until = period >= table['DATE_SEC']
+            after = start < table[DATE_SEC]
+        until = period >= table[DATE_SEC]
         selected = until & after
         subtables[period] = table[selected]
     passing = {}
@@ -213,7 +221,7 @@ def bin_errors(table, bins=5, mode='static'):
                 fail_set |= keep_prev_fail
             passing[ceiling][period] = pass_set
             failing[ceiling][period] = fail_set
-        print(f'Pass/fails binned for ceiling {ceiling:.3f} ({bin_ceilings.tolist().index(ceiling) + 1} of {len(bin_ceilings)})')
+        printf(f'Pass/fails binned for ceiling {ceiling:.3f} ({bin_ceilings.tolist().index(ceiling) + 1} of {len(bin_ceilings)})')
     passing_counts = {}
     failing_counts = {}
     total_known = {}
@@ -248,26 +256,6 @@ def bin_errors(table, bins=5, mode='static'):
         binned[key] = {ceiling: values.tolist() for ceiling, values in binned[key].items()}
     return binned
 
-def read(path):
-    '''Reads in data for plotting, from csv files generated by fit_posparams.
-    Returns astropy tables representing "merged" data set and "dynamic".'''
-    if os.path.exists(path):
-        merged = Table.read(path, format='csv')
-        dynamic_path = path.split('merged.csv')[0] + 'dynamic.csv'
-        if os.path.exists(dynamic_path):
-            dynamic = Table.read(dynamic_path, format='csv')
-        else:
-            dynamic = None
-            print('No "dynamic" results file found to match the "merged". This ' +
-              'isn\'t catastrophic, but limits some information available to plot.')
-    else:
-        print('File not found: ' + path)
-    if 'DATA_END_DATE_SEC' in merged.columns: # column not present in 2020-04-15 batch run data
-        merged['DATE_SEC'] = merged['DATA_END_DATE_SEC']
-    else:
-        merged['DATE_SEC'] = Time(merged['DATA_END_DATE']).unix
-    return merged, dynamic
-
 def _init_plot(figsize=(20,10)):
     '''Internal common plot initialization function. Returns figure handle.'''
     plt.ioff()
@@ -289,6 +277,17 @@ def _ticks(times):
     tick_labels = [Time(t, format='unix', out_subfmt='date').iso for t in tick_values]
     return tick_values, tick_labels
 
+def _colors(v):
+    '''Generate colors for vector v of scalar values.'''
+    V = np.abs(v)
+    finite = np.isfinite(V)
+    Vmax = max(V[finite])
+    scaled = V / Vmax * 0.7 + 0.25
+    scaled[~finite] = np.sign(scaled[~finite])
+    hsv = [(s, 0.7, 0.7) for s in scaled]
+    colors = matplotlib.colors.hsv_to_rgb(hsv)
+    return colors
+
 # plot definitions for parameter subplots
 param_subplot_defs = [
     {'keys': ['FIT_ERROR_STATIC', 'FIT_ERROR_DYNAMIC'],
@@ -304,28 +303,28 @@ param_subplot_defs = [
      'subplot': 4,
      'logscale': False},
             
-    {'keys': ['LENGTH_R1', 'LENGTH_R2'],
+    {'keys': ['LENGTH_R1_STATIC', 'LENGTH_R2_STATIC'],
      'units': 'mm',
      'mult': 1,
      'subplot': 2,
      'logscale': False,
      'equal_scales': True},
             
-    {'keys': ['OFFSET_X', 'OFFSET_Y'],
+    {'keys': ['OFFSET_X_STATIC', 'OFFSET_Y_STATIC'],
      'units': 'mm',
      'mult': 1,
      'subplot': 5,
      'logscale': False,
      'equal_scales': False},
             
-    {'keys': ['OFFSET_T', 'OFFSET_P'],
+    {'keys': ['OFFSET_T_STATIC', 'OFFSET_P_STATIC'],
      'units': 'deg',
      'mult': 1,
      'subplot': 6,
      'logscale': False,
      'equal_scales': False},
             
-    {'keys': ['SCALE_T', 'SCALE_P'],
+    {'keys': ['SCALE_T_DYNAMIC', 'SCALE_P_DYNAMIC'],
      'units': '',
      'mult': 1,
      'subplot': 3,
@@ -336,18 +335,18 @@ param_subplot_defs = [
 # plot definitions for pass/fail subplots
 passfail_plot_defs = [
     {'key': 'passing_counts',
-     'ylabel': 'NUM PASSING',
+     'ylabel': 'NUM WITHIN THRESHOLD',
      'suffix': '_pass_num'},
     
     {'key': 'failing_counts',
-     'ylabel': 'NUM FAILING',
+     'ylabel': 'NUM EXCEEDING THRESHOLD',
      'suffix': '_fail_num'},
     
     {'key': 'passing_fracs',
-     'ylabel': 'FRACTION PASSING',
+     'ylabel': 'FRACTION WITHIN THRESHOLD',
      'suffix': '_pass_frac'},
     
     {'key': 'failing_fracs',
-     'ylabel': 'FRACTION FAILING',
+     'ylabel': 'FRACTION EXCEEDING THRESHOLD',
      'suffix': '_fail_frac'},
     ]

@@ -57,12 +57,11 @@ static_keys = ['LENGTH_R1', 'LENGTH_R2', 'OFFSET_T', 'OFFSET_P', 'OFFSET_X', 'OF
 dynamic_keys = ['SCALE_T', 'SCALE_P']
 all_keys = static_keys + dynamic_keys
 
-def fit_params(posintT, posintP, ptlX, ptlY,
+def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
                mode='static',
                nominals=default_values,
                bounds=default_bounds,
                keep_fixed=[],
-               description='',
                ):
     '''Best-fit function for parameters used in the transformation between
     internally-tracked (theta,phi) and externally measured (x,y).
@@ -77,6 +76,9 @@ def fit_params(posintT, posintP, ptlX, ptlY,
         
         ptlX     ... list of x as meas with FVC and converted to petal coords (a.k.a. X_PTL)
         ptlY     ... list of y as meas with FVC and converted to petal coords (a.k.a. Y_PTL)
+
+        gearT    ... list of GEAR_CALIB_T at the time the robot made the move
+        gearP    ... list of GEAR_CALIB_P at the time the robot made the move
         
         mode     ... 'static' or 'dynamic'
                      In static mode, all "dynamic" parameters will be held fixed,
@@ -91,19 +93,15 @@ def fit_params(posintT, posintP, ptlX, ptlY,
         
         keep_fixed  ... list of any parameters you want forced to their nominal
                         values, and then never varied, when doing the best-fit.
-                        
-        description ... pass-thru for optional string, allows easier job-tracking
-                        when multiprocessing
                               
     OUTPUTS:
         best_params ... dict of best-fit results, keys = param names
         final_err   ... numeric error of the best-fit params
-        description ... unchanged from input arg
     '''
     # arg checking
-    assert len(posintT) == len(posintP) == len(ptlX) == len(ptlY)
-    assert all(isinstance(arg, list) for arg in (posintT, posintP, ptlX, ptlY))
-    assert all(math.isfinite(x) for x in posintT + posintP + ptlX + ptlY)
+    assert len(posintT) == len(posintP) == len(ptlX) == len(ptlY) == len(gearT) == len(gearP)
+    assert all(isinstance(arg, list) for arg in (posintT, posintP, ptlX, ptlY, gearT, gearP))
+    assert all(math.isfinite(x) for x in posintT + posintP + ptlX + ptlY + gearT + gearP)
     assert mode in {'static', 'dynamic'}
     assert all(key in nominals for key in all_keys)
     assert all(key in bounds for key in all_keys)
@@ -129,6 +127,7 @@ def fit_params(posintT, posintP, ptlX, ptlY,
     x_flat, y_flat = pos2ptl.ptl2flat(x_ptl, y_ptl)
     if mode == 'dynamic':
         n_pts -= 1 # since in dynamic mode we are using delta values
+        
         # Note how measured_int0 depends on having been fed good "static" param
         # values. Also note extraction of only theta and phi from the tuple
         # returned by loc2int. The 2nd element is the "unreachable" boolean
@@ -142,6 +141,16 @@ def fit_params(posintT, posintP, ptlX, ptlY,
             )
         dt_int = pos2ptl.delta_angle(u_start=t_int[:-1], u_final=t_int[1:], direction=0)
         dp_int = pos2ptl.delta_angle(u_start=p_int[:-1], u_final=p_int[1:], direction=0)
+        
+        # compensate for any gear calibrations in place at time of move
+        # this is somewhat aesthetic, so that SCALE_* correponds 1:1 with GEAR_CALIB_*
+        # e.g. with a gearT==0.5 (and let's suppose that calibration is physically
+        # accurate), then the operation below will make it look to the fitter
+        # like dt_int is 2x bigger than measured distance. hence fitter will
+        # output SCALE_T --> 0.5
+        dt_int /= gearT[1:]
+        dp_int /= gearP[1:]
+        
         # now remove first point, to match up with lists of deltas
         x_flat = x_flat[1:]
         y_flat = y_flat[1:]
@@ -191,7 +200,7 @@ def fit_params(posintT, posintP, ptlX, ptlY,
     best_params.update(fixed_params)
     best_params['OFFSET_T'] = wrap_at_180(best_params['OFFSET_T'])
     err = err_norm(optimizer_result.x)
-    return best_params, err, description
+    return best_params, err
 
 def wrap_at_180(angle):
     angle %= 360
