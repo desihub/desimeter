@@ -1,0 +1,12 @@
+# by hand, defining loc=0 for petal_id=1
+# for the teststand there is no focal plane frame
+# so it's arbitrary as is the transform from petal to FP
+# I intentionally rotate
+# so the petal frame and the FP frame are distinct in the code
+0:
+  Tx: 0.0
+  Ty: 0.0
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: 1.0
