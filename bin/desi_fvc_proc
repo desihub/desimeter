@@ -7,8 +7,6 @@ import time
 import numpy as np
 import fitsio
 
-from pkg_resources import resource_filename
-
 from astropy.table import Table
 from desimeter.log import get_logger
 from desimeter.detectspots import detectspots
@@ -17,7 +15,7 @@ from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
 from desimeter.match import match_same_system
 from desimeter.transform.xy2qs import qs2xy
 from desimeter.fieldmodel import FieldModel
-from desimeter.io import load_metrology
+from desimeter.io import load_metrology,fvc2fp_filename
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""FVC image processing""")
@@ -33,6 +31,8 @@ parser.add_argument('--output-transform', type = str, default = None, required =
                     help = 'write transformation to this json file')
 parser.add_argument('--input-transform', type = str, default = None, required = False,
                     help = 'use this json file as input for the match, defaut is data/default-fvc2fp.json')
+parser.add_argument('--pinhole-max-separation', type = float, default = 10, required = False,
+                    help = 'pinhole maximum separation in pixels')
 parser.add_argument('--threshold', type = float, default = 500., required = False,
                     help = "threshold for spots detection")
 parser.add_argument('--expected-positions', type = str, default = None, required = False,
@@ -103,7 +103,7 @@ if args.nomatch :
     sys.exit(0)
 
 for seqid,spots in enumerate(spots_list) :
-    spots = findfiducials(spots,input_transform=args.input_transform)
+    spots = findfiducials(spots,input_transform=args.input_transform,separation=args.pinhole_max_separation)
     n_matched_pinholes = np.sum(spots['PINHOLE_ID'] > 0)
     n_matched_fiducials = np.sum(spots['PINHOLE_ID'] == 4)
     if n_matched_fiducials < 3:
@@ -111,7 +111,7 @@ for seqid,spots in enumerate(spots_list) :
         sys.exit(13)
 
 
-    tx = FVCFP_ZhaoBurge()
+    tx = FVCFP_ZhaoBurge.read_jsonfile(fvc2fp_filename())
     tx.fit(spots, update_spots=True)
 
     if args.expected_positions is not None :
