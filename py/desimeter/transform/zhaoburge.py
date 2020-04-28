@@ -135,8 +135,6 @@ rt = np.sqrt(2.0)
 
 NCOEFS = 33  # available item coefs
 
-#LUT = [2,  5,  6,   9,  20,  28, 29,  30]    # 8 polynomials
-
 #--------Zernike-Noll Renormalization for AreaIntegral = Pi----------------
 
 squares = np.array([0, 1, 4, 4, 3, 6, 6, 8, 8, 8, 8,  5, 10, 10, 10, 10, 12, 12, 12, 12, 12, 12, 7, 14, 14, 14, 14, 14, 14, 16, 16, 16, 16, 16, 16, 16, 16, 9])
@@ -171,11 +169,11 @@ def getZhaoBurgeTerm(polid, x, y):
     # Cartesian input x,y; cartesian output x, y, and label.
     # Calls getZ() and delivers area normalized ZB terms
     if polid==0:   # case "S2"  r^0, keep; X translate; 
-        result =  getZ(1,x,y), 0.0,            'S2'   # parm=0/13
+        result =  getZ(1,x,y), 0.0,            'S2'   # parm=0/13 translation 
     elif polid==1:   # case "S3"  r^0, keep; Y translate; 
-        result =  0.0, getZ(1,x,y),             'S3'   # parm=1/13
+        result =  0.0, getZ(1,x,y),             'S3'   # parm=1/13 translation
     elif polid==2:   # case "S4"  magnify
-        result =  rh*getZ(2,x,y), rh*getZ(3,x,y), 'S4'  # parm=2/13
+        result =  rh*getZ(2,x,y), rh*getZ(3,x,y), 'S4'  # parm=2/13 dilatation
     elif polid==3:   # case "S5"
         result =  rh*getZ(3,x,y), rh*getZ(2,x,y), 'S5'  # n/a
     elif polid==4:   # case "S6"
@@ -225,7 +223,7 @@ def getZhaoBurgeTerm(polid, x, y):
     elif polid==26:  # Case "S28"
         result =  rh*getZ(20,x,y), -rh*getZ(21,x,y), 'S28'                # n/a
     elif polid==27:  #  case "T4"
-        result =  rh*getZ(3,x,y), -rh*getZ(2,x,y), 'T4'                   # parm=9/13
+        result =  rh*getZ(3,x,y), -rh*getZ(2,x,y), 'T4'                   # parm=9/13 rotation
     elif polid==28:  # case "T7" 
         result =  rh*getZ(4,x,y)-0.5*getZ(6,x,y), -0.5*getZ(5,x,y), 'T7'  # parm=10/13
     elif polid==29:  # case "T8"
@@ -275,26 +273,18 @@ def fit_scale_rotation_offset(x, y, xp, yp, fitzb=False, polids=None):
     TODO: document details
     """
 
-    def func(params, x, y, xp, yp, fitzb, polids):
+    def func(params, x, y, xp, yp):
         scale, rotation, offset_x, offset_y = params[0:4]
         xx, yy = transform(x, y, scale, rotation, offset_x, offset_y)
-
-        if fitzb:
-            polids, coeffs, zbx, zby = fitZhaoBurge(xx, yy, xp, yp, polids)
-            xx += zbx
-            yy += zby
-
         dr2 = np.sum((xx-xp)**2 + (yy-yp)**2)
         return dr2
-
-    p0 = np.array([1.0, 0.0, 0.0, 0.0])
-    p = minimize(func, p0, args=(x, y, xp, yp, fitzb, polids)) #, method='Nelder-Mead')
+    
+    p0 = np.array([1.0,0.0,0.0,0.0])
+    p  = minimize(func, p0, args=(x, y, xp, yp))
 
     scale, rotation, offset_x, offset_y = p.x
-   
-    if fitzb:
-        #- including ZB in every iteration is ~10x better than fitting
-        #- scale,rotation,offset, then separately fitting ZB
+
+    if fitzb :
         xx, yy = transform(x, y, scale, rotation, offset_x, offset_y)
         zbpolids, zbcoeffs, zbx, zby = fitZhaoBurge(xx, yy, xp, yp, polids)
         return scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs
@@ -308,11 +298,13 @@ def fitZhaoBurge(x, y, xp, yp, polids=None):
     nx = len(x)
 
     # here we choose the polynomials
-    # 0 = translation along X
-    # 1 = translation along Y
-    # 2 = magnification
+    # 0  = S2 = translation along X
+    # 1  = S3 = translation along Y
+    # 2  = S4 = magnification
+    # 27 = T4 = rotation
+    
     if polids is None :
-        polids = np.array([2, 5,  6,   9,  20,  28, 29,  30],dtype=int)
+        polids = np.array([0,1,2,3,4,5,6,9,20,27,28,29,30],dtype=int)
     
     nzb = polids.size
     H = np.zeros((2*nx, nzb))
