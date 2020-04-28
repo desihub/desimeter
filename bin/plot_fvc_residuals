@@ -6,7 +6,7 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.table import Table
-from pkg_resources import resource_filename
+from desimeter.io import load_metrology
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Plot FVC spots, showing residuals with metrology""")
@@ -44,8 +44,8 @@ else :
     xm = table["X_FP_METRO"][ii]
     ym = table["Y_FP_METRO"][ii]
 
-ii = (table["LOCATION"]>0)&(table["X_FP_EXP"]!=0)&(table["PINHOLE_ID"]>0)
-number_of_fiducials = np.unique(table["LOCATION"][ii]).size
+selection = (table["LOCATION"]>0)&(table["X_FP_EXP"]!=0)&(table["PINHOLE_ID"]>0)
+number_of_fiducials = np.unique(table["LOCATION"][selection]).size
 print("Number of fiducials that are ON=",number_of_fiducials)
 
 
@@ -59,8 +59,7 @@ a.plot(table["X_FP"],table["Y_FP"],".",alpha=0.5,label="all spots")
 
 if not args.expected : # plotting match to fiducials 
     # plotting all of FIF and GIF
-    filename = resource_filename('desimeter',"data/fp-metrology.csv")
-    metrology = Table.read(filename,format="csv")
+    metrology = load_metrology()
     selection=(metrology["DEVICE_TYPE"]=="FIF")|(metrology["DEVICE_TYPE"]=="GIF")
     a.scatter(metrology["X_FP"][selection],metrology["Y_FP"][selection],marker="o",edgecolors="gray",alpha=1.,facecolors="none",label="all FIF and GIF metrology")
     selection=((metrology["DEVICE_TYPE"]=="FIF")|(metrology["DEVICE_TYPE"]=="GIF"))&(metrology["PINHOLE_ID"]==4)
@@ -94,7 +93,6 @@ elif jj.size > 0 : # sadly
         label=None
         if j==jj[0]: label="large residual"
         a.plot(x[j],y[j],"+",color="red",markersize=12,label=label)
-
 
 a.quiver(x,y,dx,dy)
 a.set_xlabel("X_FP (mm)")

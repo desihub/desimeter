@@ -6,8 +6,8 @@ import os,sys
 import numpy as np
 from desimeter.log import get_logger
 from astropy.table import Table,Column
-from pkg_resources import resource_filename
 from scipy.spatial import cKDTree as KDTree
+from desimeter.io import load_metrology,fvc2fp_filename
 from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
 from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
 from desimeter.match import match_same_system,match_arbitrary_translation_dilatation
@@ -25,7 +25,7 @@ def findfiducials(spots,input_transform=None,separation=8.) :
     
     log.debug("load input tranformation we will use to go from FP to FVC pixels")
     if input_transform is None :
-        input_transform = resource_filename('desimeter',"data/single-lens-fvc2fp.json")
+        input_transform = fvc2fp_filename()
     
     log.info("loading input tranform from {}".format(input_transform))
     try :
@@ -36,39 +36,44 @@ def findfiducials(spots,input_transform=None,separation=8.) :
     
     
     if metrology_pinholes_table is None :
-        
-        filename = resource_filename('desimeter',"data/fp-metrology.csv")
-        if not os.path.isfile(filename) :
-            log.error("cannot find {}".format(filename))
-            raise IOError("cannot find {}".format(filename))
-        log.info("reading metrology in {}".format(filename)) 
-        metrology_table = Table.read(filename,format="csv")
+        metrology_table = load_metrology()
 
         log.debug("keep only the pinholes")
-        metrology_pinholes_table = metrology_table[:][metrology_table["PINHOLE_ID"]>0]
+        metrology_pinholes_table = metrology_table[:][(metrology_table["DEVICE_TYPE"]=="FIF")|(metrology_table["DEVICE_TYPE"]=="GIF")]
         
         # use input transform to convert X_FP,Y_FP to XPIX,YPIX
         xpix,ypix = input_tx.fp2fvc(metrology_pinholes_table["X_FP"],metrology_pinholes_table["Y_FP"])
         metrology_pinholes_table["XPIX"]=xpix
         metrology_pinholes_table["YPIX"]=ypix
 
-        log.debug("define fiducial location as central dot")
-        metrology_fiducials_table = metrology_pinholes_table[:][metrology_pinholes_table["PINHOLE_ID"]==4]
+        log.debug("define fiducial location as the most central dot")
+        central_pinholes=[]
+        for loc in np.unique(metrology_pinholes_table["LOCATION"]) :
+            ii=np.where(metrology_pinholes_table["LOCATION"]==loc)[0]
+            mx=np.mean(metrology_pinholes_table["XPIX"][ii])
+            my=np.mean(metrology_pinholes_table["YPIX"][ii])
+            k=np.argmin((metrology_pinholes_table["XPIX"][ii]-mx)**2+(metrology_pinholes_table["YPIX"][ii]-my)**2)
+            central_pinholes.append(ii[k])
+        metrology_fiducials_table = metrology_pinholes_table[:][central_pinholes]
     
     # find fiducials candidates  
     log.info("select spots with at least two close neighbors (in pixel units)")
+    nspots=spots["XPIX"].size
     xy   = np.array([spots["XPIX"],spots["YPIX"]]).T
     tree = KDTree(xy)
-    measured_spots_distances,measured_spots_indices = tree.query(xy,k=4,distance_upper_bound=separation)
+
+    inclusive_separation = 2*separation
+    inclusive_separation = separation
+    measured_spots_distances,measured_spots_indices = tree.query(xy,k=4,distance_upper_bound=inclusive_separation)
     number_of_neighbors = np.sum( measured_spots_distances<separation,axis=1)
-    fiducials_candidates_indices = np.where(number_of_neighbors>=3)[0]  # including self, so at least 3 pinholes
+    fiducials_candidates_indices = np.where(number_of_neighbors>=4)[0]  # including self, so at least 3 pinholes
+    log.debug("number of fiducials=",fiducials_candidates_indices.size)
     
     # match candidates to fiducials from metrology
-
     log.info("first match {} fiducials candidates to metrology ({}) with iterative fit".format(fiducials_candidates_indices.size,len(metrology_fiducials_table)))
     x1 = spots["XPIX"][fiducials_candidates_indices]
     y1 = spots["YPIX"][fiducials_candidates_indices]
-    x2 = metrology_fiducials_table["XPIX"] # do I need to do this?
+    x2 = metrology_fiducials_table["XPIX"]
     y2 = metrology_fiducials_table["YPIX"]
     
     nloop=20
@@ -96,6 +101,7 @@ def findfiducials(spots,input_transform=None,separation=8.) :
     matching_known_fiducials_indices = selection
     
     log.debug("mean distance = {:4.2f} pixels for {} matched and {} known fiducials".format(np.mean(distances[distances<maxdistance]),fiducials_candidates_indices.size,metrology_fiducials_table["XPIX"].size))
+
     
     log.debug("now matching pinholes ...")
     
@@ -104,7 +110,6 @@ def findfiducials(spots,input_transform=None,separation=8.) :
         spots.add_column(Column(np.zeros(nspots,dtype=int)),name='LOCATION')
     if 'PINHOLE_ID' not in spots.dtype.names :
         spots.add_column(Column(np.zeros(nspots,dtype=int)),name='PINHOLE_ID')
-    
     
     for index1,index2 in zip ( fiducials_candidates_indices , matching_known_fiducials_indices ) :
         location = metrology_fiducials_table["LOCATION"][index2]
@@ -119,7 +124,7 @@ def findfiducials(spots,input_transform=None,separation=8.) :
 
         x2 = metrology_pinholes_table["XPIX"][pi2]
         y2 = metrology_pinholes_table["YPIX"][pi2]
-        
+
         indices_2 , distances = match_arbitrary_translation_dilatation(x1,y1,x2,y2)
         
         metrology_pinhole_ids = metrology_pinholes_table["PINHOLE_ID"][pi2]
@@ -151,4 +156,5 @@ def findfiducials(spots,input_transform=None,separation=8.) :
     n_matched_pinholes  = np.sum(spots["PINHOLE_ID"]>0)
     n_matched_fiducials = np.sum(spots["PINHOLE_ID"]==4)
     log.info("matched {} pinholes from {} fiducials".format(n_matched_pinholes,n_matched_fiducials))
+
     return spots

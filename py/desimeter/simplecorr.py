@@ -135,12 +135,16 @@ class SimpleCorr(object):
         sa=(ay[1]-ax[2])/sxx_p_syy
         ca=(ax[1]+ay[2])/sxx_p_syy
 
-        self.rot_deg = np.arctan2(sa,ca)*180/np.pi
+        if sa != 0 :
+            self.rot_deg = np.arctan2(sa,ca)*180/np.pi
 
-        sxy = sa*ax[1]+ca*ay[1] - sxx_p_syy*ca*sa
-        sxx =(ax[1]-sxy*sa)/ca
-        syy = (ay[1]-sxy*ca)/sa
-
+            sxy = sa*ax[1]+ca*ay[1] - sxx_p_syy*ca*sa
+            sxx =(ax[1]-sxy*sa)/ca
+            syy = (ay[1]-sxy*ca)/sa
+        else :
+            sxx = ax[1]
+            syy = ay[2]
+            sxy = ax[2]
         self.sxx = sxx
         self.syy = syy
         self.sxy = sxy
