@@ -126,7 +126,7 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         rxpix, rypix = self._reduce_xyfvc(fidspots['XPIX'], fidspots['YPIX'])
         rxfp, ryfp = self._reduce_xyfp(metrology['X_FP'], metrology['Y_FP'])
 
-        scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = fit_scale_rotation_offset(rxpix, rypix, rxfp, ryfp, fitzb=fitzb, polids=self.zbpolids)
+        scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = fit_scale_rotation_offset(rxpix, rypix, rxfp, ryfp, fitzb=True, polids=self.zbpolids)
         self.scale = scale
         self.rotation = rotation
         self.offset_x = offset_x
