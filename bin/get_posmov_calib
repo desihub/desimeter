@@ -13,11 +13,13 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
                                      description="""Get latest calibration""")
 
 parser.add_argument('-o','--outfile', type= str, required=True, help="output csv file name")
+parser.add_argument('--host', type= str, required=False, default='db.replicator.dev-cattle.stable.spin.nersc.org', help="db.replicator.dev-cattle.stable.spin.nersc.org for kpno or beyonce.lbl.gov for petaltest")
+parser.add_argument('--port', type= int, required=False, default=60042, help="60042 for kpno or 8080 for petaltest")
 
 args  = parser.parse_args()
 
 print("db query...")
-comm = psycopg2.connect(host='db.replicator.dev-cattle.stable.spin.nersc.org',port=60042, database='desi_dev', user='desi_reader')
+comm = psycopg2.connect(host=args.host,port=args.port, database='desi_dev', user='desi_reader')
 cx=comm.cursor()
 
 print("get list of petalid ...")
