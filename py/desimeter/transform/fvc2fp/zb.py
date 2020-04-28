@@ -8,7 +8,6 @@ from desimeter.io import load_metrology
 import numpy as np
 from astropy.table import Table,Column
 
-# from desimodel.focalplane.geometry import qs2xy,xy2qs
 from desimeter.log import get_logger
 
 from .base import FVC2FP_Base
@@ -81,14 +80,14 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
             tx.offset_x = params['offset_x']
             tx.offset_y = params['offset_y']
             tx.zbpolids = np.array([2,  5,  6,   9,  20,  28, 29,  30],dtype=int)
-            tx.zbcoeffs = np.asarray(params['zbcoeffs'])
+            tx.zbcoeffs = np.asarray(params['zbcoeffs']).astype(float)
         elif params['version'] == '2' :
             tx.scale = params['scale']
             tx.rotation = params['rotation']
             tx.offset_x = params['offset_x']
             tx.offset_y = params['offset_y']
             tx.zbpolids = np.asarray(params['zbpolids'])
-            tx.zbcoeffs = np.asarray(params['zbcoeffs'])
+            tx.zbcoeffs = np.asarray(params['zbcoeffs']).astype(float)
         else :
             raise RuntimeError("don't know version {}".format(version))
 
@@ -127,11 +126,7 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         rxpix, rypix = self._reduce_xyfvc(fidspots['XPIX'], fidspots['YPIX'])
         rxfp, ryfp = self._reduce_xyfp(metrology['X_FP'], metrology['Y_FP'])
 
-        #- Perform fit
-        #- Perform fit
-        scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = \
-            fit_scale_rotation_offset(rxpix, rypix, rxfp, ryfp, fitzb=True)
-
+        scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = fit_scale_rotation_offset(rxpix, rypix, rxfp, ryfp, fitzb=fitzb, polids=self.zbpolids)
         self.scale = scale
         self.rotation = rotation
         self.offset_x = offset_x
@@ -204,11 +199,10 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
             dx, dy = dx2, dy2
             if dmax < 1e-12:
                 break
-
         rxfp -= dx
         ryfp -= dy
 
-        #- Then apply inverse scale, roation, offset
+        #- Then apply inverse scale, rotation, offset
         rxfp /= self.scale
         ryfp /= self.scale
 
