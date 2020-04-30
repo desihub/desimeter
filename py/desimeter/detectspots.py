@@ -186,7 +186,9 @@ def detectspots(fvcimage,threshold=500,nsig=7,psf_sigma=1.) :
         raise RuntimeError("no spot found")
     else :
         log.info("found {} peaks".format(npeak))
-                 
+        if npeak>10000 :
+            log.error("this is far too many, is the room/dome light on??")
+            raise RuntimeError("too many spots")
     xpix=np.zeros(npeak)
     ypix=np.zeros(npeak)
     xerr=np.zeros(npeak)
