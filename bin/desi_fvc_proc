@@ -45,6 +45,11 @@ parser.add_argument('--fvc-psf-sigma', type = float, default = 1., required = Fa
                     help = 'use this PSF sigma for the centroid measurement')
 parser.add_argument('--nomatch', action = 'store_true',
                     help = 'do not try to match data, just write FVC coordinates of detected spots')
+parser.add_argument('--min-spots', type = int , default = None, required = False,
+                    help = 'minimum number of detected spots to run')
+parser.add_argument('--max-spots', type = int , default = None, required = False,
+                    help = 'max number of detected spots to run')
+
 args  = parser.parse_args()
 log   = get_logger()
 
@@ -91,18 +96,28 @@ else :
     log.info("sorry, I don't know what to do with input file {} because not .fits nor .csv".format(filename))
     sys.exit(12)
 
-if args.nomatch :
-    # write spots
-    for seqid,spots in enumerate(spots_list) :
+
+for seqid,spots in enumerate(spots_list) :
+
+    if args.min_spots is not None :
+        if len(spots) < args.min_spots :
+            log.error("not enough spots, exiting")
+            continue
+    if args.max_spots is not None :
+        if len(spots) > args.max_spots :
+            log.error("too many spots, exiting")
+            continue
+
+    if args.nomatch :
+        # write spots
         if not args.sequence :
             outfile=args.outfile
         else :
             outfile=args.outfile.replace(".csv","-F{:04d}.csv".format(seqid))
         spots.write(outfile,format="csv",overwrite=True)
         print("wrote {}".format(outfile))
-    sys.exit(0)
-
-for seqid,spots in enumerate(spots_list) :
+        continue
+        
     spots = findfiducials(spots,input_transform=args.input_transform,separation=args.pinhole_max_separation)
     n_matched_pinholes = np.sum(spots['PINHOLE_ID'] > 0)
     n_matched_fiducials = np.sum(spots['PINHOLE_ID'] == 4)
