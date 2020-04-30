@@ -14,6 +14,7 @@ parser.add_argument('-i','--infile', type = str, required = True, help="input li
 parser.add_argument('-j','--jobdir', type = str, required = True, help="output directory with scripts to run and file with list of desimeter fvc data tables.")
 parser.add_argument('-o','--outdir', type = str, required = True, help="output directory where desimeter fvc data tables will be saved.")
 parser.add_argument('--ntasks-per-job', type = int, default = 500, required = False, help="number of desimeter call per script")
+parser.add_argument('--options', type = str, default = None)
 
 args  = parser.parse_args()
 
@@ -31,6 +32,10 @@ ifile=open(args.infile)
 jobid=0
 jobfilename=os.path.join(args.jobdir,"job-%03d.sh"%jobid)
 jobfile=open(jobfilename,"w")
+donefilename=os.path.join(args.jobdir,"DONE.txt")
+if not os.path.isfile(donefilename) :
+    with open(donefilename,"w") as dfile :
+        dfile.write("# DONE:\n")
 
 count=0
 for line in ifile.readlines() :
@@ -53,7 +58,7 @@ for line in ifile.readlines() :
         file_hdus=[]
         file_dates=[]
         for hdu in range(len(h)) :
-            if len(h)>0 and hdu==0 : continue
+            if len(h)>1 and hdu==0 : continue
             head=h[hdu].header
             extname="0"
             if hdu>0 : # check extname
@@ -81,12 +86,16 @@ for line in ifile.readlines() :
                 print(date,ofilename)
                 dates.append(date)
                 filenames.append(filename)
-                
-                lines="if [ ! -f {} ] ; then\n".format(ofilename)
-                if extname=="0" :
-                    lines+="desi_fvc_proc -i {} -o {}\n".format(filename,ofilename)
-                else :
-                    lines+="desi_fvc_proc -i {} --ext {} -o {}\n".format(filename,extname,ofilename)
+                lines="done=`grep {} {} | wc -l`\n".format(ofilename,donefilename)
+                #lines="if [ ! -f {} ] ; then\n".format(ofilename)
+                lines+="if (( done == 0 )) ; then\n"
+                lines+="desi_fvc_proc -i {} -o {}".format(filename,ofilename)
+                if extname!="0" :
+                    lines+=" --ext {}".format(extname)
+                if args.options is not None :
+                    lines+=" {}".format(args.options)
+                lines+="\n"
+                lines+="echo {} >> {}\n".format(ofilename,donefilename)
                 lines+="else\necho {} exists\nfi\n".format(ofilename)
                 jobfile.write(lines)
                 
