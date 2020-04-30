@@ -18,10 +18,13 @@ parser.add_argument('--deltat-max', type = float, default = "25", required = Fal
 parser.add_argument('--fvc-file-list', type = str, default = "/global/cfs/cdirs/desi/engineering/fvc/desimeter/v0.2.0/fvc-desimeter-and-dates.csv", required = False, help="file with the fvc file list")
 parser.add_argument('--outdir', type = str, default = "None", required = True, help="output directory where MXXXX.csv files are saved")
 parser.add_argument('--nocalib', action = 'store_true', help="do not save matching calib")
+parser.add_argument('--host', type= str, required=False, default='db.replicator.dev-cattle.stable.spin.nersc.org', help="db.replicator.dev-cattle.stable.spin.nersc.org for kpno or beyonce.lbl.gov for petaltest")
+parser.add_argument('--port', type= int, required=False, default=60042, help="60042 for kpno or 5432 for petaltest")
+parser.add_argument('--password', type= str, required=False, default=None, help="nothing for kpno")
 
 args  = parser.parse_args()
 
-comm = psycopg2.connect(host='db.replicator.dev-cattle.stable.spin.nersc.org',port=60042, database='desi_dev', user='desi_reader')
+comm = psycopg2.connect(host=args.host,port=args.port, database='desi_dev', user='desi_reader',password=args.password)
 cx=comm.cursor()
 
 print("get list of petalid ...")
