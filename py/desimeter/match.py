@@ -131,6 +131,7 @@ def match_same_system(x1,y1,x2,y2,remove_duplicates=True) :
                     kk=np.argsort(distances[jj])
                     indices_2[jj[kk[1:]]] = -1
 
+    distances[indices_2<0] = np.inf
     return indices_2,distances
 
 def match_arbitrary_translation_dilatation(x1,y1,x2,y2) :
