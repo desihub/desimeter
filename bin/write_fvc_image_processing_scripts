@@ -78,14 +78,17 @@ for line in ifile.readlines() :
             if date is not None :
                 bfilename=os.path.basename(filename).replace(".fits.fz","").replace(".fits.gz","").replace(".fits","").replace(".","-")
                 ofilename="{}/{}-{}-{}.csv".format(args.outdir,bfilename,extname,date)
+
+                print(date,ofilename)
+
+                dates.append(date)
+                filenames.append(ofilename)
+
                 if os.path.isfile(ofilename) :
                     print(ofilename,"exists")
                     continue
                 count += 1
 
-                print(date,ofilename)
-                dates.append(date)
-                filenames.append(filename)
                 lines="done=`grep {} {} | wc -l`\n".format(ofilename,donefilename)
                 #lines="if [ ! -f {} ] ; then\n".format(ofilename)
                 lines+="if (( done == 0 )) ; then\n"
