@@ -33,6 +33,8 @@ parser.add_argument('--input-transform', type = str, default = None, required = 
                     help = 'use this json file as input for the match, defaut is data/default-fvc2fp.json')
 parser.add_argument('--pinhole-max-separation', type = float, default = 10, required = False,
                     help = 'pinhole maximum separation in pixels')
+parser.add_argument('--max-match-distance', type = float, default = 7, required = False,
+                    help = 'maximum match distance in mm')
 parser.add_argument('--threshold', type = float, default = 500., required = False,
                     help = "threshold for spots detection")
 parser.add_argument('--expected-positions', type = str, default = None, required = False,
@@ -45,6 +47,11 @@ parser.add_argument('--fvc-psf-sigma', type = float, default = 1., required = Fa
                     help = 'use this PSF sigma for the centroid measurement')
 parser.add_argument('--nomatch', action = 'store_true',
                     help = 'do not try to match data, just write FVC coordinates of detected spots')
+parser.add_argument('--min-spots', type = int , default = None, required = False,
+                    help = 'minimum number of detected spots to run')
+parser.add_argument('--max-spots', type = int , default = None, required = False,
+                    help = 'max number of detected spots to run')
+
 args  = parser.parse_args()
 log   = get_logger()
 
@@ -91,19 +98,30 @@ else :
     log.info("sorry, I don't know what to do with input file {} because not .fits nor .csv".format(filename))
     sys.exit(12)
 
-if args.nomatch :
-    # write spots
-    for seqid,spots in enumerate(spots_list) :
+
+for seqid,spots in enumerate(spots_list) :
+
+    if args.min_spots is not None :
+        if len(spots) < args.min_spots :
+            log.error("not enough spots, exiting")
+            continue
+    if args.max_spots is not None :
+        if len(spots) > args.max_spots :
+            log.error("too many spots, exiting")
+            continue
+
+    if args.nomatch :
+        # write spots
         if not args.sequence :
             outfile=args.outfile
         else :
             outfile=args.outfile.replace(".csv","-F{:04d}.csv".format(seqid))
         spots.write(outfile,format="csv",overwrite=True)
         print("wrote {}".format(outfile))
-    sys.exit(0)
-
-for seqid,spots in enumerate(spots_list) :
+        continue
+        
     spots = findfiducials(spots,input_transform=args.input_transform,separation=args.pinhole_max_separation)
+    
     n_matched_pinholes = np.sum(spots['PINHOLE_ID'] > 0)
     n_matched_fiducials = np.sum(spots['PINHOLE_ID'] == 4)
     if n_matched_fiducials < 3:
@@ -139,11 +157,16 @@ for seqid,spots in enumerate(spots_list) :
         expected_pos = expected_pos[:][ii]
 
     # select spots that are not already matched
-    selection  = (spots["LOCATION"]==0)
+    selection  = (spots["LOCATION"]==-1)
+
     # match
     indices_of_expected_pos,distances = match_same_system(spots["X_FP"][selection],spots["Y_FP"][selection],expected_pos["X_FP"],expected_pos["Y_FP"])
-    for maxdist in [0.1,1,5.] :
-        log.info("Number of match < {}mm = {}/{}".format(maxdist,np.sum(distances<maxdist),len(expected_pos)))
+
+    is_matched = (distances<args.max_match_distance)&(indices_of_expected_pos>=0)
+    ii=np.where(selection)[0]
+    selection[ii]          &=  is_matched
+    indices_of_expected_pos = indices_of_expected_pos[is_matched]
+    distances               = distances[is_matched]
 
     # add columns after matching fibers
     for k1,k2 in zip(["X_FP","Y_FP"],["X_FP_EXP","Y_FP_EXP"]) :
@@ -159,7 +182,6 @@ for seqid,spots in enumerate(spots_list) :
     spots["X_FP_EXP"][selection]=spots["X_FP_METRO"][selection]
     selection = (spots["Y_FP_METRO"]!=0)
     spots["Y_FP_EXP"][selection]=spots["Y_FP_METRO"][selection]
-
 
     # write transfo
     if args.output_transform is not None :

@@ -1,0 +1,127 @@
+#!/usr/bin/env python
+
+
+import sys,os
+import numpy as np
+import astropy.io.fits as pyfits
+from astropy.table import Table
+import argparse
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="""Match posmovedb and FVC data""")
+
+parser.add_argument('-i','--infile', type = str, required = True, help="input list of fvc images")
+parser.add_argument('-j','--jobdir', type = str, required = True, help="output directory with scripts to run and file with list of desimeter fvc data tables.")
+parser.add_argument('-o','--outdir', type = str, required = True, help="output directory where desimeter fvc data tables will be saved.")
+parser.add_argument('--ntasks-per-job', type = int, default = 500, required = False, help="number of desimeter call per script")
+parser.add_argument('--options', type = str, default = None)
+
+args  = parser.parse_args()
+
+filenames=[]
+dates=[]
+
+if not os.path.isdir(args.jobdir) :
+    os.makedirs(args.jobdir)
+if not os.path.isdir(args.outdir) :
+    os.makedirs(args.outdir)
+    
+
+ifile=open(args.infile)
+
+jobid=0
+jobfilename=os.path.join(args.jobdir,"job-%03d.sh"%jobid)
+jobfile=open(jobfilename,"w")
+donefilename=os.path.join(args.jobdir,"DONE.txt")
+if not os.path.isfile(donefilename) :
+    with open(donefilename,"w") as dfile :
+        dfile.write("# DONE:\n")
+
+count=0
+for line in ifile.readlines() :
+    date=None
+    filename=line.strip()
+    if filename.find("primary")>=0 :
+        continue
+    #print(filename)
+    if count >= args.ntasks_per_job :
+        jobfile.close()
+        print("wrote",jobfilename)
+        jobid += 1
+        jobfilename=os.path.join(args.jobdir,"job-%03d.sh"%jobid)
+        jobfile=open(jobfilename,"w")
+        count=0
+    try :
+    #if 1 :    
+        h=pyfits.open(filename)
+
+        file_hdus=[]
+        file_dates=[]
+        for hdu in range(len(h)) :
+            if len(h)>1 and hdu==0 : continue
+            head=h[hdu].header
+            extname="0"
+            if hdu>0 : # check extname
+                if not "EXTNAME" in head.keys() : continue
+                if head["EXTNAME"].find("F0")<0 : continue
+                extname=head["EXTNAME"]
+            date=None
+            if "DATE-OBS" in head.keys():
+                date=str(head["DATE-OBS"]).strip()
+            elif "DATE" in head.keys() :
+                date=str(head["DATE"]).strip()
+            if date is not None and len(date)==0 : date=None
+            if date is not None : date=date.split(".")[0]
+            if date is not None :
+                if date.find("astropy")>=0 :
+                    continue
+            if date is not None :
+                bfilename=os.path.basename(filename).replace(".fits.fz","").replace(".fits.gz","").replace(".fits","").replace(".","-")
+                ofilename="{}/{}-{}-{}.csv".format(args.outdir,bfilename,extname,date)
+
+                print(date,ofilename)
+
+                dates.append(date)
+                filenames.append(ofilename)
+
+                if os.path.isfile(ofilename) :
+                    print(ofilename,"exists")
+                    continue
+                count += 1
+
+                lines="done=`grep {} {} | wc -l`\n".format(ofilename,donefilename)
+                #lines="if [ ! -f {} ] ; then\n".format(ofilename)
+                lines+="if (( done == 0 )) ; then\n"
+                lines+="desi_fvc_proc -i {} -o {}".format(filename,ofilename)
+                if extname!="0" :
+                    lines+=" --ext {}".format(extname)
+                if args.options is not None :
+                    lines+=" {}".format(args.options)
+                lines+="\n"
+                lines+="echo {} >> {}\n".format(ofilename,donefilename)
+                lines+="else\necho {} exists\nfi\n".format(ofilename)
+                jobfile.write(lines)
+                
+        h.close()
+    except :
+        print("a failure")
+        print(sys.exc_info())
+
+    if count%10 == 0 :
+        #ofile1.flush()
+        jobfile.flush()
+    #if count>20 : break
+
+jobfile.close()
+print("wrote",jobfilename)
+
+t=Table()
+t["DATE"]=dates
+t["FILE"]=filenames
+ofilename=os.path.join(args.outdir,"fvc-desimeter-and-dates.csv")
+t.write(ofilename,format="csv")
+print("wrote",ofilename)
+
+        
+
+
