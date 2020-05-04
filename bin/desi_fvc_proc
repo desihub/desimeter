@@ -33,6 +33,8 @@ parser.add_argument('--input-transform', type = str, default = None, required = 
                     help = 'use this json file as input for the match, defaut is data/default-fvc2fp.json')
 parser.add_argument('--pinhole-max-separation', type = float, default = 10, required = False,
                     help = 'pinhole maximum separation in pixels')
+parser.add_argument('--max-match-distance', type = float, default = 7, required = False,
+                    help = 'maximum match distance in mm')
 parser.add_argument('--threshold', type = float, default = 500., required = False,
                     help = "threshold for spots detection")
 parser.add_argument('--expected-positions', type = str, default = None, required = False,
@@ -155,10 +157,19 @@ for seqid,spots in enumerate(spots_list) :
 
     # select spots that are not already matched
     selection  = (spots["LOCATION"]==0)
+
+    # set a negative default device_loc
+    spots["DEVICE_LOC"][selection]=-1
+
     # match
     indices_of_expected_pos,distances = match_same_system(spots["X_FP"][selection],spots["Y_FP"][selection],expected_pos["X_FP"],expected_pos["Y_FP"])
-    for maxdist in [0.1,1,5.] :
+    for maxdist in [0.1,1,args.max_match_distance] :
         log.info("Number of match < {}mm = {}/{}".format(maxdist,np.sum(distances<maxdist),len(expected_pos)))
+
+    other_selection = (distances<args.max_match_distance)
+    selection[selection]    &=  other_selection
+    indices_of_expected_pos = indices_of_expected_pos[other_selection]
+    distances               = distances[other_selection]
 
     # add columns after matching fibers
     for k1,k2 in zip(["X_FP","Y_FP"],["X_FP_EXP","Y_FP_EXP"]) :
