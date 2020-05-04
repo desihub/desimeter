@@ -106,11 +106,14 @@ def findfiducials(spots,input_transform=None,separation=8.) :
     log.debug("now matching pinholes ...")
     
     nspots=spots["XPIX"].size
-    if 'LOCATION' not in spots.dtype.names :
-        spots.add_column(Column(np.zeros(nspots,dtype=int)),name='LOCATION')
-    if 'PINHOLE_ID' not in spots.dtype.names :
-        spots.add_column(Column(np.zeros(nspots,dtype=int)),name='PINHOLE_ID')
-    
+    for k in ['LOCATION','PETAL_LOC','DEVICE_LOC','PINHOLE_ID'] :
+        if k not in spots.dtype.names :
+            spots.add_column(Column(np.zeros(nspots,dtype=int)),name=k)
+    spots["LOCATION"][:]=-1
+    spots["PETAL_LOC"][:]=-1
+    spots["DEVICE_LOC"][:]=-1
+    spots["PINHOLE_ID"][:]=0
+
     for index1,index2 in zip ( fiducials_candidates_indices , matching_known_fiducials_indices ) :
         location = metrology_fiducials_table["LOCATION"][index2]
         
@@ -149,9 +152,10 @@ def findfiducials(spots,input_transform=None,separation=8.) :
                 log.warning("Unmatch ambiguous pinhole id = {}".format(duplicate))
                 selection=(spots["LOCATION"]==location)&(spots["PINHOLE_ID"]==duplicate)
                 spots["PINHOLE_ID"][selection]=0
-        
-    spots["PETAL_LOC"]=spots["LOCATION"]//1000
-    spots["DEVICE_LOC"]=spots["LOCATION"]%1000
+
+    ii=(spots["LOCATION"]>=0)
+    spots["PETAL_LOC"][ii]=spots["LOCATION"][ii]//1000
+    spots["DEVICE_LOC"][ii]=spots["LOCATION"][ii]%1000
     
     n_matched_pinholes  = np.sum(spots["PINHOLE_ID"]>0)
     n_matched_fiducials = np.sum(spots["PINHOLE_ID"]==4)
