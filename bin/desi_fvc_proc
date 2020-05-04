@@ -121,6 +121,7 @@ for seqid,spots in enumerate(spots_list) :
         continue
         
     spots = findfiducials(spots,input_transform=args.input_transform,separation=args.pinhole_max_separation)
+    
     n_matched_pinholes = np.sum(spots['PINHOLE_ID'] > 0)
     n_matched_fiducials = np.sum(spots['PINHOLE_ID'] == 4)
     if n_matched_fiducials < 3:
@@ -156,20 +157,16 @@ for seqid,spots in enumerate(spots_list) :
         expected_pos = expected_pos[:][ii]
 
     # select spots that are not already matched
-    selection  = (spots["LOCATION"]==0)
-
-    # set a negative default device_loc
-    spots["DEVICE_LOC"][selection]=-1
+    selection  = (spots["LOCATION"]==-1)
 
     # match
     indices_of_expected_pos,distances = match_same_system(spots["X_FP"][selection],spots["Y_FP"][selection],expected_pos["X_FP"],expected_pos["Y_FP"])
-    for maxdist in [0.1,1,args.max_match_distance] :
-        log.info("Number of match < {}mm = {}/{}".format(maxdist,np.sum(distances<maxdist),len(expected_pos)))
 
-    other_selection = (distances<args.max_match_distance)
-    selection[selection]    &=  other_selection
-    indices_of_expected_pos = indices_of_expected_pos[other_selection]
-    distances               = distances[other_selection]
+    is_matched = (distances<args.max_match_distance)&(indices_of_expected_pos>=0)
+    ii=np.where(selection)[0]
+    selection[ii]          &=  is_matched
+    indices_of_expected_pos = indices_of_expected_pos[is_matched]
+    distances               = distances[is_matched]
 
     # add columns after matching fibers
     for k1,k2 in zip(["X_FP","Y_FP"],["X_FP_EXP","Y_FP_EXP"]) :
@@ -185,7 +182,6 @@ for seqid,spots in enumerate(spots_list) :
     spots["X_FP_EXP"][selection]=spots["X_FP_METRO"][selection]
     selection = (spots["Y_FP_METRO"]!=0)
     spots["Y_FP_EXP"][selection]=spots["Y_FP_METRO"][selection]
-
 
     # write transfo
     if args.output_transform is not None :
