@@ -6,14 +6,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 from astropy.table import Table
 import datetime
-
 import argparse
+
+from desimeter.util import parse_fibers
+
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Match posmovedb and FVC data""")
 
 parser.add_argument('--date-min', type = str, default = "2019-01-01", required = False, help="date min with format YYYY-MM-DD")
 parser.add_argument('--date-max', type = str, default = "2030-01-01", required = False, help="date max with format YYYY-MM-DD")
+parser.add_argument('--clock-offset', type = float, default = "0", required = False, help="FVC - posmovedb offset. =0 at KPNO, =-276sec for LBNL test (beyonce is late)")
+#parser.add_argument('--deltat-min', type = float, default = "0", required = False, help="min delay between FVC image and posmovedb entry in seconds (can be negative if clocks are not synchronized (as is the case for petal 1)")
 parser.add_argument('--deltat-max', type = float, default = "25", required = False, help="max delay between FVC image and posmovedb entry in seconds")
 parser.add_argument('--fvc-file-list', type = str, default = "/global/cfs/cdirs/desi/engineering/fvc/desimeter/v0.2.0/fvc-desimeter-and-dates.csv", required = False, help="file with the fvc file list")
 parser.add_argument('--outdir', type = str, default = "None", required = True, help="output directory where MXXXX.csv files are saved")
@@ -21,27 +25,34 @@ parser.add_argument('--nocalib', action = 'store_true', help="do not save matchi
 parser.add_argument('--host', type= str, required=False, default='db.replicator.dev-cattle.stable.spin.nersc.org', help="db.replicator.dev-cattle.stable.spin.nersc.org for kpno or beyonce.lbl.gov for petaltest")
 parser.add_argument('--port', type= int, required=False, default=60042, help="60042 for kpno or 5432 for petaltest")
 parser.add_argument('--password', type= str, required=False, default=None, help="nothing for kpno")
+parser.add_argument('--petal-ids', type= str, required=False, default=None, help="select petal ids")
 
 args  = parser.parse_args()
+
+petalids=None
+if args.petal_ids is not None :
+    petalids=parse_fibers(args.petal_ids)
+
 
 comm = psycopg2.connect(host=args.host,port=args.port, database='desi_dev', user='desi_reader',password=args.password)
 cx=comm.cursor()
 
-print("get list of petalid ...")
-cx.execute("select relname from pg_class where relkind='r' and relname !~ '^(pg_|sql_)';")
-tables=[d[0] for d in cx.fetchall()]
-petalids=[]
-for table in tables :
-    if table.find("positioner_moves_p")>=0 :
-        tmp=table.replace("positioner_moves_p","")
-        #print(tmp)
-        try :
-            i=int(tmp)
-            if i<20 :
-                print(table)
-                petalids.append(i)
-        except ValueError :
-            pass
+if petalids is None :
+    print("get list of petalid ...")
+    cx.execute("select relname from pg_class where relkind='r' and relname !~ '^(pg_|sql_)';")
+    tables=[d[0] for d in cx.fetchall()]
+    petalids=[]
+    for table in tables :
+        if table.find("positioner_moves_p")>=0 :
+            tmp=table.replace("positioner_moves_p","")
+            #print(tmp)
+            try :
+                i=int(tmp)
+                if i<20 :
+                    print(table)
+                    petalids.append(i)
+            except ValueError :
+                pass
 
 #sys.exit(12)
 petal_id2loc = dict()
@@ -56,13 +67,18 @@ petal_id2loc[9]=9
 petal_id2loc[10]=5
 petal_id2loc[11]=6
 
+# lbl petal 1 tests
+petal_id2loc[1]=0
+
 print("reading csv table with list of desimeter files ...")
 dmt=Table.read(args.fvc_file_list)
-dmt_tstamp = np.array([datetime.datetime.strptime(d,"%Y-%m-%dT%H:%M:%S").timestamp() for d in dmt["DATE"]])
+tstamp_fvc = np.array([datetime.datetime.strptime(d,"%Y-%m-%dT%H:%M:%S").timestamp() for d in dmt["DATE"]])
 print("done")
-jj=np.argsort(dmt_tstamp)
+jj=np.argsort(tstamp_fvc)
 dmt=dmt[:][jj]
-dmt_tstamp=dmt_tstamp[jj]
+tstamp_fvc=tstamp_fvc[jj]
+
+
 
 for petalid in petalids :
     
@@ -84,31 +100,34 @@ for petalid in petalids :
     print("number of unique time_recorded = {}".format(len(date)))
     for i in range(len(date)) :
         date[i] = datetime.datetime(date[i].year,date[i].month,date[i].day,date[i].hour,date[i].minute,date[i].second) # get rid of time zone
-    tstamp =  np.array([d.timestamp() for d in date])
+    tstamp_posmovedb =  np.array([d.timestamp() for d in date])
 
     print("match FVC image ...")
-    dmt_index=np.zeros(tstamp.size,dtype=int)
-    for i in range(tstamp.size) :
-        j=np.where(dmt_tstamp>tstamp[i])[0]
+    dmt_index=np.zeros(tstamp_posmovedb.size,dtype=int)
+    for i in range(tstamp_posmovedb.size) :
+        j=np.where((tstamp_fvc+args.clock_offset)>tstamp_posmovedb[i])[0]
         if j.size>0 :
             dmt_index[i]=j[0]
-            #dmt_deltat[i]=dmt_tstamp[j[0]]-tstamp[i]
+            #dmt_deltat[i]=tstamp_fvc[j[0]]-tstamp[i]
         else :
             dmt_index[i]=len(dmt)-1
-    dmt_deltat=dmt_tstamp[dmt_index]-tstamp
-    selection = np.where((dmt_deltat>0)&(dmt_deltat<args.deltat_max))[0] # FVC image less than n seconds after move
+    tstamp_fvc=tstamp_fvc[dmt_index]
+    dmt_deltat=tstamp_fvc+args.clock_offset-tstamp_posmovedb
+    selection = np.where(dmt_deltat<=args.deltat_max)[0] # FVC image less than n seconds after move
     print("number of matched FVC images= {}".format(len(selection)))
     #selected_date=date[selection]
     #selected_tstamp=tstamp[selection]
     #selected_dmt_index=dmt_index[selection]
     #selected_dmt_deltat=dmt_deltat[selection]
 
-    posid_tstamp=dict()
+    posid_tstamp_posmovedb=dict()
+    posid_tstamp_fvc=dict()
     posid_deltat=dict()
     posid_x_dmt=dict()
     posid_y_dmt=dict()
     for posid in posids :
-        posid_tstamp[posid]=[]
+        posid_tstamp_posmovedb[posid]=[]
+        posid_tstamp_fvc[posid]=[]
         posid_deltat[posid]=[]
         posid_x_dmt[posid]=[]
         posid_y_dmt[posid]=[]
@@ -124,14 +143,16 @@ for petalid in petalids :
             for posid,loc in zip(posids,locations) :
                 kk=np.where(dmt_xytable["LOCATION"]==loc)[0]
                 if kk.size>0 :
-                    posid_tstamp[posid].append(tstamp[i])
+                    posid_tstamp_posmovedb[posid].append(tstamp_posmovedb[i])
+                    posid_tstamp_fvc[posid].append(tstamp_fvc[i])
                     posid_deltat[posid].append(dmt_deltat[i])
                     posid_x_dmt[posid].append(dmt_xytable["X_FP"][kk[0]])
                     posid_y_dmt[posid].append(dmt_xytable["Y_FP"][kk[0]])
         #if count>300 : break # debug
 
     for posid,deviceloc in zip(posids,devicelocs) :
-        posid_tstamp[posid]=np.array(posid_tstamp[posid])
+        posid_tstamp_posmovedb[posid]=np.array(posid_tstamp_posmovedb[posid])
+        posid_tstamp_fvc[posid]=np.array(posid_tstamp_fvc[posid])
         posid_deltat[posid]=np.array(posid_deltat[posid])
         posid_x_dmt[posid]=np.array(posid_x_dmt[posid])
         posid_y_dmt[posid]=np.array(posid_y_dmt[posid])
@@ -154,23 +175,24 @@ for petalid in petalids :
         for i in range(len(date)) :
             #date[i].tzinfo = None  # does this help?
             date[i] = datetime.datetime(date[i].year,date[i].month,date[i].day,date[i].hour,date[i].minute,date[i].second) # get rid of time zone
-        tstamp =  np.array([d.timestamp() for d in date])
+        tstamp_posmovedb =  np.array([d.timestamp() for d in date])
 
 
             
         
-        jj = np.where(np.in1d(tstamp,posid_tstamp[posid]))[0]
+        jj = np.where(np.in1d(tstamp_posmovedb,posid_tstamp_posmovedb[posid]))[0]
         print("for {} got {} entries in db, with {} matched to desimeter data".format(posid,len(data),jj.size))
-        kk = np.argsort(tstamp[jj])
+        kk = np.argsort(tstamp_posmovedb[jj])
         jj = jj[kk]
         for k in res.keys() :
             res[k] = res[k][jj]
-        tstamp = tstamp[jj]
-        dd = {t:i for i,t in enumerate(posid_tstamp[posid])}
-        jj = [dd[t] for t in tstamp]
+        tstamp_posmovedb = tstamp_posmovedb[jj]
+        dd = {t:i for i,t in enumerate(posid_tstamp_posmovedb[posid])}
+        jj = [dd[t] for t in tstamp_posmovedb]
         x_dmt = posid_x_dmt[posid][jj]
         y_dmt = posid_y_dmt[posid][jj]
         deltat = posid_deltat[posid][jj]
+        tstamp_fvc = posid_tstamp_fvc[posid][jj]
         
         if not args.nocalib :
             
@@ -185,14 +207,14 @@ for petalid in petalids :
             date2 = res2["time_recorded"]
             for i in range(len(date2)) :
                 date2[i] = datetime.datetime(date2[i].year,date2[i].month,date2[i].day,date2[i].hour,date2[i].minute,date2[i].second) # get rid of time zone
-            tstamp2 =  np.array([d.timestamp() for d in date2])
+            tstamp_calib =  np.array([d.timestamp() for d in date2])
 
             ckeys=['pos_calib_index','calib_date','length_r1','length_r2','offset_x','offset_y','offset_t','offset_p','physical_range_t','physical_range_p','gear_calib_t','gear_calib_p','total_limit_seeks_t', 'total_limit_seeks_p', 'last_primary_hardstop_dir_t', 'last_primary_hardstop_dir_p', 'keepout_expansion_phi_radial', 'keepout_expansion_phi_angular', 'keepout_expansion_theta_radial', 'keepout_expansion_theta_angular']
             for k in ckeys :
                 res[k]=[]
             
-            for t in tstamp :
-                j=np.where(tstamp2<t)[0][-1]
+            for t in tstamp_posmovedb :
+                j=np.where(tstamp_calib<t)[0][-1]
                 for k in ckeys :
                     if k=='calib_date' :
                         k2='time_recorded'
@@ -215,6 +237,8 @@ for petalid in petalids :
         ot["X_FP"]  = x_dmt[jj]
         ot["Y_FP"]  = y_dmt[jj]
         ot["DELTAT"]  = deltat[jj]
+        ot["TSTAMP_POSMOVE"]  = tstamp_posmovedb[jj]
+        ot["TSTAMP_FVC"]  = tstamp_fvc[jj]
         
         if not os.path.isdir(args.outdir) :
             os.makedirs(args.outdir)
