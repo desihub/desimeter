@@ -23,16 +23,14 @@ print(t.dtype.names)
 #plt.figure()
 #plt.hist(t['DELTAT'],bins=100)
 
-
-r1=t['LENGTH_R1'][0]
-r2=t['LENGTH_R2'][0]
-t_offset=t['OFFSET_T'][0]
-p_offset=t['OFFSET_P'][0]
-x_offset=t['OFFSET_X'][0]
-y_offset=t['OFFSET_Y'][0]
-x_loc, y_loc = int2loc(t["POS_T"],t["POS_P"], r1, r2, t_offset, p_offset)
-x_flat = loc2flat(x_loc,x_offset)
-y_flat = loc2flat(y_loc,y_offset)
+ok=t["OFFSET_T"]!=0
+t=t[:][ok]
+x_flat = np.zeros(t["POS_T"].size)
+y_flat = np.zeros(t["POS_T"].size)
+for i in range(t["POS_T"].size) :
+   x_loc, y_loc = int2loc(t["POS_T"][i],t["POS_P"][i], t['LENGTH_R1'][i], t['LENGTH_R2'][i] , t['OFFSET_T'][i] , t['OFFSET_P'][i])
+   x_flat[i] = loc2flat(x_loc,t['OFFSET_X'][i])
+   y_flat[i] = loc2flat(y_loc,t['OFFSET_Y'][i])
 
 x_fp=t["X_FP"]
 y_fp=t["Y_FP"]
