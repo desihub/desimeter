@@ -4,10 +4,25 @@ desimeter change Log
 
 0.3.0 (unreleased)
 ------------------
-
+* Connection to posmov db at LBL, documentation [PR `#70`_]
+* LBL petal 1 [PR `#69`_]
+* Make posparam fits more atomic [PR `#68`_]
+* Added CircleCI and Coveralls [PR `#57`_] [PR `#58`_] [PR `#62`_]
+* pos2ptl [PR `#56`_] [PR `#59`_]
+* simplification of call to ptl2fp [PR `#55`_]
 * Added `fit_posparams` and `desimeter.transform.pos2ptl` for fitting
   positioner parameters [PR `#54`_].
 
+.. _`#70`: https://github.com/desihub/desimeter/pull/70
+.. _`#69`: https://github.com/desihub/desimeter/pull/69
+.. _`#68`: https://github.com/desihub/desimeter/pull/68
+.. _`#63`: https://github.com/desihub/desimeter/pull/63
+.. _`#62`: https://github.com/desihub/desimeter/pull/62
+.. _`#59`: https://github.com/desihub/desimeter/pull/59
+.. _`#58`: https://github.com/desihub/desimeter/pull/58
+.. _`#57`: https://github.com/desihub/desimeter/pull/57
+.. _`#56`: https://github.com/desihub/desimeter/pull/56
+.. _`#55`: https://github.com/desihub/desimeter/pull/55
 .. _`#54`: https://github.com/desihub/desimeter/pull/54
 
 0.2.1 (2020-04-15)
