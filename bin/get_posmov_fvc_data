@@ -113,7 +113,7 @@ for petalid in petalids :
             dmt_index[i]=len(dmt)-1
     tstamp_fvc=tstamp_fvc[dmt_index]
     dmt_deltat=tstamp_fvc+args.clock_offset-tstamp_posmovedb
-    selection = np.where(dmt_deltat<=args.deltat_max)[0] # FVC image less than n seconds after move
+    selection = np.where((dmt_deltat>=0)&(dmt_deltat<=args.deltat_max))[0] # FVC image less than n seconds after move
     print("number of matched FVC images= {}".format(len(selection)))
     #selected_date=date[selection]
     #selected_tstamp=tstamp[selection]
