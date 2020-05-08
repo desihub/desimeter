@@ -26,11 +26,16 @@ spots = Table.read(filename,format="csv")
 if 'col0' in spots.dtype.names :
     spots.remove_column('col0')
 
+
 print("metrology columns:",spots.dtype.names)
 
 
 # force int type
 spots["PETAL_LOC"]=spots["PETAL_LOC"].astype(int)
+# keep only petal_loc<10
+selection = spots["PETAL_LOC"]<10
+spots = spots[:][selection]
+
 pids=np.zeros(spots["PINHOLE_ID"].size,dtype=int)
 for i,pid in enumerate(spots["PINHOLE_ID"]) :
     pid=str(pid)
