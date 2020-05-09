@@ -1,0 +1,76 @@
+#!/usr/bin/env python
+
+
+import argparse
+import sys,os
+import numpy as np
+import yaml
+from desimeter.log import get_logger
+from pkg_resources import resource_filename
+from astropy.table import Table
+from desimeter.transform.ptl2fp import apply_ptl2fp
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="""Combine petal metrology and petal alignment data into a single CSV file""")
+
+parser.add_argument('-o','--outfile', type = str, default = None, required = True, help = 'output csv file')
+
+
+if "DESIMETER_DATA" not in os.environ :
+    print("error: you need to set first the env. variable DESIMETER_DATA to point to the petal1 data")
+    sys.exit(12)
+    
+
+args  = parser.parse_args()
+log = get_logger()
+
+log.info("reading petal metrology")
+filename = resource_filename('desimeter',"data/UMT-DESI-5421.csv")
+log.info(" in {}".format(filename))
+spots = Table.read(filename,format="csv")
+if 'col0' in spots.dtype.names :
+    spots.remove_column('col0')
+
+
+print("metrology columns:",spots.dtype.names)
+
+
+# force int type
+spots["PETAL_LOC"]=spots["PETAL_LOC"].astype(int)
+
+# keep only petal1
+selection = spots["PETAL_ID"]==1
+spots = spots[:][selection]
+
+# I choose a PETAL_LOC that matches the definition of the IDs for platemaker.
+# This is PETAL_LOC = 2
+spots["PETAL_LOC"][:] = 2
+
+pids=np.zeros(spots["PINHOLE_ID"].size,dtype=int)
+for i,pid in enumerate(spots["PINHOLE_ID"]) :
+    pid=str(pid)
+    if pid[0]=="M":
+        pids[i]=int(pid[1])
+    else :
+        try :
+            pids[i]=int(pid)
+        except ValueError as e :
+            pids[i]=0
+spots["PINHOLE_ID"]=pids
+
+r=np.sqrt(spots["X_PTL"]**2+spots["Y_PTL"]**2)
+ii=np.where( r < 1.)[0]
+for i in ii :
+    log.warning("BAD DATA {} {} type={} xptl={} yptl={} xmnt={} ymnt={}".format(spots["PETAL_LOC"][i],spots["DEVICE_LOC"][i],spots["DEVICE_TYPE"][i],spots["X_PTL"][i],spots["Y_PTL"][i],spots["X_MNT"][i],spots["Y_MNT"][i]))
+spots=spots[:][r>1.] # exclude bad data??
+
+spots = apply_ptl2fp(spots)
+
+spots["LOCATION"] = spots["PETAL_LOC"]*1000+spots["DEVICE_LOC"]
+
+spots.write(args.outfile,format='csv',overwrite=True)
+
+log.info("wrote {}".format(args.outfile))
+
+
+
