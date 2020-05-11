@@ -31,7 +31,7 @@ parser.add_argument('--output-transform', type = str, default = None, required =
                     help = 'write transformation to this json file')
 parser.add_argument('--input-transform', type = str, default = None, required = False,
                     help = 'use this json file as input for the match, defaut is data/default-fvc2fp.json')
-parser.add_argument('--pinhole-max-separation', type = float, default = 10, required = False,
+parser.add_argument('--pinhole-max-separation-mm', type = float, default = 1.5, required = False,
                     help = 'pinhole maximum separation in pixels')
 parser.add_argument('--max-match-distance', type = float, default = 7, required = False,
                     help = 'maximum match distance in mm')
@@ -120,7 +120,7 @@ for seqid,spots in enumerate(spots_list) :
         print("wrote {}".format(outfile))
         continue
         
-    spots = findfiducials(spots,input_transform=args.input_transform,separation=args.pinhole_max_separation)
+    spots = findfiducials(spots,input_transform=args.input_transform,pinhole_max_separation_mm=args.pinhole_max_separation_mm)
     
     n_matched_pinholes = np.sum(spots['PINHOLE_ID'] > 0)
     n_matched_fiducials = np.sum(spots['PINHOLE_ID'] == 4)
