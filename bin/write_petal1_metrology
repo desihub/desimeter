@@ -70,6 +70,18 @@ spots = apply_ptl2fp(spots)
 
 spots["LOCATION"] = spots["PETAL_LOC"]*1000+spots["DEVICE_LOC"]
 
+# add positioner id and bus id
+
+filename=resource_filename('desimeter',"data/lbl-petal1/petal-01-ids.csv")
+if os.path.isfile(filename) :
+    ids=Table.read(filename)
+    loc2ind={loc:i for i,loc in enumerate(ids["DEVICE_LOC"])}
+    spots["DEVICE_ID"]=np.array([ ids["DEVICE_ID"][loc2ind[loc]] for loc in spots["DEVICE_LOC"] ])
+    spots["BUS_ID"]=np.array([ ids["BUS_ID"][loc2ind[loc]] for loc in spots["DEVICE_LOC"] ])
+    
+
+
+
 spots.write(args.outfile,format='csv',overwrite=True)
 
 log.info("wrote {}".format(args.outfile))
