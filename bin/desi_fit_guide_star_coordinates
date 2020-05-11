@@ -7,6 +7,7 @@ import fitsio
 
 from desimeter.log import get_logger
 from desimeter.fieldmodel import FieldModel
+from desimeter.transform.gfa2fp import fp2gfa
 from desimeter.time import mjd2lst
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -20,6 +21,8 @@ parser.add_argument('--fits-header', type = str, default = None, required = True
 parser.add_argument('--plot', action = 'store_true')
 parser.add_argument('--save-plot', type=str, default=None,
                     help='Base filename for plots')
+parser.add_argument('--cat', '--catalog', dest='cat', type=str, default=None,
+                    help='Output catalog filename')
 
 args  = parser.parse_args()
 log   = get_logger()
@@ -53,6 +56,37 @@ with open(args.outfile, 'w') as file:
     file.write(fm.tojson())
 print("wrote",args.outfile)
 
+if args.cat:
+    t=catalog
+    xgfa=t["xcentroid"]
+    ygfa=t["ycentroid"]
+    pet=t["petal_loc"]
+    xfp,yfp = fm.all_gfa2fp(xgfa,ygfa,pet)
+    ra2,dec2=fm.fp2radec(xfp,yfp)
+    t['fit_fx'] = xfp
+    t['fit_fy'] = yfp
+    t['fit_ra'] = ra2
+    t['fit_dec'] = dec2
+    ra=t["ra_gaia"]
+    dec=t["dec_gaia"]
+    t['fit_gaia_fx'] = np.zeros(len(t), np.float32)
+    t['fit_gaia_fy'] = np.zeros(len(t), np.float32)
+    t['fit_gaia_x'] = np.zeros(len(t), np.float32)
+    t['fit_gaia_y'] = np.zeros(len(t), np.float32)
+    # Skip chips missing GFA metrology
+    ii=(xfp!=0)
+    t = t[ii]
+    cams = np.unique(t['camera'])
+    for cam in cams:
+        I = np.flatnonzero(t['camera'] == cam)
+        petal = t["petal_loc"][I[0]]
+        gfx,gfy = fm.radec2fp(ra[I], dec[I])
+        gx,gy = fp2gfa(petal, gfx, gfy)
+        t['fit_gaia_fx'][I] = gfx
+        t['fit_gaia_fy'][I] = gfy
+        t['fit_gaia_x'][I] = gx
+        t['fit_gaia_y'][I] = gy
+    t.write(args.cat, format='fits', overwrite=True)
 
 if args.plot or args.save_plot:
     import matplotlib.pyplot as plt
