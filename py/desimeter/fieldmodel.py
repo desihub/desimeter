@@ -151,7 +151,7 @@ class FieldModel(object):
         # first transfo: gfa2fp
         x_fp,y_fp = self.all_gfa2fp(x_gfa,y_gfa,petal_loc=catalog["petal_loc"])
         
-        # keep only petal data for which we have the metrology        
+        # keep only petal data for which we have the metrology
         selection = (x_fp!=0)
         x_gfa    = x_gfa[selection]
         y_gfa    = y_gfa[selection]

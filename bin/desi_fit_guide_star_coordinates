@@ -18,7 +18,9 @@ parser.add_argument('-o','--outfile', type = str, default = None, required = Tru
 parser.add_argument('--fits-header', type = str, default = None, required = True,
                     help = 'path to file with fits header to read time and sky coordinates')
 parser.add_argument('--plot', action = 'store_true')
-                    
+parser.add_argument('--save-plot', type=str, default=None,
+                    help='Base filename for plots')
+
 args  = parser.parse_args()
 log   = get_logger()
 
@@ -32,21 +34,18 @@ if not "TARGTRA" in header :
         log.error("no TARGTRA in headers of HDU 0 or 1 of file {}".format(args.fits_header))
         sys.exit(12)
 
-        
 fm.ra  = header["TARGTRA"]
 fm.dec = header["TARGTDEC"]
 fm.expid = header["EXPID"]
 fm.hexrot_deg = float(header["FOCUS"][5])/3600.
-
 fm.adc1 = header["ADC1PHI"]
 fm.adc2 = header["ADC2PHI"]
 
 catalog = fm.read_guide_stars_catalog(args.infile)
 
 # MJD and LST are needed for sky transform
-fm.mjd    = np.mean(catalog["mjd_obs"])
-fm.lst    = mjd2lst(fm.mjd)
-
+fm.mjd = np.mean(catalog["mjd_obs"])
+fm.lst = mjd2lst(fm.mjd)
 fm.fit_tancorr(catalog)
 
 # save it
@@ -55,7 +54,7 @@ with open(args.outfile, 'w') as file:
 print("wrote",args.outfile)
 
 
-if args.plot :
+if args.plot or args.save_plot:
     import matplotlib.pyplot as plt
 
     t=catalog
@@ -66,7 +65,7 @@ if args.plot :
     # re-read the model to also test the I/O
     with open(args.outfile) as file :
         fm = FieldModel.fromjson(file.read())
-    
+
     xfp,yfp = fm.all_gfa2fp(xgfa,ygfa,pet)
     ra2,dec2=fm.fp2radec(xfp,yfp)
 
@@ -79,12 +78,73 @@ if args.plot :
     dr2=dx**2+dy**2
     rms=np.sqrt(np.mean(dr2))
     print("rms (GAIA RA,Dec - Measurement) = {:3.2f} arcsec".format(rms*3600.))
-    
-    plt.figure("sky")
-    plt.plot(-ra,dec,"o",label="GAIA")
-    plt.plot(-ra2,dec2,"x",label="Measurements")
-    plt.xlabel("-RA (deg)")
+
+    fig = plt.figure("sky")
+    ax = fig.subplots()
+    ax.set_aspect(1. / np.cos(np.deg2rad(np.mean(dec))))
+    plt.plot(ra,dec,"o",label="GAIA")
+    plt.plot(ra2,dec2,"x",label="Measurements")
+    xl,xh = plt.xlim()
+    plt.xlim(xh,xl)
+    plt.xlabel("RA (deg)")
     plt.ylabel("Dec (deg)")
     plt.legend()
-    plt.show()
-    
+    if args.save_plot:
+        plt.savefig(args.save_plot + '1.png')
+    else:
+        plt.show()
+
+    from desimeter.transform.gfa2fp import fp2gfa
+
+    cams = np.unique(t['camera'])
+    for cam in cams:
+        I = np.flatnonzero(t['camera'] == cam)
+        print(len(I), 'for', cam)
+        xx = xfp[I]
+        print('xx', type(xx))
+        if np.all(xx == 0.):
+            continue
+
+        plt.clf()
+        ax = fig.subplots()
+        ax.set_aspect(1. / np.cos(np.deg2rad(np.mean(dec))))
+        plt.plot(ra[I], dec[I], 'b.')
+        plt.quiver(ra[I], dec[I], ra2[I]-ra[I], dec2[I]-dec[I],
+                   label='Measurements - Gaia',
+                   angles='xy', scale_units='xy', scale=0.01)
+        # GFA physical CCD size
+        H,W = 1032,2048
+        xx = np.array([1, 1, W, W, 1])
+        yy = np.array([1, H, H, 1, 1])
+        petal = pet[I[0]]
+        x_c,y_c = fm.all_gfa2fp(xx, yy, np.zeros(len(xx),int) + petal)
+        ra_c,dec_c = fm.fp2radec(x_c,y_c)
+        plt.plot(ra_c, dec_c, 'k-')
+        xl,xh = plt.xlim()
+        plt.xlim(xh,xl)
+        plt.xlabel("RA (deg)")
+        plt.ylabel("Dec (deg)")
+        plt.legend()
+        if args.save_plot:
+            plt.savefig(args.save_plot + '2-%s.png' % cam)
+        else:
+            plt.show()
+
+        plt.clf()
+        plt.plot(xgfa[I], ygfa[I], 'b.')
+        gfx,gfy = fm.radec2fp(ra[I], dec[I])
+        gx,gy = fp2gfa(petal, gfx, gfy)
+        plt.quiver(xgfa[I], ygfa[I], xgfa[I]-gx, ygfa[I]-gy,
+                   label='Measurements - Gaia',
+                   angles='xy', scale_units='xy', scale=0.01)
+        plt.plot(xx, yy, 'k-')
+        m = 20
+        plt.axis([1-m, W+m, 1-m, H+m])
+        plt.axis('equal')
+        plt.xlabel("GFA x (pixels)")
+        plt.ylabel("GFA y (pixels)")
+        plt.legend()
+        if args.save_plot:
+            plt.savefig(args.save_plot + '3-%s.png' % cam)
+        else:
+            plt.show()
