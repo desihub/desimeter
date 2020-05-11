@@ -111,12 +111,12 @@ if args.plot or args.save_plot:
     dx=(ra2[ii]-ra[ii])*np.cos(dec[ii]/180*np.pi)
     dr2=dx**2+dy**2
     rms=np.sqrt(np.mean(dr2))
-    print("rms (GAIA RA,Dec - Measurement) = {:3.2f} arcsec".format(rms*3600.))
+    print("rms (Gaia RA,Dec - Measurement) = {:3.2f} arcsec".format(rms*3600.))
 
     fig = plt.figure("sky")
     ax = fig.subplots()
     ax.set_aspect(1. / np.cos(np.deg2rad(np.mean(dec))))
-    plt.plot(ra,dec,"o",label="GAIA")
+    plt.plot(ra,dec,"o",label="Gaia")
     plt.plot(ra2,dec2,"x",label="Measurements")
     xl,xh = plt.xlim()
     plt.xlim(xh,xl)
@@ -128,17 +128,13 @@ if args.plot or args.save_plot:
     else:
         plt.show()
 
-    from desimeter.transform.gfa2fp import fp2gfa
-
     cams = np.unique(t['camera'])
     for cam in cams:
         I = np.flatnonzero(t['camera'] == cam)
-        print(len(I), 'for', cam)
         xx = xfp[I]
-        print('xx', type(xx))
+        # Skip chips missing GFA metrology
         if np.all(xx == 0.):
             continue
-
         plt.clf()
         ax = fig.subplots()
         ax.set_aspect(1. / np.cos(np.deg2rad(np.mean(dec))))
@@ -182,3 +178,18 @@ if args.plot or args.save_plot:
             plt.savefig(args.save_plot + '3-%s.png' % cam)
         else:
             plt.show()
+
+    plt.clf()
+    for cam in cams:
+        I = np.flatnonzero(t['camera'] == cam)
+        cosdec = np.cos(np.deg2rad(np.mean(dec)))
+        # FIXME
+        dist = np.hypot((ra2[I] - ra[I])*cosdec, dec2[I] - dec[I])
+        dist *= 3600.
+        plt.hist(dist, range=(0,2), bins=50, histtype='step', label=cam)
+    plt.xlabel('Match distance (arcsec)')
+    plt.legend()
+    if args.save_plot:
+        plt.savefig(args.save_plot + '4.png')
+    else:
+        plt.show()
