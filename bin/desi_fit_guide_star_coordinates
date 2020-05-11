@@ -112,6 +112,8 @@ if args.plot or args.save_plot:
     dr2=dx**2+dy**2
     rms=np.sqrt(np.mean(dr2))
     print("rms (Gaia RA,Dec - Measurement) = {:3.2f} arcsec".format(rms*3600.))
+    rmeds=np.sqrt(np.median(dr2))
+    print("r[median]s (Gaia RA,Dec - Measurement) = {:3.2f} arcsec".format(rmeds*3600.))
 
     fig = plt.figure("sky")
     ax = fig.subplots()
