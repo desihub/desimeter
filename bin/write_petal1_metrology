@@ -18,6 +18,9 @@ parser.add_argument('-o','--outfile', type = str, default = None, required = Tru
 
 if "DESIMETER_DATA" not in os.environ :
     print("error: you need to set first the env. variable DESIMETER_DATA to point to the petal1 data")
+    datadir=resource_filename('desimeter',"data/lbl-petal1")
+    if os.path.isdir(datadir) :
+        print("maybe export DESIMETER_DATA={}".format(datadir))
     sys.exit(12)
     
 
@@ -42,9 +45,8 @@ spots["PETAL_LOC"]=spots["PETAL_LOC"].astype(int)
 selection = spots["PETAL_ID"]==1
 spots = spots[:][selection]
 
-# I choose a PETAL_LOC that matches the definition of the IDs for platemaker.
-# This is PETAL_LOC = 2
-spots["PETAL_LOC"][:] = 2
+# I choose PETAL_LOC = 0
+spots["PETAL_LOC"][:] = 0
 
 pids=np.zeros(spots["PINHOLE_ID"].size,dtype=int)
 for i,pid in enumerate(spots["PINHOLE_ID"]) :
