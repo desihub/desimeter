@@ -16,7 +16,7 @@ parser.add_argument('-i','--infile', type = str, default = None, required = True
                     help = 'path to a GFA catalog file, fits or csv, like ""')
 parser.add_argument('-o','--outfile', type = str, default = None, required = True,
                     help = 'path to output json file with transformation parameters')
-parser.add_argument('--fits-header', type = str, default = None, required = True,
+parser.add_argument('--fits-header', type = str, default = None,
                     help = 'path to file with fits header to read time and sky coordinates')
 parser.add_argument('--plot', action = 'store_true')
 parser.add_argument('--save-plot', type=str, default=None,
@@ -29,7 +29,11 @@ log   = get_logger()
 
 fm = FieldModel()
 
-header  = fitsio.read_header(args.fits_header,0)
+if args.fits_header:
+    header  = fitsio.read_header(args.fits_header,0)
+else:
+    header = fitsio.read_header(args.infile, 'GUIDER')
+
 if not "TARGTRA" in header :
     log.warning("no TARGTRA in header of HDU 0, try HDU 1")
     header  = fitsio.read_header(args.fits_header,1)
