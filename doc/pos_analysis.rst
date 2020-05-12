@@ -6,16 +6,14 @@ The general sequence of events is:
 
    #) This could be at the Mayall or in the lab.
 
+#) Calculate measured fiber positions from FVC images:
+
+   #) Platemaker, at time of measurement.
+   #) Or desimeter, at any time later.
+
 #) Data is selected from the online database (posmovedb), and stored to local CSV files.
 
-#) Derive measured fiber positions:
-
-   #) Desimeter calculates measured fiber positions from FVC images.
-   #) Or skip this step and use platemaker's values, grabbed from posmovedb. [1]_
-
 #) Analyze / plot.
-
-.. [1] As of 2020-05-12, this is just now being brought online.
 
 Moving / measuring positioners
 ------------------------------
@@ -42,7 +40,9 @@ For every move performed, numerous values get stored in the online database (pos
       #) ``EXPOSURE_ID`` and ``EXPOSURE_ITER``, index values to identify associated FVC FITS file with that row in posmovedb
       
       #) ``MOVE_CMD``, ``MOVE_VAL1``, ``MOVE_VAL2``, ``LOG_NOTE``, fields that can be parsed to determine what higher level operation was being performed
-      
+
+As of 2020-05-12, items (2), (3), (4) are just now being brought online.
+
 Anytime a calibration value is changed (such as ``LENGTH_R1``, ``LENGTH_R2``, etc), or indeed any other change of positioner state data, that fact will be recorded in the online database.
 
 Retreiving data from the online database
@@ -54,4 +54,6 @@ As of 2020-05-12, desimeter provides the following tools:
 * ``get_posmov_fvc_data`` ... Matches timestamps between posmovedb and fvc FITS files, saves csv combining posmovedb rows with desimeter’s analysis of the measured positions.
 
 * ``get_posmov_calib`` ... Just grabs values like ``LENGTH_*``, ``OFFSET_*`` etc from posmovedb, saves csv.
+
+
 
