@@ -22,11 +22,13 @@ Moving / measuring positioners
 This happens outside of desimeter. The robots are always moved using ``PetalApp.py``, which is an ICS wrapper around ``petal.py``.
 
 ``<desi_svn>/code/online/Positioner/PetalApp/<some_tag_or_branch>/python/PetalApp/PetalApp.py``
+
 ``<desi_svn>/code/focalplane/plate_control/<some_tag_or_branch>/petal/petal.py``
 
 Depending on the operational circumstance, there will be different high-level scripts which send the requests for which targets to go to, and when to trigger the FVC camera. These are in general the night time OCS script, or else for "xytests" and "arc calibrations", etc, the various PECS scripts.
 
-``<desi_svn>/code/online/OCS/<some_tag_or_branch>/python/OCS/
+``<desi_svn>/code/online/OCS/<some_tag_or_branch>/python/OCS/``
+
 ``<desi_svn>/code/focalplane/plate_control/<some_tag_or_branch>/pecs/``
 
 For every move performed, numerous values get stored in the online database (posmovedb). These include:
@@ -47,16 +49,9 @@ Retreiving data from the online database
 ----------------------------------------
 The posmovedb for the instrument at the Mayall is hosted at KPNO, and regularly mirrored to NERSC. There is a similar posmovedb hosted at LBNL on the beyonce server, just for test petals there.
 
-Desimeter provides the following tools:
+As of 2020-05-12, desimeter provides the following tools:
 
 * ``get_posmov_fvc_data`` ... Matches timestamps between posmovedb and fvc FITS files, saves csv combining posmovedb rows with desimeter’s analysis of the measured positions.
 
 * ``get_posmov_calib`` ... Just grabs values like ``LENGTH_*``, ``OFFSET_*`` etc from posmovedb, saves csv.
-
-   
-   #) 
-
-      
-      
-      
 
