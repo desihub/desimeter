@@ -11,7 +11,7 @@ from astropy.table import Table
 from desimeter.log import get_logger
 from desimeter.detectspots import detectspots
 from desimeter.findfiducials import findfiducials
-from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
+from desimeter.transform.fvc2fp import FVC2FP
 from desimeter.match import match_same_system
 from desimeter.transform.xy2qs import qs2xy
 from desimeter.fieldmodel import FieldModel
@@ -129,9 +129,9 @@ for seqid,spots in enumerate(spots_list) :
         sys.exit(13)
 
 
-    tx = FVCFP_ZhaoBurge.read_jsonfile(fvc2fp_filename())
+    tx = FVC2FP.read_jsonfile(fvc2fp_filename())
     tx.fit(spots, update_spots=True)
-
+    
     if args.expected_positions is not None :
         log.info("reading expected positions in {}".format(args.expected_positions))
         expected_pos = Table.read(args.expected_positions) # auto-magically guess format

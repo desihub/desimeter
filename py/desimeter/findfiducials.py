@@ -8,8 +8,7 @@ from desimeter.log import get_logger
 from astropy.table import Table,Column
 from scipy.spatial import cKDTree as KDTree
 from desimeter.io import load_metrology,fvc2fp_filename
-from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
-from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
+from desimeter.transform.fvc2fp import FVC2FP
 from desimeter.match import match_same_system,match_arbitrary_translation_dilatation
 from desimeter.simplecorr import SimpleCorr
 
@@ -29,13 +28,8 @@ def findfiducials(spots,input_transform=None,pinhole_max_separation_mm=1.5) :
         input_transform = fvc2fp_filename()
     
     log.info("loading input tranform from {}".format(input_transform))
-    try :
-        input_tx = FVCFP_ZhaoBurge.read_jsonfile(input_transform)
-    except AssertionError as e :
-        log.warning("Failed to read input transfo as Zhao Burge, try polynomial...")
-        input_tx = FVCFP_Polynomial.read_jsonfile(input_transform)
-
-    
+    input_tx = FVC2FP.read_jsonfile(input_transform)
+        
     xpix=np.array([2000.,]) ; ypix=np.array([0.,])
     xfp1,yfp1=input_tx.fvc2fp(xpix,ypix)
     xfp2,yfp2=input_tx.fvc2fp(xpix+1,ypix)
