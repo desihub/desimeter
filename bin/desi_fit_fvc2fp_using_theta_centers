@@ -1,0 +1,123 @@
+#!/usr/bin/env python
+
+import os
+import numpy as np
+import sys
+from desimeter.util import parse_fibers
+import matplotlib.pyplot as plt
+from astropy.table import Table
+
+import argparse
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="""FVC image processing""")
+parser.add_argument('-i','--infile', type = str, default = None, required = True, nargs="*",
+                    help = 'path to input circles CSV files (output of desi_fit_circles)')
+parser.add_argument('-o','--outfile', type = str, default = None, required = True,
+                    help = 'path to output transformation json file')
+parser.add_argument('--zbpolids', type=str, default="0,1,2,3,4,5,6,9,20,27,28,29,30", required = False,
+                    help = 'list of ZB coefficients to fit. 0,1,2,27 are mandatory (2xtranslation,magnification,rotation)')
+parser.add_argument('--plot',action='store_true',help="plot")
+
+args  = parser.parse_args()
+zbpolids = parse_fibers(args.zbpolids)
+if not np.all(np.in1d([0,1,2,27],zbpolids)) :
+    print("error, need at least 0,1,2,27 in zppolids")
+    sys.exit(12)
+
+x1=[]
+y1=[]
+x2=[]
+y2=[]
+for filename in args.infile :
+    print(filename)
+    if not os.path.isfile(filename) : continue
+    t=Table.read(filename)
+    x1.append(t["X_FP"])
+    y1.append(t["Y_FP"])
+    x2.append(t["X_FP_METRO"])
+    y2.append(t["Y_FP_METRO"])
+    
+
+x1 = np.hstack(x1)
+y1 = np.hstack(y1)
+x2 = np.hstack(x2)
+y2 = np.hstack(y2)
+
+
+from desimeter.transform.fvc2fp import FVC2FP #,read_jsonfile
+from desimeter.io import fvc2fp_filename
+from desimeter.transform.zhaoburge import fit_scale_rotation_offset
+transfo=FVC2FP.read_jsonfile(fvc2fp_filename())
+# apply transfo back to pixels
+xpix,ypix = transfo.fp2fvc(x1,y1)
+
+# add more polynomials
+transfo.zbpolids = zbpolids
+# and redo the fit, now globally
+rxpix, rypix = transfo._reduce_xyfvc(xpix,ypix)
+rxfp, ryfp = transfo._reduce_xyfp(x2,y2)
+scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = fit_scale_rotation_offset(rxpix, rypix, rxfp, ryfp, fitzb=True, zbpolids=transfo.zbpolids, zbcoeffs=transfo.zbcoeffs)
+transfo.scale = scale
+transfo.rotation = rotation
+transfo.offset_x = offset_x
+transfo.offset_y = offset_y
+transfo.zbpolids = zbpolids
+transfo.zbcoeffs = zbcoeffs
+# and apply it now
+x1b,y1b = transfo.fvc2fp(xpix,ypix)
+
+dist=np.sqrt((x1b-x2)**2+(y1b-y2)**2)
+
+ok=(dist<0.08)
+
+scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = fit_scale_rotation_offset(rxpix[ok], rypix[ok], rxfp[ok], ryfp[ok], fitzb=True, zbpolids=transfo.zbpolids, zbcoeffs=transfo.zbcoeffs)
+transfo.scale = scale
+transfo.rotation = rotation
+transfo.offset_x = offset_x
+transfo.offset_y = offset_y
+transfo.zbpolids = zbpolids
+transfo.zbcoeffs = zbcoeffs
+# and apply it now
+x1b,y1b = transfo.fvc2fp(xpix,ypix)
+
+transfo.write_jsonfile(args.outfile)
+print("wrote {}".format(args.outfile))
+
+if args.plot :
+    
+    refit=True
+
+    plt.figure("theta-centers")
+    if refit :
+        plt.subplot(211,title="before adjustment")
+    plt.quiver(x1,y1,x1-x2,y1-y2)
+    nmad2d=1.20*np.median(np.sqrt((x1-x2)**2+(y1-y2)**2))
+    rms2d=np.sqrt(np.mean((x1-x2)**2+(y1-y2)**2))
+    plt.text(50,160,"rms (2D)  = {:4.0f} um".format(rms2d*1000.))
+    plt.text(50,140,"nmad (2D) = {:4.0f} um".format(nmad2d*1000.))
+
+    if refit :
+        plt.subplot(212,title="after adjustment")
+        plt.quiver(x1b,y1b,x1b-x2,y1b-y2)
+        dist=np.sqrt((x1b-x2)**2+(y1b-y2)**2)
+        ok=(dist<0.08)
+        nmad2d=1.20*np.median(dist)
+        rms2d=np.sqrt(np.mean(dist**2))
+        print("nmad2d(all)=",nmad2d)
+        print("rms2d(all)=",rms2d)
+        #nmad2d=1.20*np.median(dist[ok])
+        #rms2d=np.sqrt(np.mean(dist[ok]**2))
+        #print("nmad2d(selected)=",nmad2d)
+        #print("rms2d(selected)=",rms2d)
+
+        ii=np.argsort(dist)[::-1]
+        print(ii[:10],dist[ii[:10]])
+
+        plt.text(50,160,"rms (2D)  = {:4.0f} um".format(rms2d*1000.))
+        plt.text(50,140,"nmad (2D) = {:4.0f} um".format(nmad2d*1000.))
+
+
+
+    plt.legend()
+    plt.show()

@@ -8,15 +8,15 @@ from desimeter.log import get_logger
 from astropy.table import Table,Column
 from scipy.spatial import cKDTree as KDTree
 from desimeter.io import load_metrology,fvc2fp_filename
-from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
-from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
+from desimeter.transform.fvc2fp import FVC2FP
 from desimeter.match import match_same_system,match_arbitrary_translation_dilatation
 from desimeter.simplecorr import SimpleCorr
 
 metrology_pinholes_table = None
 metrology_fiducials_table = None
 
-def findfiducials(spots,input_transform=None,separation=8.) :
+
+def findfiducials(spots,input_transform=None,pinhole_max_separation_mm=1.5) :
     
     
     global metrology_pinholes_table
@@ -28,12 +28,14 @@ def findfiducials(spots,input_transform=None,separation=8.) :
         input_transform = fvc2fp_filename()
     
     log.info("loading input tranform from {}".format(input_transform))
-    try :
-        input_tx = FVCFP_ZhaoBurge.read_jsonfile(input_transform)
-    except AssertionError as e :
-        log.warning("Failed to read input transfo as Zhao Burge, try polynomial...")
-        input_tx = FVCFP_Polynomial.read_jsonfile(input_transform)
-    
+    input_tx = FVC2FP.read_jsonfile(input_transform)
+        
+    xpix=np.array([2000.,]) ; ypix=np.array([0.,])
+    xfp1,yfp1=input_tx.fvc2fp(xpix,ypix)
+    xfp2,yfp2=input_tx.fvc2fp(xpix+1,ypix)
+    pixel2fp = np.sqrt((xfp2-xfp1)**2+(yfp2-yfp1)**2)[0] # mm
+    pinhole_max_separation_pixels = pinhole_max_separation_mm/pixel2fp
+    log.info("with pixel2fp = {:4.3f} mm, pinhole max separation = {:4.3f} pixels ".format(pixel2fp,pinhole_max_separation_pixels))
     
     if metrology_pinholes_table is None :
         metrology_table = load_metrology()
@@ -61,11 +63,9 @@ def findfiducials(spots,input_transform=None,separation=8.) :
     nspots=spots["XPIX"].size
     xy   = np.array([spots["XPIX"],spots["YPIX"]]).T
     tree = KDTree(xy)
-
-    inclusive_separation = 2*separation
-    inclusive_separation = separation
-    measured_spots_distances,measured_spots_indices = tree.query(xy,k=4,distance_upper_bound=inclusive_separation)
-    number_of_neighbors = np.sum( measured_spots_distances<separation,axis=1)
+    
+    measured_spots_distances,measured_spots_indices = tree.query(xy,k=4,distance_upper_bound=pinhole_max_separation_pixels)
+    number_of_neighbors = np.sum( measured_spots_distances<pinhole_max_separation_pixels,axis=1)
     fiducials_candidates_indices = np.where(number_of_neighbors>=4)[0]  # including self, so at least 3 pinholes
     log.debug("number of fiducials=",fiducials_candidates_indices.size)
     
@@ -119,7 +119,7 @@ def findfiducials(spots,input_transform=None,separation=8.) :
         
         # get indices of all pinholes for this matched fiducial
         # note we now use the full pinholes metrology table
-        pi1 = measured_spots_indices[index1][measured_spots_distances[index1]<separation]
+        pi1 = measured_spots_indices[index1][measured_spots_distances[index1]<pinhole_max_separation_pixels]
         pi2 = np.where(metrology_pinholes_table["LOCATION"]==location)[0]
         
         x1 = spots["XPIX"][pi1]
