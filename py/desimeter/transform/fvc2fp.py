@@ -2,20 +2,21 @@
 Utility functions to fit and apply coordinates transformation from FVC to FP
 """
 
-import os
 import json
 import numpy as np
-from astropy.table import Table,Column
 
 from desimeter.io import load_metrology
 from desimeter.log import get_logger
-from desimeter.transform.zhaoburge import getZhaoBurgeXY, getZhaoBurgeTerm, transform, fit_scale_rotation_offset, fitZhaoBurge
+from desimeter.transform.zhaoburge import getZhaoBurgeXY, transform, fit_scale_rotation_offset
 
 #-------------------------------------------------------------------------
 
 class FVC2FP(object):
 
     def __init__(self):
+        """
+        init
+        """
         self.xfvc_scale  = -3000.
         self.yfvc_scale  = 3000.
         self.xfvc_offset = 3000.
@@ -96,7 +97,7 @@ class FVC2FP(object):
             tx.zbpolids = np.asarray(params['zbpolids'])
             tx.zbcoeffs = np.asarray(params['zbcoeffs']).astype(float)
         else :
-            raise RuntimeError("don't know version {}".format(version))
+            raise RuntimeError("don't know version {}".format(params['version']))
 
         if 'xfvc_scale' in params  : tx.xfvc_scale = params['xfvc_scale']
         if 'yfvc_scale' in params  : tx.yfvc_scale = params['yfvc_scale']
@@ -106,7 +107,10 @@ class FVC2FP(object):
         return tx
 
     def fit(self, spots, metrology=None, update_spots=False, zbfit=True):
-        """TODO: document"""
+        """
+        TODO: document
+        """
+
         log = get_logger()
         if metrology is not None:
             self.metrology = metrology
