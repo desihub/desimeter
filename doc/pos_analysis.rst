@@ -15,7 +15,7 @@ The general sequence of events is:
 
 #) Analyze / plot.
 
-Moving / measuring positioners
+Moving positioners + measuring
 ------------------------------
 This happens outside of desimeter. The robots are always moved using ``PetalApp.py``, which is an ICS wrapper around ``petal.py``.
 
@@ -41,9 +41,13 @@ For every move performed, numerous values get stored in the online database (pos
       
       #) ``MOVE_CMD``, ``MOVE_VAL1``, ``MOVE_VAL2``, ``LOG_NOTE``, fields that can be parsed to determine what higher level operation was being performed
 
-As of 2020-05-12, items (2), (3), (4) are just now being brought online.
+*(As of 2020-05-12, items (2), (3), (4) are in the process of being brought online.)*
 
 Anytime a calibration value is changed (such as ``LENGTH_R1``, ``LENGTH_R2``, etc), or indeed any other change of positioner state data, that fact will be recorded in the online database.
+
+Re-analysis of fiber positions with desimeter
+---------------------------------------------
+FVC fits files can be re-analyzed at any time after the fact using desimeter. Also see: `<posmov.rst>`_
 
 Retreiving data from the online database
 ----------------------------------------
@@ -55,5 +59,17 @@ As of 2020-05-12, desimeter provides the following tools:
 
 * ``get_posmov_calib`` ... Just grabs values like ``LENGTH_*``, ``OFFSET_*`` etc from posmovedb, saves csv.
 
+Analysis of positioning performance
+-----------------------------------
 
+As of 2020-05-12, desimeter provides the following tools:
+
+* ``fit_posparams`` ... Fits positioner calibration parameters, by comparing measured (x,y) to internally-tracked (theta,phi).
+
+* ``plot_posparams`` ... Plots results from fit_posparams per positioner. Also plots cumulative positioner errors over time, as calculated when performing those best-fits.
+
+* ``plot_positioner`` ...
+
+* ``plot_posmove`` ...
+	
 
