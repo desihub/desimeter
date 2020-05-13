@@ -290,6 +290,44 @@ def fit_scale_rotation_offset(x, y, xp, yp, fitzb=False, polids=None):
         return scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs
     else:
         return scale, rotation, offset_x, offset_y
+    
+def fit_scale_rotation_offset(x, y, xp, yp, fitzb=False, zbpolids=None, zbcoeffs=None):
+    """
+    Fit scale, rotation, offset plus optional Zhao-Burge corrections
+    for x,y -> xp,yp.
+
+    TODO: document details
+    """
+
+
+    # if coeffs are not Null we have to apply the ZB correction in
+    # the fit of the coefficients scale, rotation, offset_x, offset_y
+    # because values of non-linear terms are changing with
+    # the scale, rotation, offset_x, offset_y that is applied to
+    # the input coordinates.
+
+    # however the first if just a fit of scale, rotation, offset_x, offset_y
+    
+    def func(params, x, y, xp, yp):
+        scale, rotation, offset_x, offset_y = params[0:4]
+        xx, yy = transform(x, y, scale, rotation, offset_x, offset_y, zbpolids=zbpolids, zbcoeffs=zbcoeffs)
+        dr2 = np.sum((xx-xp)**2 + (yy-yp)**2)
+        return dr2
+    
+    p0 = np.array([1.0,0.0,0.0,0.0])
+    p  = minimize(func, p0, args=(x, y, xp, yp))
+
+    scale, rotation, offset_x, offset_y = p.x
+
+    if fitzb :
+
+        # here we refit only the ZB coefficients, but those should include provision
+        # for adjustment of shift translation rotation 
+        xx, yy = transform(x, y, scale, rotation, offset_x, offset_y)
+        zbpolids, zbcoeffs, zbx, zby = fitZhaoBurge(xx, yy, xp, yp, zbpolids)
+        return scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs
+    else:
+        return scale, rotation, offset_x, offset_y
 
 def fitZhaoBurge(x, y, xp, yp, polids=None):
     dx = xp-x
