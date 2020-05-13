@@ -4,17 +4,12 @@ Utility functions to fit and apply coordinates transformation from FVC to FP
 
 import os
 import json
-from desimeter.io import load_metrology
 import numpy as np
 from astropy.table import Table,Column
 
+from desimeter.io import load_metrology
 from desimeter.log import get_logger
-
-
 from desimeter.transform.zhaoburge import getZhaoBurgeXY, getZhaoBurgeTerm, transform, fit_scale_rotation_offset, fitZhaoBurge
-
-
-
 
 #-------------------------------------------------------------------------
 
@@ -37,7 +32,7 @@ class FVC2FP(object):
     def write_jsonfile(self, filename):
         with open(filename, 'w') as fx:
             fx.write(self.tojson())
-    
+
     #- Utility transforms to/from reduced [-1,1] coordinates
     def _reduce_xyfp(self, x, y):
         """
@@ -52,7 +47,7 @@ class FVC2FP(object):
         """
         a = 420.0
         return x*a, y*a
-    
+
     def _reduce_xyfvc(self, x, y):
         """
         Rescale FVC xy pix coords  -> [-1,1]
@@ -64,7 +59,7 @@ class FVC2FP(object):
         Undo _redux_xyfvc() transform
         """
         return x*self.xfvc_scale+self.xfvc_offset, y*self.yfvc_scale+self.yfvc_offset
-    
+
     def tojson(self):
         params = dict()
         params['method'] = 'Zhao-Burge'
@@ -107,7 +102,7 @@ class FVC2FP(object):
         if 'yfvc_scale' in params  : tx.yfvc_scale = params['yfvc_scale']
         if 'xfvc_offset' in params : tx.xfvc_offset = params['xfvc_offset']
         if 'yfvc_offset' in params : tx.yfvc_offset = params['yfvc_offset']
-        
+
         return tx
 
     def fit(self, spots, metrology=None, update_spots=False, zbfit=True):
@@ -143,10 +138,10 @@ class FVC2FP(object):
         self.rotation = res[1]
         self.offset_x = res[2]
         self.offset_y = res[3]
-        if zbfit :            
+        if zbfit :
             self.zbpolids = res[4]
             self.zbcoeffs = res[5]
-        
+
         #- Goodness of fit
         xfp_fidmeas, yfp_fidmeas = self.fvc2fp(fidspots['XPIX'], fidspots['YPIX'])
         dx = (metrology['X_FP'] - xfp_fidmeas)
@@ -237,7 +232,6 @@ def fit(spots, update_spots=False, zbfit=True):
 
 #- Read JSON file and determine what class to load
 def read_jsonfile(filename):
-    import json
     with open(filename) as fx:
         s = fx.read()
     return FVC2FP.fromjson(s)
