@@ -298,7 +298,7 @@ def fit_scale_rotation_offset(x, y, xp, yp, fitzb=False, zbpolids=None, zbcoeffs
         # here we refit only the ZB coefficients, but those should include provision
         # for adjustment of shift translation rotation
         xx, yy = transform(x, y, scale, rotation, offset_x, offset_y)
-        zbpolids, zbcoeffs, zbx, zby = fitZhaoBurge(xx, yy, xp, yp, zbpolids)
+        zbpolids, zbcoeffs = fitZhaoBurge(xx, yy, xp, yp, zbpolids)
         return scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs
     else:
         return scale, rotation, offset_x, offset_y
@@ -329,6 +329,4 @@ def fitZhaoBurge(x, y, xp, yp, polids=None):
     b = H.T.dot(np.concatenate([dx, dy]))
     coeffs = np.linalg.solve(A, b)
 
-    zbx, zby = getZhaoBurgeXY(polids, coeffs, x, y)
-
-    return polids, coeffs, zbx, zby
+    return polids, coeffs
