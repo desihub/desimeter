@@ -5,6 +5,7 @@ import numpy as np
 from astropy.table import Table,Column # for the IO
 import RT185    # needs DESI-ADC.OPT.CSV  DESI-ADC.RAY.CSV  DESI-ADC.MED.CSV
 # These files give us up to 680 rays, 8 wavelengths.
+from desimeter.trig import sind
 
 refwave = np.array([3650,   4360,   4860,   5880,   6380,   6560,   8520,  10140]) #A
 
@@ -19,7 +20,7 @@ def incoming_rays(adc1=0.,adc2=0., dangle=0.2) :
 
     ntheta=int(1.6/dangle)+1
     for theta_deg in np.linspace(0,1.6,ntheta) :
-        st=np.sin(theta_deg/180*np.pi)
+        st=sind(theta_deg)
         nphi = int((2.*np.pi*theta_deg)/dangle)+1
         phi_rad = np.arange(nphi)*(2.*np.pi/nphi)
         uu = st*np.cos(phi_rad)

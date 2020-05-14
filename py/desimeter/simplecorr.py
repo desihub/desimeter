@@ -4,6 +4,7 @@ Utility class to fit a translation , dilatation , rotation in a cartesian plane
 
 import json
 import numpy as np
+from desimeter.trig import arctan2d, cosd, sind
 
 class SimpleCorr(object):
 
@@ -75,7 +76,7 @@ class SimpleCorr(object):
         ATA = A.T.dot(A)
         p = np.linalg.solve(ATA, ATv)
 
-        self.rot_deg = np.degrees(np.arctan2(p[1], p[0]))
+        self.rot_deg = arctan2d(p[1], p[0])
         self.dx = p[2]
         self.dy = p[3]
         self.sxx = 1.
@@ -130,12 +131,12 @@ class SimpleCorr(object):
         # ax1+ay2 = (sxx+syy)*ca
         # ay1-ax2 = (sxx+syy)*sa
 
-        sxx_p_syy = np.sqrt( (ax[1]+ay[2])**2+(ay[1]-ax[2])**2 )
+        sxx_p_syy = np.hypot(ax[1]+ay[2], ay[1]-ax[2])
         sa=(ay[1]-ax[2])/sxx_p_syy
         ca=(ax[1]+ay[2])/sxx_p_syy
 
         if sa != 0 :
-            self.rot_deg = np.arctan2(sa,ca)*180/np.pi
+            self.rot_deg = arctan2d(sa,ca)
 
             sxy = sa*ax[1]+ca*ay[1] - sxx_p_syy*ca*sa
             sxx =(ax[1]-sxy*sa)/ca
@@ -150,8 +151,8 @@ class SimpleCorr(object):
 
     def apply(self,x,y) :
         scale_matrix = np.array([[self.sxx,self.sxy],[self.sxy,self.syy]])
-        ca=np.cos(self.rot_deg/180*np.pi)
-        sa=np.sin(self.rot_deg/180*np.pi)
+        ca=cosd(self.rot_deg)
+        sa=sind(self.rot_deg)
         rot_matrix = np.array([[ca,-sa],[sa,ca]])
         xy=scale_matrix.dot(rot_matrix.dot(np.array([x,y])))
         return xy[0]+self.dx,xy[1]+self.dy
@@ -159,8 +160,8 @@ class SimpleCorr(object):
     def apply_inverse(self,x,y) :
         det = self.sxx*self.syy - self.sxy**2
         scale_matrix = np.array([[self.syy,-self.sxy],[-self.sxy,self.sxx]])/det
-        ca=np.cos(self.rot_deg/180*np.pi)
-        sa=np.sin(self.rot_deg/180*np.pi)
+        ca=cosd(self.rot_deg)
+        sa=sind(self.rot_deg)
         rot_matrix = np.array([[ca,sa],[-sa,ca]])
         xy=rot_matrix.dot(scale_matrix.dot(np.array([x-self.dx,y-self.dy])))
         return xy[0],xy[1]

@@ -30,6 +30,7 @@ Inputs are pointing TEL_RA,TEL_DEC,MJD,LST,HEXROT and a list of  TARGET_RA,TARGE
 
 import numpy as np
 from desimeter.log import get_logger
+from desimeter.trig import *
 
 ###################################################################################
 # constants
@@ -45,38 +46,6 @@ REFRACTION_AT_30DEG_ELEVATION = 79. # arcsec
 # values based on DESI-5186, fit of commissioning instrument field rotation rotation
 MA_ARCSEC = -2. # arcsec; in the northern hemisphere, positive MA means that the pole of the mounting is to the right of due north
 ME_ARCSEC = -120. # arcsec; in the northern hemisphere, positive ME means that the pole of the mounting is below the true (unrefracted) north (so elevation=latitude-me)
-
-###################################################################################
-D2R = np.pi/180.
-R2D = 1./D2R
-###################################################################################
-
-def sind(degrees):
-    return np.sin(D2R*degrees)
-
-def cosd(degrees):
-    return np.cos(D2R*degrees)
-
-def tand(degrees):
-    return np.tan(D2R*degrees)
-
-def put360(degrees): # Puts an angle into range 0 to 360.
-    return np.fmod(720.+degrees, 360)
-
-def arctan2d(y, x):
-    return put360(np.arctan2(y, x)*R2D)
-
-def arcsind(x):
-    return np.arcsin(x)*R2D
-
-def getXYZ(lon,lat):  # Convert spherical angles (in degrees) into xyz triplet
-    return np.array([cosd(lon)*cosd(lat), sind(lon)*cosd(lat), sind(lat)])
-
-def getNorm(xyz):
-    return np.sqrt(np.sum(xyz**2,axis=0))
-
-def getNormalized(xyz):
-    return xyz/getNorm(xyz)
 
 def getLONLAT(xyz):
     """Convert xyz into its spherical angles"""

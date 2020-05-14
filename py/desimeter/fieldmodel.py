@@ -8,6 +8,7 @@ import numpy as np
 from desimeter.transform.radec2tan import xy2hadec,hadec2xy,tan2radec,radec2tan
 from desimeter.transform.tan2fp import tan2fp,fp2tan
 from desimeter.transform.gfa2fp import gfa2fp
+from desimeter.trig import cosd, sind, arctan2d
 
 from desimeter.log import get_logger
 from astropy.table import Table
@@ -98,9 +99,9 @@ class FieldModel(object):
         max_sep_arcsec = 2.
         log.info("selection stars for which we have a good match (< {} arcsec)".format(max_sep_arcsec))
 
-        dra  = (catalog["ra"]-catalog["ra_gaia"])*np.cos(catalog["dec_gaia"]/180*np.pi)*3600. # arcsec
-        ddec = (catalog["dec"]-catalog["dec_gaia"])*3600. # arcsec
-        dr = np.sqrt(dra**2+ddec**2)
+        dra  = (catalog["ra"]-catalog["ra_gaia"])*cosd(catalog["dec_gaia"]) * 3600. # arcsec
+        ddec = (catalog["dec"]-catalog["dec_gaia"]) * 3600. # arcsec
+        dr = np.hypot(dra, ddec)
         selection = (dr<2) # arcsec
         if np.sum(selection)==0 :
             log.error("no star is matched with sufficient precision!")
@@ -170,7 +171,7 @@ class FieldModel(object):
 
             # opposite sign for the telescope offset because I have converted GAIA RA Dec to tangent plane ...
             self.dec -= correction.ddec
-            self.ra  += correction.dha/np.cos(self.dec*np.pi/180.) # HA = LST-RA
+            self.ra  += correction.dha/cosd(self.dec) # HA = LST-RA
 
 
         # save params to this
@@ -334,6 +335,7 @@ class TanCorr(object):
             dx = np.mean(x2-x1t)
             dy = np.mean(y2-y1t)
             #print(i,dx,dy)
+            #### FIXME -- cosd / deg2rad etc here
             self.dha -= dx/np.cos(self.ddec)*180./np.pi
             self.ddec -= dy*180./np.pi
         x1t,y1t  = hadec2xy(ha,dec,self.dha,self.ddec)
@@ -351,8 +353,9 @@ class TanCorr(object):
         ay = Ai.dot(np.sum(y2*H,axis=1))
         y2p = ay[0] + ay[1]*x1t + ay[2]*y1t # y2p = predicted y2 from y1t
 
-         # tangent plane coordinates are in radians
-        self.rms_arcsec = np.sqrt( np.mean( (x2-x2p)**2 + (y2-y2p)**2 ) )*(180*3600)/np.pi
+        # tangent plane coordinates are in radians
+        rms = np.sqrt( np.mean( (x2-x2p)**2 + (y2-y2p)**2 ) )
+        self.rms_arcsec = np.rad2deg(rms) * 3600.
 
         # interpret this back into telescope pointing offset, field rotation, dilatation
 
@@ -360,8 +363,8 @@ class TanCorr(object):
         # increasing gaia stars x means telescope is more to the left so tel_ha should be decreased
         # increasing gaia stars y means telescope is more to the bottom so tel_dec should be decreased
         # tangent plane coordinates are in rad
-        ddha  = -ax[0]*180./np.pi
-        dddec = -ay[0]*180./np.pi
+        ddha  = -np.rad2deg(ax[0])
+        dddec = -np.rad2deg(ay[0])
 
         self.dha  += ddha
         self.ddec += dddec
@@ -374,11 +377,11 @@ class TanCorr(object):
         # ax1+ay2 = (sxx+syy)*ca
         # ay1-ax2 = (sxx+syy)*sa
 
-        sxx_p_syy = np.sqrt( (ax[1]+ay[2])**2+(ay[1]-ax[2])**2 )
+        sxx_p_syy = np.hypot(ax[1] + ay[2], ay[1] - ax[2])
         sa=(ay[1]-ax[2])/sxx_p_syy
         ca=(ax[1]+ay[2])/sxx_p_syy
 
-        self.rot_deg = np.arctan2(sa,ca)*180/np.pi
+        self.rot_deg = arctan2d(sa,ca)
 
         sxy = sa*ax[1]+ca*ay[1] - sxx_p_syy*ca*sa
         sxx =(ax[1]-sxy*sa)/ca
@@ -390,8 +393,8 @@ class TanCorr(object):
 
     def apply(self,x,y) :
         scale_matrix = np.array([[self.sxx,self.sxy],[self.sxy,self.syy]])
-        ca=np.cos(self.rot_deg/180*np.pi)
-        sa=np.sin(self.rot_deg/180*np.pi)
+        ca=cosd(self.rot_deg)
+        sa=sind(self.rot_deg)
         rot_matrix = np.array([[ca,-sa],[sa,ca]])
         ha,dec  = xy2hadec(x,y,0,0)
         x1t,y1t = hadec2xy(ha,dec,self.dha,self.ddec)
@@ -403,8 +406,8 @@ class TanCorr(object):
         det = self.sxx*self.syy - self.sxy**2
         scale_matrix = np.array([[self.syy,-self.sxy],[-self.sxy,self.sxx]])/det
 
-        ca=np.cos(self.rot_deg/180*np.pi)
-        sa=np.sin(self.rot_deg/180*np.pi)
+        ca=cosd(self.rot_deg)
+        sa=sind(self.rot_deg)
         rot_matrix = np.array([[ca,sa],[-sa,ca]])
         ha,dec  = xy2hadec(x,y,0,0)
         x1t,y1t = hadec2xy(ha,dec,self.dha,self.ddec)

@@ -174,7 +174,7 @@ class TAN2FP_RayTraceFit(object) :
         """
         scale,rotation,offset_x,offset_y,zbcoeffs = self.interpolate_coeffs(adc1,adc2)
 
-        mean_adc_rad = (adc1+adc2)/2. *np.pi/180.
+        mean_adc_rad = np.deg2rad((adc1+adc2)/2.)
         ca = np.cos(mean_adc_rad)
         sa = np.sin(mean_adc_rad)
 
@@ -200,7 +200,7 @@ class TAN2FP_RayTraceFit(object) :
 
         scale,rotation,offset_x,offset_y,zbcoeffs = self.interpolate_coeffs(adc1, adc2)
 
-        mean_adc_rad = (adc1+adc2)/2. *np.pi/180.
+        mean_adc_rad = np.deg2rad((adc1+adc2)/2.)
         ca = np.cos(mean_adc_rad)
         sa = np.sin(mean_adc_rad)
 
