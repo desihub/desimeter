@@ -54,16 +54,19 @@ def getLONLAT(xyz):
     return  arctan2d(xyz[1],xyz[0]) , arcsind(xyz[2])  # degrees
 
 def vecX(xdeg):  # For positive xdeg=cwRoll: +y=>+z; +z=>-y.
-    c=np.cos(np.radians(xdeg)); s=np.sin(np.radians(xdeg))
+    c=cosd(xdeg)
+    s=sind(xdeg)
     return np.array([[1,0,0], [0,c,-s], [0,+s,c]])
 
 def vecY(ydeg):  # For positive ydeg=-elev: +z=>+x; +x=>-z.
     # do not overlook this minus sign: positive ydeg pitches downward.
-    c=np.cos(np.radians(ydeg)); s=np.sin(np.radians(ydeg))
+    c=cosd(ydeg)
+    s=sind(ydeg)
     return np.array([[c,0,+s], [0,1,0], [-s,0,c]])
 
 def vecZ(zdeg):  # For positive zdeg=+az: +x=>+y; +y=>-x.
-    c=np.cos(np.radians(zdeg)); s=np.sin(np.radians(zdeg))
+    c=cosd(zdeg)
+    s=sind(zdeg)
     return np.array([[c,-s,0], [+s,c,0], [0,0,1]])
 
 def refX(xdeg):  # Rolls reference frame clockwise about X
@@ -355,8 +358,8 @@ def hadec2xy(ha,dec,tel_ha,tel_dec) :
     xyz = getXYZ(ha,dec)
     ch= cosd(tel_ha)
     sh= sind(tel_ha)
-    sd= sind(tel_dec)
     cd= cosd(tel_dec)
+    sd= sind(tel_dec)
     rh=np.array([[ch,sh,0],[-sh,ch,0],[0,0,1]]) # rotation about HA axis
     rd=np.array([[sd,0,-cd],[0,1,0],[+cd,0,sd]]) # rotation about Dec axis
     tmp = rd.dot(rh.dot(xyz))
@@ -379,8 +382,8 @@ def xy2hadec(x,y,tel_ha,tel_dec) :
     """
     ch= cosd(tel_ha)
     sh= sind(tel_ha)
-    sd= sind(tel_dec)
     cd= cosd(tel_dec)
+    sd= sind(tel_dec)
     rh=np.array([[ch,-sh,0],[sh,ch,0],[0,0,1]])
     rd=np.array([[sd,0,cd],[0,1,0],[-cd,0,sd]])
     z = np.sqrt(1-x**2-y**2)
@@ -432,7 +435,7 @@ def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, a
         tel_ra,tel_dec = apply_aberration(tel_ra,tel_dec,mjd, use_astropy)
 
     # ha,dec
-    ha    = lst_deg - ra
+    ha     = lst_deg - ra
     tel_ha = lst_deg - tel_ra
 
     if polar_misalignment :
@@ -460,7 +463,6 @@ def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, a
     chex = cosd(hexrot_deg)
     shex = sind(hexrot_deg)
 
-
     return chex*x-shex*y , +shex*x+chex*y
 
 def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, aberration = True, polar_misalignment = True, use_astropy = False) :
@@ -487,7 +489,7 @@ def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = Tr
     # undo hexapod rotation
     chex = cosd(hexrot_deg)
     shex = sind(hexrot_deg)
-    x = chex*x_tan+shex*y_tan
+    x =  chex*x_tan+shex*y_tan
     y = -shex*x_tan+chex*y_tan
 
     # need to apply precession ... etc to telescope pointing to interpret the x,y

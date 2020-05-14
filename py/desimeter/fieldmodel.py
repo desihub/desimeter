@@ -196,8 +196,8 @@ class FieldModel(object):
 
         # cross of side length 1 degree in tangent plane
         phi = np.arange(4)*np.pi/2.
-        x1 = np.append(0.,np.pi/180.*np.cos(phi))
-        y1 = np.append(0.,np.pi/180.*np.sin(phi))
+        x1 = np.append(0., np.deg2rad(np.cos(phi)))
+        y1 = np.append(0., np.deg2rad(np.sin(phi)))
 
         # convert to sky
         xfp,yfp = tan2fp(x1,y1,self.adc1,self.adc2)
