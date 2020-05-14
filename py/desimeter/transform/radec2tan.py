@@ -190,16 +190,6 @@ def undo_precession_from_icrs(ra, dec, mjd, use_astropy = False) :
         ra2, dec2 = apply_precession(ra, dec, years)
     return ra2,dec2
 
-def radec2eclip(ra_equ,dec_equ) :
-    xyz_equ = getXYZ(ra_equ,dec_equ)
-    xyz_ecl = np.dot(refX(OBLIQ), xyz_equ)  # roll frame clockwise
-    return getLONLAT(xyz_ecl)
-
-def eclip2radec(ra_eclip,dec_eclip) :
-    xyz_eclip = getXYZ(ra_eclip,dec_eclip)
-    xyz_equ   = np.dot(refX(-OBLIQ), xyz_eclip)  # roll frame counterclockwise by obliq
-    return getLONLAT(xyz_equ)
-
 def getSunLon(mjd):  # Given JD.fff, returns sun ecliptic longitude degrees
     # https://en.wikipedia.org/wiki/Position_of_the_Sun
     #days = jd - 2451545.0  # days from Greenwich noon 2000 Jan 01
