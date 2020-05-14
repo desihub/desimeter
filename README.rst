@@ -158,3 +158,8 @@ Other Notes
 desimeter is a work in progress and we expect that class names and module
 organization will change.
 
+
+
+.. image:: https://api.codacy.com/project/badge/Grade/434a19492ea54e8b930f3353c196fffd
+   :alt: Codacy Badge
+   :target: https://app.codacy.com/gh/desihub/desimeter?utm_source=github.com&utm_medium=referral&utm_content=desihub/desimeter&utm_campaign=Badge_Grade_Dashboard
