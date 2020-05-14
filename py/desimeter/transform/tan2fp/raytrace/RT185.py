@@ -3,7 +3,7 @@
 #  RT183.py  Fraunhofer lines (line 1030) are now base=0 but so far unused.
 #     Keeping base=1 Nsurfs, Nrays, Nglasses
 #     Repaired plot color error by calling PLOTCOLORS[], line 1519.
-#  RT182.py  Examining the max ADC angular dispersion over the field. Externally called. 
+#  RT182.py  Examining the max ADC angular dispersion over the field. Externally called.
 #    set up to use Fraunhofer "i" line 365nm and "t" line 1013nm.
 #  RT181.py  Looking at through-focus for KAP-50100 36x49mm sensor, FVC
 #  RT180.py  Studying field distortion of a simple doublet FVC lens
@@ -167,7 +167,7 @@ IDIAM    = 4   # inner diameter validate failure
 SPI      = 5   # spider leg hit killed ray
 TIR      = 6   # refraction failure
 EDGE     = 7   # interpolation beyond safe boundary
-UNKNOWN  = 8   # no valid action 
+UNKNOWN  = 8   # no valid action
 
 failures = ['OK', 'BACK', 'MISS', 'ODIAM', 'IDIAM', 'SPI', 'TIR', 'EDGE', 'UNKNOWN']
 
@@ -191,7 +191,7 @@ Otable          = []                # list of lists of fields: 2D, starting with
 Oheaders        = []                # list of strings, one per field
 OhasZern        = []                # one-based list of booleans
 OhasPoly        = []                # one-based list of booleans
-OglassNames     = []                # one-based list of refractive indices and glass Names. 
+OglassNames     = []                # one-based list of refractive indices and glass Names.
 OneedsMedia     = False             # if True, nonnumerical glass names will require a validated .MED table
 Oarray          = np.empty([0,0])   # Working, possibly modified, optical specification [allSurfaces, allParms]
 
@@ -335,9 +335,9 @@ def getOpticsAttribute(header):
         # print 'getOpticsIndex() finds polynomial field whose index = ', sum
         return summ
     elif c0up=='Z' and c1up=='E' and guidenum<36:
-        sum = OZ0 + guidenum
+        summ = OZ0 + guidenum
         # print 'getOpticsIndex() finds Zernike field whose index = ', sum
-        return sum
+        return summ
     elif c0up=='S' and c3up=='F':   # sag header
         return OSAGFILE
     elif c0up=='S' and c3up=='M':
@@ -613,7 +613,7 @@ def gradConic(iray, jsurf):
         # print '   gradConic() is returning the flange case.'
         return -0.0, -0.0
     coef = c/np.sqrt(arg)  # conic case
-    gx = x*coef
+    #gx = x*coef
     return x*coef, y*coef
 
 def gradPoly(iray, jsurf):
@@ -660,9 +660,9 @@ def func(iray, jsurf, d):
     # print 'zp = ', zp
     z0 = Rarray[iray, jsurf, Rz]
     w = Rarray[iray, jsurf, Rw]
-    sum = zc + zp - (z0 + w*d)
+    summ = zc + zp - (z0 + w*d)
     # print 'func() gets total sum = ', sum
-    return sum, OK
+    return summ, OK
 
 def deriv(iray, jsurf, d):
     # Estimator of the derivative of func() for Newton's method.
@@ -729,7 +729,7 @@ def conicIntercept(iray, jsurf):
     # Always try the shorter path first...
     if sheetLessPositive<1.0 and rLessPositive>0.0:  # if OK, this is our winner.
         d=rLessPositive
-    elif sheetMorePositive<1.0 and rMorePositive>0.0:  # else maybe this is our winner. 
+    elif sheetMorePositive<1.0 and rMorePositive>0.0:  # else maybe this is our winner.
         d=rMorePositive
     if d<=0.0:                             # Neither? well then... failed.
         # print 'intercept failed: d1, d2 = ', rLessPositive, rMorePositive
@@ -1056,7 +1056,7 @@ def letter2plotColor(letter):
 
 #----------FILE GENERAL UNPACKER-----------------------
 
-def unpackCSV(fname):   # returns a 2D rectangular list of all the fields in fname. 
+def unpackCSV(fname):   # returns a 2D rectangular list of all the fields in fname.
     data = list()       # initially empty.
     # print('\nunpackCSV() Trying: ', fname)
     try:
@@ -1106,7 +1106,7 @@ def unpackCSV(fname):   # returns a 2D rectangular list of all the fields in fna
 
 def getOpticsCSV(optname):
     # puts user CSV data into a global list "Odata"
-    global Onfields, Nsurfs, Oarray, OglassNames, OneedsMedia, OhasAnySags, Oheaders, Ojmirror, Ojfocal
+    global Onfields, Nsurfs, Oarray, OglassNames, OneedsMedia, Oheaders, Ojmirror, Ojfocal #OhasAnySags,
     # print(optname)
     if len(optname) < 4:
         print("Optics table was not found, but is mandatory.  Quitting.")
@@ -1266,7 +1266,7 @@ def getRaysCSV(rayname, maxrays):  # sets up Raystarts[], Rarray[] etc
         V = Rarray[iray, 0, RV] = Raystarts[iray, RV]
         W = Rarray[iray, 0, RW] = Raystarts[iray, RW]
         W = Rarray[iray, 0, RW] = fixup(U,V,W)
-
+        del X,Y,Z
     #---evaluate lookup table RItoF[]-----------
     del RItoF[:]
     for attrib in range(RX, RFINALINPUT+1):
@@ -1485,7 +1485,7 @@ def doSpotDiagram(xyzcArray, title, u0, v0, adc1, adc2):
 
     for i in range(NWAVES):  # base=0
         item = FraunhoferLetters[i] + '  ' + str(FraunhoferNanometers[i]) + 'nm'
-        ax.text(0.86, 0.96-0.03*i, item, transform=ax.transAxes, fontsize=8, color=PLOTCOLORS[i])  
+        ax.text(0.86, 0.96-0.03*i, item, transform=ax.transAxes, fontsize=8, color=PLOTCOLORS[i])
 
     u0string     = 'U0 = {:9.6f}'.format(u0)
     v0string     = 'V0 = {:9.6f}'.format(v0)
@@ -1611,7 +1611,7 @@ def getNine(wuv12s):
     zlist = []
     ngood = 0.0
     for iwave in range(nwavels):
-        wuv  = wuv12s[iwave,:3]            # first three elements 0, 1, 2        
+        wuv  = wuv12s[iwave,:3]            # first three elements 0, 1, 2
         prepForcedRayGroup(wuv)            # use these {wavels, U0, V0}
         xyzcArray = runAllTableRays()      # run this wavelength on this target; get 84rows, 4cols
 
