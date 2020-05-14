@@ -30,7 +30,8 @@ Inputs are pointing TEL_RA,TEL_DEC,MJD,LST,HEXROT and a list of  TARGET_RA,TARGE
 
 import numpy as np
 from desimeter.log import get_logger
-from desimeter.trig import *
+from desimeter.trig import (sind, cosd, tand, put360, arctan2d arcsind, getXYZ,
+                            getNorm, getNormalized)
 
 ###################################################################################
 # constants
