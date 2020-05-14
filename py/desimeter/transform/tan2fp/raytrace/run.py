@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import numpy as np
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 from astropy.table import Table,Column # for the IO
 import RT185    # needs DESI-ADC.OPT.CSV  DESI-ADC.RAY.CSV  DESI-ADC.MED.CSV
 # These files give us up to 680 rays, 8 wavelengths.
@@ -9,7 +9,6 @@ import RT185    # needs DESI-ADC.OPT.CSV  DESI-ADC.RAY.CSV  DESI-ADC.MED.CSV
 refwave = np.array([3650,   4360,   4860,   5880,   6380,   6560,   8520,  10140]) #A
 
 def incoming_rays(adc1=0.,adc2=0., dangle=0.2) :
-    
     # w = wavelength number 0 through 7 corresponding to the arrays in line 976:
     # u = incoming ray direction cosines: u=+x component of unit length vector = eastward ray from western target
     # v = incoming ray direction cosine:   v = +y component of  unit length vector southward from northern target 
@@ -17,7 +16,7 @@ def incoming_rays(adc1=0.,adc2=0., dangle=0.2) :
     # adc2 angle in degrees
 
     wuv12 = [] # list of arrays with 5 components [w,u,v,adc1,adc2]
-    
+
     ntheta=int(1.6/dangle)+1
     for theta_deg in np.linspace(0,1.6,ntheta) :
         st=np.sin(theta_deg/180*np.pi)
@@ -29,13 +28,12 @@ def incoming_rays(adc1=0.,adc2=0., dangle=0.2) :
         for u,v in zip(uu,vv) :
             wuv12.append([w,u,v,adc1,adc2])
     wuv12=np.vstack(wuv12)
-    
     return wuv12
 
-def trace(wuv12):                # TASK 10 
-    res = []
+def trace(wuv12):                # TASK 10
+    resultsList = []
     arrayNine = RT185.getNine(wuv12)          # one star, but either monochromatic or polychromatic   
-    resultsList.append(arrayNine)                     
+    resultsList.append(arrayNine)
     return resultsList  # adc1, adc2, ngood, xave, yave, zave, xrms, yrms, zrms
 
 def main() :
@@ -50,6 +48,8 @@ def main() :
         zfp = np.zeros((rays.shape[0]))
         for i,ray in enumerate(rays) :
             adc1, adc2, ngood, xfp[i] , yfp[i], zfp[i], xrms, yrms, zrms = RT185.getNine(ray)
+            # avoid unused-var warning
+            del zrms
 
         wave = refwave[ rays[:,0].astype(int) ]
         xtan = rays[:,1]
@@ -62,10 +62,10 @@ def main() :
         #plt.figure("fp")
         #plt.plot(xfp,yfp,".")
         #plt.show()
-        
+
     result = np.array(result)
     print(result.shape)
-    
+
     # make a table
     nray=len(result)
     table = Table()
@@ -77,7 +77,7 @@ def main() :
     table.add_column(Column(name="Y_FP",dtype=float,unit="mm",length=nray))
     table.add_column(Column(name="Z_FP",dtype=float,unit="mm",length=nray))
     table.add_column(Column(name="WAVELENGTH",dtype=float,unit="A",length=nray))
-    
+
     table["ADC1"] = result[:,0]
     table["ADC2"] = result[:,1]
     table["X_TAN"] = result[:,2]
@@ -86,7 +86,7 @@ def main() :
     table["Y_FP"] = result[:,5]
     table["Z_FP"] = result[:,6]
     table["WAVELENGTH"] = result[:,7]
-    
+
     table.write("raytrace-tan2fp-4957-v17.csv")
-    
+
 main()
