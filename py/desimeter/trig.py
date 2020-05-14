@@ -10,6 +10,15 @@ def sind(degrees):
 def cosd(degrees):
     return np.cos(D2R*degrees)
 
+def sincosd(deg):
+    r = np.deg2rad(deg)
+    return np.sin(r), np.cos(r)
+
+def rot2deg(deg):
+    '''Returns a 2-d rotation matrix by angle 'deg'.'''
+    sa,ca=sincosd(deg)
+    return np.array([[ca,-sa],[sa,ca]])
+
 def tand(degrees):
     return np.tan(D2R*degrees)
 

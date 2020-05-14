@@ -4,7 +4,7 @@ Utility class to fit a translation , dilatation , rotation in a cartesian plane
 
 import json
 import numpy as np
-from desimeter.trig import arctan2d, cosd, sind
+from desimeter.trig import arctan2d, cosd, sind, rot2deg
 
 class SimpleCorr(object):
 
@@ -151,17 +151,13 @@ class SimpleCorr(object):
 
     def apply(self,x,y) :
         scale_matrix = np.array([[self.sxx,self.sxy],[self.sxy,self.syy]])
-        ca=cosd(self.rot_deg)
-        sa=sind(self.rot_deg)
-        rot_matrix = np.array([[ca,-sa],[sa,ca]])
+        rot_matrix = rot2deg(self.rot_deg)
         xy=scale_matrix.dot(rot_matrix.dot(np.array([x,y])))
         return xy[0]+self.dx,xy[1]+self.dy
 
     def apply_inverse(self,x,y) :
         det = self.sxx*self.syy - self.sxy**2
         scale_matrix = np.array([[self.syy,-self.sxy],[-self.sxy,self.sxx]])/det
-        ca=cosd(self.rot_deg)
-        sa=sind(self.rot_deg)
-        rot_matrix = np.array([[ca,sa],[-sa,ca]])
+        rot_matrix = rot2deg(-self.rot_deg)
         xy=rot_matrix.dot(scale_matrix.dot(np.array([x-self.dx,y-self.dy])))
         return xy[0],xy[1]

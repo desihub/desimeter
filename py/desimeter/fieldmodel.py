@@ -8,7 +8,7 @@ import numpy as np
 from desimeter.transform.radec2tan import xy2hadec,hadec2xy,tan2radec,radec2tan
 from desimeter.transform.tan2fp import tan2fp,fp2tan
 from desimeter.transform.gfa2fp import gfa2fp
-from desimeter.trig import cosd, sind, arctan2d
+from desimeter.trig import cosd, sind, arctan2d, rot2deg
 
 from desimeter.log import get_logger
 from astropy.table import Table
@@ -393,22 +393,16 @@ class TanCorr(object):
 
     def apply(self,x,y) :
         scale_matrix = np.array([[self.sxx,self.sxy],[self.sxy,self.syy]])
-        ca=cosd(self.rot_deg)
-        sa=sind(self.rot_deg)
-        rot_matrix = np.array([[ca,-sa],[sa,ca]])
+        rot_matrix = rot2deg(self.rot_deg)
         ha,dec  = xy2hadec(x,y,0,0)
         x1t,y1t = hadec2xy(ha,dec,self.dha,self.ddec)
         xy=scale_matrix.dot(rot_matrix.dot(np.array([x1t,y1t])))
         return xy[0],xy[1]
 
     def apply_inverse(self,x,y) :
-
         det = self.sxx*self.syy - self.sxy**2
         scale_matrix = np.array([[self.syy,-self.sxy],[-self.sxy,self.sxx]])/det
-
-        ca=cosd(self.rot_deg)
-        sa=sind(self.rot_deg)
-        rot_matrix = np.array([[ca,sa],[-sa,ca]])
+        rot_matrix = rot2deg(-self.rot_deg)
         ha,dec  = xy2hadec(x,y,0,0)
         x1t,y1t = hadec2xy(ha,dec,self.dha,self.ddec)
         xy=rot_matrix.dot(scale_matrix.dot(np.array([x1t,y1t])))

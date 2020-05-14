@@ -31,7 +31,7 @@ Inputs are pointing TEL_RA,TEL_DEC,MJD,LST,HEXROT and a list of  TARGET_RA,TARGE
 import numpy as np
 #from desimeter.log import get_logger
 from desimeter.trig import (sind, cosd, tand, put360, arctan2d, arcsind, getXYZ,
-                            getNormalized)
+                            getNormalized, sincosd)
 
 ###################################################################################
 # constants
@@ -54,19 +54,16 @@ def getLONLAT(xyz):
     return  arctan2d(xyz[1],xyz[0]) , arcsind(xyz[2])  # degrees
 
 def vecX(xdeg):  # For positive xdeg=cwRoll: +y=>+z; +z=>-y.
-    c=cosd(xdeg)
-    s=sind(xdeg)
+    s,c = sincosd(xdeg)
     return np.array([[1,0,0], [0,c,-s], [0,+s,c]])
 
 def vecY(ydeg):  # For positive ydeg=-elev: +z=>+x; +x=>-z.
     # do not overlook this minus sign: positive ydeg pitches downward.
-    c=cosd(ydeg)
-    s=sind(ydeg)
+    s,c = sincosd(ydeg)
     return np.array([[c,0,+s], [0,1,0], [-s,0,c]])
 
 def vecZ(zdeg):  # For positive zdeg=+az: +x=>+y; +y=>-x.
-    c=cosd(zdeg)
-    s=sind(zdeg)
+    s,c = sincosd(zdeg)
     return np.array([[c,-s,0], [+s,c,0], [0,0,1]])
 
 def refX(xdeg):  # Rolls reference frame clockwise about X
@@ -306,12 +303,9 @@ def hadec2altaz(ha,dec) :
         alt: float or 1D np.array altitude in degrees
         az: float or 1D np.array azimuth in degrees
     """
-    cha  = cosd(ha)
-    sha  = sind(ha)
-    cdec = cosd(dec)
-    sdec = sind(dec)
-    clat = cosd(LATITUDE)
-    slat = sind(LATITUDE)
+    sha,cha   = sincosd(ha)
+    sdec,cdec = sincosd(dec)
+    slat,clat = sincosd(LATITUDE)
     x = - cha * cdec * slat + sdec * clat
     y = - sha * cdec
     z = cha * cdec * clat + sdec * slat
@@ -332,12 +326,9 @@ def altaz2hadec(alt,az) :
         ha: float or 1D np.array Hour Angle in degrees
         dec: float or 1D np.array Hour Angle in degrees
     """
-    calt = cosd(alt)
-    salt = sind(alt)
-    caz  = cosd(az)
-    saz  = sind(az)
-    clat = cosd(LATITUDE)
-    slat = sind(LATITUDE)
+    salt,calt = sincosd(alt)
+    saz,caz   = sincosd(az)
+    slat,clat = sincosd(LATITUDE)
     ha  = arctan2d( -saz*calt, -caz*slat*calt+salt*clat)
     dec = arcsind(slat*salt+clat*calt*caz)
     return ha,dec
@@ -356,10 +347,8 @@ def hadec2xy(ha,dec,tel_ha,tel_dec) :
     Returns: x y float or 1D np.array
     """
     xyz = getXYZ(ha,dec)
-    ch= cosd(tel_ha)
-    sh= sind(tel_ha)
-    cd= cosd(tel_dec)
-    sd= sind(tel_dec)
+    sh,ch = sincosd(tel_ha)
+    sd,cd = sincosd(tel_dec)
     rh=np.array([[ch,sh,0],[-sh,ch,0],[0,0,1]]) # rotation about HA axis
     rd=np.array([[sd,0,-cd],[0,1,0],[+cd,0,sd]]) # rotation about Dec axis
     tmp = rd.dot(rh.dot(xyz))
@@ -380,10 +369,8 @@ def xy2hadec(x,y,tel_ha,tel_dec) :
 
     Returns: HA, Dec  float or 1D np.array in degrees
     """
-    ch= cosd(tel_ha)
-    sh= sind(tel_ha)
-    cd= cosd(tel_dec)
-    sd= sind(tel_dec)
+    sh,ch = sincosd(tel_ha)
+    sd,cd = sincosd(tel_dec)
     rh=np.array([[ch,-sh,0],[sh,ch,0],[0,0,1]])
     rd=np.array([[sd,0,cd],[0,1,0],[-cd,0,sd]])
     z = np.sqrt(1-x**2-y**2)
@@ -460,8 +447,7 @@ def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, a
     x,y = hadec2xy(ha,dec,tel_ha,tel_dec)
 
     # hexapod rotation
-    chex = cosd(hexrot_deg)
-    shex = sind(hexrot_deg)
+    shex,chex = sincosd(hexrot_deg)
 
     return chex*x-shex*y , +shex*x+chex*y
 
@@ -487,8 +473,7 @@ def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = Tr
     """
 
     # undo hexapod rotation
-    chex = cosd(hexrot_deg)
-    shex = sind(hexrot_deg)
+    shex,chex = sincosd(hexrot_deg)
     x =  chex*x_tan+shex*y_tan
     y = -shex*x_tan+chex*y_tan
 
