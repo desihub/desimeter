@@ -145,11 +145,13 @@ def _no_cruise_performed(table):
     cruiseP_diff = _np_diff_with_prepend(table['TOTAL_CRUISE_MOVES_P'], prepend=dummyP)
     return cruiseT_diff + cruiseP_diff == 0 # these diffs are always >= 0 for sorted table input
 
-def _apply_filters(table, bad_row_funcs=[_ctrl_not_enabled, _no_move_performed], printf=print):
+def _apply_filters(table, bad_row_funcs=None, printf=print):
     '''Removes bad rows from table, according to filter functions specified
     in the list bad_row_funcs. Note as of 2020-04-16, default bad_row_funcs
     intentionally deoes not include no_cruise_performed().
     '''
+    if bad_row_funcs is None:
+        bad_row_funcs = [_ctrl_not_enabled, _no_move_performed]
     initial_len = len(table)
     for func in bad_row_funcs:
         bad_rows = func(table)
