@@ -28,7 +28,7 @@ def fit_circle(x, y):
 
     def calc_R(xc, yc):
         """Calculate the distance of each data points from the center (xc, yc)."""
-        return np.sqrt((x-xc)**2 + (y-yc)**2)
+        return np.hypot(x-xc, y-yc)
 
     def f_2b(c):
         """Calculate the algebraic distance between the 2D points and the mean circle centered at c=(xc, yc)."""
@@ -103,6 +103,6 @@ def _fast_fit_circle(x,y) :
     # first estimate of center is mean of all intersections
     xc=np.mean(xc)
     yc=np.mean(yc)
-    r=np.mean(np.sqrt((x-xc)**2+(y-yc)**2))
+    r=np.mean(np.hypot(x-xc, y-yc))
 
     return xc,yc,r

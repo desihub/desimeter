@@ -1,4 +1,5 @@
 import numpy as np
+from desimeter.trig import arctan2d, sind, cosd
 
 def xy2qs(x, y):
     '''Focal tangent plane x,y -> angular q,s on curved focal surface
@@ -14,9 +15,9 @@ def xy2qs(x, y):
     it is *not* sqrt(x**2 + y**2).  (q,s) are the preferred coordinates for
     the DESI focal plane hardware engineering team.
     '''
-    r = np.sqrt(x**2 + y**2)
+    r = np.hypot(x, y)
     s = r2s(r)
-    q = (np.degrees(np.arctan2(y, x)) + 360.0) % 360.0
+    q = arctan2d(y, x)
     return q, s
 
 def qs2xy(q, s):
@@ -35,8 +36,8 @@ def qs2xy(q, s):
     the DESI focal plane hardware engineering team.
     '''
     r = s2r(s)
-    x = r*np.cos(np.radians(q))
-    y = r*np.sin(np.radians(q))
+    x = r*cosd(q)
+    y = r*sind(q)
     return x, y
 
 def r2s(r):
@@ -71,8 +72,7 @@ def xy2uv(x, y):
     return u, v
 
 def uv2xy(u, v):
-    s = np.sqrt(u**2 + v**2)
-    qrad = np.arctan2(v, u)
-    q = np.degrees(qrad)
+    s = np.hypot(u, v)
+    q = arctan2d(v, u)
     x, y = qs2xy(q, s)
     return x, y

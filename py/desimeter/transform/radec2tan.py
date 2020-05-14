@@ -311,7 +311,7 @@ def hadec2altaz(ha,dec) :
     x = - cha * cdec * slat + sdec * clat
     y = - sha * cdec
     z = cha * cdec * clat + sdec * slat
-    r = np.sqrt(x**2 + y**2)
+    r = np.hypot(x, y)
     az  = arctan2d(y,x)
     alt = arctan2d(z,r)
     return alt,az

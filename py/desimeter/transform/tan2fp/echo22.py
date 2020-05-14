@@ -5,6 +5,7 @@ Echo22 optics model in DESI-0329v18 Echo22Platescale.txt
 
 import numpy as np
 from pkg_resources import resource_filename
+from desimeter.trig import sind
 
 _r2t_coeff = None
 _t2r_coeff = None
@@ -21,7 +22,7 @@ def tan2fp(xtan, ytan):
     Returns xfp, yfp in CS5 coordinates on the focal plane
     """
     phi = np.arctan2(ytan, xtan)
-    rtan = np.sqrt(xtan**2 + ytan**2)
+    rtan = np.hypot(xtan, ytan)
     theta = np.degrees(np.arcsin(rtan))
     r = theta2radius(theta)
     x = r*np.cos(phi)
@@ -39,10 +40,10 @@ def fp2tan(xfp, yfp):
     """
     #- phi=0 aligned with +xtan = -RA = +HA = +xfp
     phi = np.arctan2(yfp, xfp)
-    r = np.sqrt(xfp**2 + yfp**2)
+    r = np.hypot(xfp, yfp)
     theta = radius2theta(r)
 
-    rtan = np.sin(np.radians(theta))
+    rtan = sind(theta)
 
     xtan = rtan * np.cos(phi)
     ytan = rtan * np.sin(phi)

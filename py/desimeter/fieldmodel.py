@@ -207,7 +207,7 @@ class FieldModel(object):
         ha      = self.lst - ra
         x2,y2   = hadec2xy(ha,dec,ha[0],dec[0])
 
-        return  180./np.pi*np.mean((y1[1:]*x2[1:]-x1[1:]*y2[1:])/np.sqrt((x1[1:]**2+y1[1:]**2)*(x2[1:]**2+y2[1:]**2)))
+        return  np.rad2deg(np.mean((y1[1:]*x2[1:]-x1[1:]*y2[1:])/np.sqrt((x1[1:]**2+y1[1:]**2)*(x2[1:]**2+y2[1:]**2))))
 
     # tangent plane correction from the instrument to the sky
     def tancorr_inst2sky(self,x_tan,y_tan) :

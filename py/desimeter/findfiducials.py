@@ -31,7 +31,7 @@ def findfiducials(spots,input_transform=None,pinhole_max_separation_mm=1.5) :
     xpix=np.array([2000.,]) ; ypix=np.array([0.,])
     xfp1,yfp1=input_tx.fvc2fp(xpix,ypix)
     xfp2,yfp2=input_tx.fvc2fp(xpix+1,ypix)
-    pixel2fp = np.sqrt((xfp2-xfp1)**2+(yfp2-yfp1)**2)[0] # mm
+    pixel2fp = np.hypot(xfp2-xfp1, yfp2-yfp1)[0] # mm
     pinhole_max_separation_pixels = pinhole_max_separation_mm/pixel2fp
     log.info("with pixel2fp = {:4.3f} mm, pinhole max separation = {:4.3f} pixels ".format(pixel2fp,pinhole_max_separation_pixels))
 
