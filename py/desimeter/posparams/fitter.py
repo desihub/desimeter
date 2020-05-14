@@ -141,6 +141,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
             nominals['LENGTH_R1'], nominals['LENGTH_R2'],
             nominals['OFFSET_T'], nominals['OFFSET_P']
             )
+        del unreachable
         dt_int = pos2ptl.delta_angle(u_start=t_int[:-1], u_final=t_int[1:], direction=0)
         dp_int = pos2ptl.delta_angle(u_start=p_int[:-1], u_final=p_int[1:], direction=0)
         
@@ -152,7 +153,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
         # output SCALE_T --> 0.5
         dt_int /= gearT[1:]
         dp_int /= gearP[1:]
-        
+
         # now remove first point, to match up with lists of deltas
         x_flat = x_flat[1:]
         y_flat = y_flat[1:]

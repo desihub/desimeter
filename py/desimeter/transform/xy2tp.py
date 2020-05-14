@@ -88,7 +88,7 @@ def xy2tp(xy, r, ranges):
     for i in [0, 1]:
         range_min, range_max = min(ranges[i]), max(ranges[i])
         if TP[i] < range_min: # try +360 phase wrap
-            TP[i] += math.floor((range_max - TP[i])/360.0)*360.0 
+            TP[i] += math.floor((range_max - TP[i])/360.0)*360.0
             if TP[i] < range_min:
                 TP[i] = range_min
                 unreachable = True
@@ -109,7 +109,7 @@ def xy2tp(xy, r, ranges):
         if vector_err <= theta_centralizing_err_tol:
             TP[0] = T_try
             break
-        
+
     return tuple(TP), unreachable
 
 def linspace(start,stop,num):

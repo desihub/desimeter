@@ -29,9 +29,9 @@ Inputs are pointing TEL_RA,TEL_DEC,MJD,LST,HEXROT and a list of  TARGET_RA,TARGE
 """
 
 import numpy as np
-from desimeter.log import get_logger
+#from desimeter.log import get_logger
 from desimeter.trig import (sind, cosd, tand, put360, arctan2d, arcsind, getXYZ,
-                            getNorm, getNormalized)
+                            getNormalized)
 
 ###################################################################################
 # constants
@@ -174,7 +174,7 @@ def compute_aberration(ra_eclip,dec_eclip, mjd, magnif):
     # returns the fully aberrated & magnified LonLat.
     speed     = 0.99365E-4 # Meeus p.151 in radians
     apexlon   = getSunLon(mjd) - 90.
-    if type(ra_eclip)==float :
+    if isinstance(ra_eclip, float):
         apexXYZ   = getXYZ(apexlon,0.)
     else :
         apexXYZ   = getXYZ(apexlon*np.ones(ra_eclip.shape), np.zeros(ra_eclip.shape))

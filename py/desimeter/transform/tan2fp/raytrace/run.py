@@ -12,7 +12,7 @@ refwave = np.array([3650,   4360,   4860,   5880,   6380,   6560,   8520,  10140
 def incoming_rays(adc1=0.,adc2=0., dangle=0.2) :
     # w = wavelength number 0 through 7 corresponding to the arrays in line 976:
     # u = incoming ray direction cosines: u=+x component of unit length vector = eastward ray from western target
-    # v = incoming ray direction cosine:   v = +y component of  unit length vector southward from northern target 
+    # v = incoming ray direction cosine:   v = +y component of  unit length vector southward from northern target
     # adc1 angle in degrees
     # adc2 angle in degrees
 
@@ -33,7 +33,7 @@ def incoming_rays(adc1=0.,adc2=0., dangle=0.2) :
 
 def trace(wuv12):                # TASK 10
     resultsList = []
-    arrayNine = RT185.getNine(wuv12)          # one star, but either monochromatic or polychromatic   
+    arrayNine = RT185.getNine(wuv12)          # one star, but either monochromatic or polychromatic
     resultsList.append(arrayNine)
     return resultsList  # adc1, adc2, ngood, xave, yave, zave, xrms, yrms, zrms
 
