@@ -120,7 +120,7 @@ class TAN2FP_RayTraceFit(object) :
             #################################################################
             #- Perform fit
             if 1 : # it's a bit better
-                scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = fit_scale_rotation_offset(rxtan, rytan, rxfp, ryfp, fitzb=True, polids=polids)
+                scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = fit_scale_rotation_offset(rxtan, rytan, rxfp, ryfp, fitzb=True, zbpolids=polids)
                 self.scale[config] = scale
                 self.rotation[config] = rotation
                 self.offset_x[config] = offset_x
