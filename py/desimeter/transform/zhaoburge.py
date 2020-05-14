@@ -319,7 +319,7 @@ def fitZhaoBurge(x, y, xp, yp, polids=None):
     nzb = polids.size
     H = np.zeros((2*nx, nzb))
     for i,polid in enumerate(polids) :
-        zbx, zby, name = getZhaoBurgeTerm(polid, x, y)
+        zbx, zby, _ = getZhaoBurgeTerm(polid, x, y)
         H[0:nx, i] = zbx
         H[nx:, i] = zby
 

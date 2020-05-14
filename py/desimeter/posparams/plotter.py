@@ -130,7 +130,7 @@ def plot_passfail(binned, savepath, title='', printf=print):
         plt.gca().tick_params(axis='y', which='both', labelleft='on', labelright='on')
         _save_and_close_plot(fig, savepath=path)
         printf(f'Pass/fail plot saved to: {path}')
-    
+
 def bin_errors(table, bins=5, mode='static', printf=print):
     '''Bin the positioners over time by best-fit error.
 
@@ -200,8 +200,7 @@ def bin_errors(table, bins=5, mode='static', printf=print):
     for ceiling in bin_ceilings:
         passing[ceiling] = {}
         failing[ceiling] = {}
-        for i in range(len(periods)):
-            period = periods[i]
+        for i,period in enumerate(periods):
             subtable = subtables[period]
             pass_selection = subtable[err_key] <= ceiling
             fail_selection = ~pass_selection
