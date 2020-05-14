@@ -10,10 +10,7 @@ import tempfile
 import numpy as np
 from astropy.table import Table
 
-from desimeter.transform.fvc2fp.base import FVC2FP_Base
-from desimeter.transform.fvc2fp.poly2d import FVCFP_Polynomial
-from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
-from desimeter.transform.fvc2fp import read_jsonfile, fit
+from desimeter.transform.fvc2fp import FVC2FP,read_jsonfile, fit
 
 class _TestFVC2FP(object):
     
@@ -161,23 +158,15 @@ class _TestFVC2FP(object):
         self.assertEqual(type(t3), type(t1))
 
 
-class TestPoly2d(_TestFVC2FP, unittest.TestCase):
+class TestFVC2FP(_TestFVC2FP, unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.spotfile = resource_filename('desimeter', 'test/data/test-spots.csv')
         cls.tempdir = tempfile.mkdtemp()
-        cls.TransformClass = FVCFP_Polynomial
-
-class TestZhaoBurge(_TestFVC2FP, unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.spotfile = resource_filename('desimeter', 'test/data/test-spots.csv')
-        cls.tempdir = tempfile.mkdtemp()
-        cls.TransformClass = FVCFP_ZhaoBurge
+        cls.TransformClass = FVC2FP
 
     def test_reduce_expand(self):
-        from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
-        trans = FVCFP_ZhaoBurge()
+        trans = FVC2FP()
         x1, y1 = np.random.uniform(2000,4000, size=(2,100))
         rx, ry = trans._reduce_xyfvc(x1, y1)
         x2, y2 = trans._expand_xyfvc(rx, ry)
@@ -199,7 +188,7 @@ class TestDefaultFit(unittest.TestCase):
         spotfile = resource_filename('desimeter', 'test/data/test-spots.csv')
         spots = Table.read(spotfile)
         tx = fit(spots)
-        self.assertTrue(isinstance(tx, FVC2FP_Base))
+        self.assertTrue(isinstance(tx, FVC2FP))
 
 if __name__ == '__main__':
     unittest.main()

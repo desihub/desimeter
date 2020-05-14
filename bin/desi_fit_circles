@@ -133,7 +133,7 @@ dy=yfp_meas-yfp_metro
 dr=np.sqrt(dx**2+dy**2)
 print("median offset = {:4.1f} um",np.median(dr[dr!=0])*1000.)
 
-ii=np.where((xfp_metro!=0)&(dr<0.2))[0]
+ii=np.where((xfp_metro!=0)&(dr<3.))[0]
 
 # make a table out of that
 t2=Table([location[ii],pinhole[ii],xfp_metro[ii],yfp_metro[ii],xfp_meas[ii],yfp_meas[ii]],names=["LOCATION","PINHOLE_ID","X_FP_METRO","Y_FP_METRO","X_FP","Y_FP"],dtype=[int,int,float,float,float,float])

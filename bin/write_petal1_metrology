@@ -16,6 +16,14 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
 parser.add_argument('-o','--outfile', type = str, default = None, required = True, help = 'output csv file')
 
 
+if "DESIMETER_DATA" not in os.environ :
+    print("error: you need to set first the env. variable DESIMETER_DATA to point to the petal1 data")
+    datadir=resource_filename('desimeter',"data/lbl-petal1")
+    if os.path.isdir(datadir) :
+        print("maybe export DESIMETER_DATA={}".format(datadir))
+    sys.exit(12)
+    
+
 args  = parser.parse_args()
 log = get_logger()
 
@@ -32,9 +40,13 @@ print("metrology columns:",spots.dtype.names)
 
 # force int type
 spots["PETAL_LOC"]=spots["PETAL_LOC"].astype(int)
-# keep only petal_loc<10
-selection = spots["PETAL_LOC"]<10
+
+# keep only petal1
+selection = spots["PETAL_ID"]==1
 spots = spots[:][selection]
+
+# I choose PETAL_LOC = 0
+spots["PETAL_LOC"][:] = 0
 
 pids=np.zeros(spots["PINHOLE_ID"].size,dtype=int)
 for i,pid in enumerate(spots["PINHOLE_ID"]) :
@@ -48,7 +60,6 @@ for i,pid in enumerate(spots["PINHOLE_ID"]) :
             pids[i]=0
 spots["PINHOLE_ID"]=pids
 
-
 r=np.sqrt(spots["X_PTL"]**2+spots["Y_PTL"]**2)
 ii=np.where( r < 1.)[0]
 for i in ii :
@@ -59,22 +70,18 @@ spots = apply_ptl2fp(spots)
 
 spots["LOCATION"] = spots["PETAL_LOC"]*1000+spots["DEVICE_LOC"]
 
-log.info("applying patch")
-filename = resource_filename('desimeter',"data/fp-metrology-patch.csv")
-log.info(" from {}".format(filename))
-patch = Table.read(filename,format="csv")
-for i in range(patch["X_FP"].size) :
-    selection=(spots["LOCATION"]==patch["LOCATION"][i])&(spots["PINHOLE_ID"]==patch["PINHOLE_ID"][i])
-    jj=np.where(selection)[0]
-    if jj.size == 0 :
-        log.info("Adding LOCATION={} PINHOLE_ID={}".format(patch["LOCATION"][i],patch["PINHOLE_ID"][i]))
-        spots.add_row(patch[:][i])
-    else :
-        j=jj
-        log.info("Replacing LOCATION={} PINHOLE_ID={}".format(patch["LOCATION"][i],patch["PINHOLE_ID"][i]))
-        spots[:][j] = patch[:][i]
+# add positioner id and bus id
 
-        
+filename=resource_filename('desimeter',"data/lbl-petal1/petal-01-ids.csv")
+if os.path.isfile(filename) :
+    ids=Table.read(filename)
+    loc2ind={loc:i for i,loc in enumerate(ids["DEVICE_LOC"])}
+    spots["DEVICE_ID"]=np.array([ ids["DEVICE_ID"][loc2ind[loc]] for loc in spots["DEVICE_LOC"] ])
+    spots["BUS_ID"]=np.array([ ids["BUS_ID"][loc2ind[loc]] for loc in spots["DEVICE_LOC"] ])
+    
+
+
+
 spots.write(args.outfile,format='csv',overwrite=True)
 
 log.info("wrote {}".format(args.outfile))

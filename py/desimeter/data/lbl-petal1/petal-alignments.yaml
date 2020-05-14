@@ -1,4 +1,4 @@
-# by hand, defining loc=0 for petal_id=1
+# by hand, defining loc=2 for petal_id=1
 # for the teststand there is no focal plane frame
 0:
   Tx: 0.0

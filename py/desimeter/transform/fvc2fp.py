@@ -2,32 +2,38 @@
 Utility functions to fit and apply coordinates transformation from FVC to FP
 """
 
-import os
 import json
-from desimeter.io import load_metrology
 import numpy as np
-from astropy.table import Table,Column
 
+from desimeter.io import load_metrology
 from desimeter.log import get_logger
-
-from .base import FVC2FP_Base
-from desimeter.transform.zhaoburge import getZhaoBurgeXY, getZhaoBurgeTerm, transform, fit_scale_rotation_offset, fitZhaoBurge
-
-
-
+from desimeter.transform.zhaoburge import getZhaoBurgeXY, transform, fit_scale_rotation_offset
 
 #-------------------------------------------------------------------------
 
-class FVCFP_ZhaoBurge(FVC2FP_Base):
+class FVC2FP(object):
 
     def __init__(self):
+        """
+        init
+        """
         self.xfvc_scale  = -3000.
         self.yfvc_scale  = 3000.
         self.xfvc_offset = 3000.
         self.yfvc_offset = 3000.
         self.zbpolids = np.array([0,1,2,3,4,5,6,9,20,27,28,29,30],dtype=int)
         self.zbcoeffs = np.zeros(self.zbpolids.shape,dtype=float)
-        
+
+    @classmethod
+    def read_jsonfile(cls, filename):
+        with open(filename) as fx:
+            s = fx.read()
+        return cls.fromjson(s)
+
+    def write_jsonfile(self, filename):
+        with open(filename, 'w') as fx:
+            fx.write(self.tojson())
+
     #- Utility transforms to/from reduced [-1,1] coordinates
     def _reduce_xyfp(self, x, y):
         """
@@ -42,7 +48,7 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         """
         a = 420.0
         return x*a, y*a
-    
+
     def _reduce_xyfvc(self, x, y):
         """
         Rescale FVC xy pix coords  -> [-1,1]
@@ -54,7 +60,7 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         Undo _redux_xyfvc() transform
         """
         return x*self.xfvc_scale+self.xfvc_offset, y*self.yfvc_scale+self.yfvc_offset
-    
+
     def tojson(self):
         params = dict()
         params['method'] = 'Zhao-Burge'
@@ -91,17 +97,20 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
             tx.zbpolids = np.asarray(params['zbpolids'])
             tx.zbcoeffs = np.asarray(params['zbcoeffs']).astype(float)
         else :
-            raise RuntimeError("don't know version {}".format(version))
+            raise RuntimeError("don't know version {}".format(params['version']))
 
         if 'xfvc_scale' in params  : tx.xfvc_scale = params['xfvc_scale']
         if 'yfvc_scale' in params  : tx.yfvc_scale = params['yfvc_scale']
         if 'xfvc_offset' in params : tx.xfvc_offset = params['xfvc_offset']
         if 'yfvc_offset' in params : tx.yfvc_offset = params['yfvc_offset']
-        
+
         return tx
 
-    def fit(self, spots, metrology=None, update_spots=False):
-        """TODO: document"""
+    def fit(self, spots, metrology=None, update_spots=False, zbfit=True):
+        """
+        TODO: document
+        """
+
         log = get_logger()
         if metrology is not None:
             self.metrology = metrology
@@ -128,13 +137,14 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         rxpix, rypix = self._reduce_xyfvc(fidspots['XPIX'], fidspots['YPIX'])
         rxfp, ryfp = self._reduce_xyfp(metrology['X_FP'], metrology['Y_FP'])
 
-        scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = fit_scale_rotation_offset(rxpix, rypix, rxfp, ryfp, fitzb=True, polids=self.zbpolids)
-        self.scale = scale
-        self.rotation = rotation
-        self.offset_x = offset_x
-        self.offset_y = offset_y
-        self.zbpolids = zbpolids
-        self.zbcoeffs = zbcoeffs
+        res = fit_scale_rotation_offset(rxpix, rypix, rxfp, ryfp, fitzb=zbfit, zbpolids=self.zbpolids, zbcoeffs=self.zbcoeffs)
+        self.scale = res[0]
+        self.rotation = res[1]
+        self.offset_x = res[2]
+        self.offset_y = res[3]
+        if zbfit :
+            self.zbpolids = res[4]
+            self.zbcoeffs = res[5]
 
         #- Goodness of fit
         xfp_fidmeas, yfp_fidmeas = self.fvc2fp(fidspots['XPIX'], fidspots['YPIX'])
@@ -217,3 +227,15 @@ class FVCFP_ZhaoBurge(FVC2FP_Base):
         xpix, ypix = self._expand_xyfvc(xx, yy)
 
         return xpix, ypix
+
+#- default transform fit
+def fit(spots, update_spots=False, zbfit=True):
+    tx = FVC2FP()
+    tx.fit(spots, update_spots=update_spots, zbfit=zbfit)
+    return tx
+
+#- Read JSON file and determine what class to load
+def read_jsonfile(filename):
+    with open(filename) as fx:
+        s = fx.read()
+    return FVC2FP.fromjson(s)

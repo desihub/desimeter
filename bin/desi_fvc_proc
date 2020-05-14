@@ -11,7 +11,7 @@ from astropy.table import Table
 from desimeter.log import get_logger
 from desimeter.detectspots import detectspots
 from desimeter.findfiducials import findfiducials
-from desimeter.transform.fvc2fp.zb import FVCFP_ZhaoBurge
+from desimeter.transform.fvc2fp import FVC2FP
 from desimeter.match import match_same_system
 from desimeter.transform.xy2qs import qs2xy
 from desimeter.fieldmodel import FieldModel
@@ -31,7 +31,7 @@ parser.add_argument('--output-transform', type = str, default = None, required =
                     help = 'write transformation to this json file')
 parser.add_argument('--input-transform', type = str, default = None, required = False,
                     help = 'use this json file as input for the match, defaut is data/default-fvc2fp.json')
-parser.add_argument('--pinhole-max-separation', type = float, default = 10, required = False,
+parser.add_argument('--pinhole-max-separation-mm', type = float, default = 1.5, required = False,
                     help = 'pinhole maximum separation in pixels')
 parser.add_argument('--max-match-distance', type = float, default = 7, required = False,
                     help = 'maximum match distance in mm')
@@ -51,6 +51,8 @@ parser.add_argument('--min-spots', type = int , default = None, required = False
                     help = 'minimum number of detected spots to run')
 parser.add_argument('--max-spots', type = int , default = None, required = False,
                     help = 'max number of detected spots to run')
+parser.add_argument('--no-zbfit', action = 'store_true',
+                    help = 'do not refit the high degree ZB polynomial coefficients, just shift,rotation,magnification')
 
 args  = parser.parse_args()
 log   = get_logger()
@@ -120,7 +122,7 @@ for seqid,spots in enumerate(spots_list) :
         print("wrote {}".format(outfile))
         continue
         
-    spots = findfiducials(spots,input_transform=args.input_transform,separation=args.pinhole_max_separation)
+    spots = findfiducials(spots,input_transform=args.input_transform,pinhole_max_separation_mm=args.pinhole_max_separation_mm)
     
     n_matched_pinholes = np.sum(spots['PINHOLE_ID'] > 0)
     n_matched_fiducials = np.sum(spots['PINHOLE_ID'] == 4)
@@ -129,9 +131,9 @@ for seqid,spots in enumerate(spots_list) :
         sys.exit(13)
 
 
-    tx = FVCFP_ZhaoBurge.read_jsonfile(fvc2fp_filename())
-    tx.fit(spots, update_spots=True)
-
+    tx = FVC2FP.read_jsonfile(fvc2fp_filename())
+    tx.fit(spots, update_spots=True, zbfit=(not args.no_zbfit))
+    
     if args.expected_positions is not None :
         log.info("reading expected positions in {}".format(args.expected_positions))
         expected_pos = Table.read(args.expected_positions) # auto-magically guess format
