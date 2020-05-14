@@ -44,7 +44,13 @@ if not "TARGTRA" in header :
 fm.ra  = header["TARGTRA"]
 fm.dec = header["TARGTDEC"]
 fm.expid = header["EXPID"]
-fm.hexrot_deg = float(header["FOCUS"][5])/3600.
+focus_str = header['FOCUS']
+#print('FOCUS:', focus_str)
+#fm.hexrot_deg = float(header["FOCUS"][5])/3600.
+#print('HEXROT_DEG:', fm.hexrot_deg)
+focus_words = focus_str.split(',')
+fm.hexrot_deg = float(focus_words[5])/3600.
+
 fm.adc1 = header["ADC1PHI"]
 fm.adc2 = header["ADC2PHI"]
 
@@ -84,7 +90,7 @@ if args.cat:
     for cam in cams:
         I = np.flatnonzero(t['camera'] == cam)
         petal = t["petal_loc"][I[0]]
-        gfx,gfy = fm.radec2fp(ra[I], dec[I])
+        gfx,gfy = fm.radec2fp(t['ra_gaia'][I], t['dec_gaia'][I])
         gx,gy = fp2gfa(petal, gfx, gfy)
         t['fit_gaia_fx'][I] = gfx
         t['fit_gaia_fy'][I] = gfy
