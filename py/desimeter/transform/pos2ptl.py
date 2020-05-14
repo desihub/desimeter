@@ -314,7 +314,7 @@ def loc2int(x_loc, y_loc, r1, r2, t_offset, p_offset):
     t_int = ext2int(t_ext, t_offset)
     p_int = ext2int(p_ext, p_offset)
     return t_int, p_int, unreachable
-    
+
 def _to_numpy(u):
     '''Internal function to cast values to consistent numpy vectors.'''
     if isinstance(u, list):

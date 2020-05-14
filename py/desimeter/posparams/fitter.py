@@ -7,7 +7,7 @@ import math
 import scipy.optimize
 import numpy as np
 
-# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
+# imports below require <path to desimeter>/py' to be added to system PYTHONPATH.
 import desimeter.transform.pos2ptl as pos2ptl
 
 # default parameter values and bounds
@@ -61,7 +61,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
                mode='static',
                nominals=default_values,
                bounds=default_bounds,
-               keep_fixed=[],
+               keep_fixed=None,
                ):
     '''Best-fit function for parameters used in the transformation between
     internally-tracked (theta,phi) and externally measured (x,y).
@@ -105,6 +105,8 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     assert mode in {'static', 'dynamic'}
     assert all(key in nominals for key in all_keys)
     assert all(key in bounds for key in all_keys)
+    if keep_fixed is None:
+        keep_fixed = []
     assert all(key in all_keys for key in keep_fixed)
     
     # selection of which parameters are variable
@@ -193,7 +195,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     optimizer_result = scipy.optimize.minimize(fun=err_norm,
                                                x0=initial_params,
                                                bounds=bounds_vector)
-    
+
     # organize and return results
     best_params = {key: optimizer_result.x[param_idx[key]] for key in params_to_fit}
     fixed_params = {key: nominals[key] for key in keep_fixed}
@@ -207,4 +209,3 @@ def wrap_at_180(angle):
     if angle > 180:
         angle -= 360
     return angle
-    

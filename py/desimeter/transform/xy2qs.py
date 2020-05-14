@@ -49,7 +49,7 @@ def r2s(r):
     #        Suggest comparison to posconstants.R2S_lookup()
     r = r if isinstance(r, np.ndarray) else np.array(r)
     c = np.array([-3.01232440e-03,  1.45324708e-02, -2.55244612e-02,  2.15885180e-02, -8.05287872e-03,  2.05529419e-03,  9.99773920e-01,  9.12275165e-06])
-    pol = np.poly1d(c)    
+    pol = np.poly1d(c)
     s = 400.*pol(r/400.)
     return s
 

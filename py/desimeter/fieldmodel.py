@@ -33,7 +33,7 @@ class FieldModel(object):
         self.syy = 1.
         self.sxy = 0.
         self.fieldrot_zp_deg = 0. # zero point of field rotation (should be constant across exposures)
-        self.fieldrot_deg = 0. # rotation of field as defined in DESI-5190, to compare to fiberassign FIELDROT 
+        self.fieldrot_deg = 0. # rotation of field as defined in DESI-5190, to compare to fiberassign FIELDROT
         self.expid  = 0
         self.nstars = 0
         self.rms_arcsec = 0.
@@ -161,7 +161,7 @@ class FieldModel(object):
 
         correction = TanCorr()
 
-        for loop in range(3) : # loop because change of pointing induces a rotation of the field
+        for _ in range(3) : # loop because change of pointing induces a rotation of the field
 
             # we transform GAIA coordinates to the tangent plane
             x_tan_gaia,y_tan_gaia = radec2tan(ra_gaia,dec_gaia,self.ra,self.dec,mjd=self.mjd,lst_deg=self.lst,hexrot_deg = self.hexrot_deg, precession = self.precession, aberration = self.aberration, polar_misalignment = self.polar_misalignment)

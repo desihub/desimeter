@@ -109,7 +109,7 @@ def match_same_system(x1,y1,x2,y2,remove_duplicates=True) :
         y2 : float numpy array of coordinates along second axis in same system
 
     returns:
-        indices_2 : integer numpy array. if ii is a index array for entries in the first catalog, 
+        indices_2 : integer numpy array. if ii is a index array for entries in the first catalog,
                             indices_2[ii] is the index array of best matching entries in the second catalog.
                             (one should compare x1[ii] with x2[indices_2[ii]])
                             negative indices_2 indicate unmatched entries

@@ -11,7 +11,7 @@ from astropy.time import Time
 from astropy.table import Table
 from astropy.table import join
 
-# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
+# imports below require <path to desimeter>/py' to be added to system PYTHONPATH.
 import desimeter.posparams.fitter as fitter
 import desimeter.transform.ptl2fp as ptl2fp
 
@@ -182,7 +182,7 @@ def _define_cases(table, datum_dates, data_window, printf=print):
                     'start_idx' ... first data index in analyis window
                     'final_idx' ... last data index in analysis window
     '''
-    table.sort('DATE_SEC')  # for speed, _row_idx_for_time() ASSUMEs this pre-sort has been done 
+    table.sort('DATE_SEC')  # for speed, _row_idx_for_time() ASSUMEs this pre-sort has been done
     cases = []
     widths = []
     start_idxs = []

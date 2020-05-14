@@ -166,7 +166,7 @@ def detectspots(fvcimage,threshold=500,nsig=7,psf_sigma=1.):
     if threshold is None:
         threshold=nsig*rms
     else:
-        threhold=max(threshold,nsig*rms)
+        threshold=max(threshold,nsig*rms)
 
     peaks=np.zeros((n0,n1))
     peaks[1:-1,1:-1] = ((convolved_image[1:-1, 1:-1] > convolved_image[:-2, 1:-1]) *

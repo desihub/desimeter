@@ -8,7 +8,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 
 # from desimodel.focalplane.geometry import qs2xy,xy2qs
-from desimeter.log import get_logger
+#from desimeter.log import get_logger
 
 from desimeter.transform.zhaoburge import getZhaoBurgeXY, transform, fit_scale_rotation_offset, fitZhaoBurge
 
@@ -127,7 +127,7 @@ class TAN2FP_RayTraceFit(object) :
                 self.offset_y[config] = offset_y
             else :
                 zbpolids, zbcoeffs, dx, dy =  fitZhaoBurge(rxtan, rytan, rxfp, ryfp, polids=polids)
-
+                del dx,dy
                 self.scale[config] = 1
                 self.rotation[config] = 0.
                 self.offset_x[config] = 0.
@@ -215,7 +215,7 @@ class TAN2FP_RayTraceFit(object) :
         #- in the correction at rxfp,ryfp but rather the correction at
         #- a different rx,ry that when applies becomes rxfp, ryfp
         dx = dy = 0.0
-        for i in range(20):
+        for _ in range(20):
             dx2, dy2 = getZhaoBurgeXY(self.zbpolids, zbcoeffs, rrxfp-dx, rryfp-dy)
             dmax = max(np.max(np.abs(dx2-dx)), np.max(np.abs(dy2-dy)))
             dx, dy = dx2, dy2

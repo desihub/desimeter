@@ -6,7 +6,7 @@ import numpy as np
 
 def parse_fibers(fiber_string) :
     """
-    Short func that parses a string containing a comma separated list of 
+    Short func that parses a string containing a comma separated list of
     integers, which can include ":" or ".." or "-" labeled ranges
 
     Args:
@@ -46,6 +46,7 @@ def parse_fibers(fiber_string) :
 
         if not match:
             print("parsing error. Didn't understand {}".format(sub))
+            import sys
             sys.exit(1)
 
     return np.array(fibers)

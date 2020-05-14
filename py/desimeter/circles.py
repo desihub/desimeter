@@ -52,12 +52,12 @@ def fit_circle(x, y):
 
 
     center_estimate = x_m, y_m
-    center_2b, ier = optimize.leastsq(f_2b, center_estimate, Dfun=Df_2b, col_deriv=True)
+    center_2b, _ = optimize.leastsq(f_2b, center_estimate, Dfun=Df_2b, col_deriv=True)
 
     xc_2b, yc_2b = center_2b
     Ri_2b        = calc_R(*center_2b)
     R_2b         = Ri_2b.mean()
-    residu_2b    = sum((Ri_2b - R_2b)**2)
+    #residu_2b    = sum((Ri_2b - R_2b)**2)
 
     if (R_2b < 1.0) or (R_2b > 5.0):
         raise ValueError('Bad circle fit')
