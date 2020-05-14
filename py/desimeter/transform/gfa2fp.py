@@ -3,7 +3,6 @@ Transforms between GFA pixel coordinates and FP mm
 """
 
 import numpy as np
-from scipy.optimize import minimize
 from desimeter import io
 from desimeter.log import get_logger
 from desimeter.simplecorr import SimpleCorr
@@ -30,7 +29,6 @@ def gfa2fp(petal_loc, xgfa, ygfa):
     if petal_loc not in _gfa_transforms:
         log.error('PETAL_LOC {} GFA metrology missing'.format(petal_loc))
     
-    params = _gfa_transforms[petal_loc]
     xfp, yfp = _gfa_transforms[petal_loc].apply(xgfa, ygfa)
     
     return xfp, yfp
@@ -110,9 +108,3 @@ def fit_gfa2fp(metrology):
             gfa_transforms[p] = corr
             
     return gfa_transforms
-        
-        
-
-
-
-

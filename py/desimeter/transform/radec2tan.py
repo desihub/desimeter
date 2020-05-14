@@ -238,7 +238,7 @@ def apply_aberration(ra,dec,mjd, use_astropy = False) :
 
     """
     if use_astropy :
-        from astropy.coordinates import SkyCoord,FK5,GCRS
+        from astropy.coordinates import SkyCoord,GCRS #FK5
         import astropy.time
 
         gcrs=GCRS(obstime=astropy.time.Time(mjd,format="mjd")) # precession? + aberration
@@ -295,7 +295,7 @@ def undo_refraction(alt) :
     """
     # need second order inverse
     daprev = 0.
-    for i in range(2) :
+    for _ in range(2) :
         da   = apply_refraction(alt) - alt
         dda  = da-daprev
         alt -= dda
@@ -452,8 +452,6 @@ def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, a
         polar_misalignment: boolean; compute polar misalignment if True
         use_astropy: boolean; use astropy coordinates for precession and aberration if True
     """
-    log = get_logger()
-
     if precession :
         ra,dec = apply_precession_from_icrs(ra, dec, mjd, use_astropy)
         tel_ra,tel_dec = apply_precession_from_icrs(tel_ra, tel_dec, mjd, use_astropy)
