@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-This module provides coordinate transformation between petal cartesian (x, y)
+Provides coordinate transformation between petal cartesian (x, y)
 and several fiber positioner systems.
 
     x_ptl, y_ptl   ... Units mm. Cartesian coordinates, relative to petal.
@@ -220,7 +220,7 @@ def ext2int(u_ext, u_offset):
     return u_int
 
 def int2ext(u_int, u_offset):
-    '''Converts t_int or p_int coordinate to t_ext or p_ext.
+    """Converts t_int or p_int coordinate to t_ext or p_ext.
     READ THE FINE PRINT: Args here are not  like "(t,p)". More like "(t,to)".
         
     INPUTS:
@@ -232,7 +232,7 @@ def int2ext(u_int, u_offset):
     
     u_offset may either be a scalar (will be applied to all points), or
     a vector of unique values per point.
-    '''
+    """
     u_ext = _add_offset(u_int, u_offset)
     return u_ext
 

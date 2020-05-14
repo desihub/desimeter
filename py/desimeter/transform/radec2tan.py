@@ -163,6 +163,8 @@ def undo_precession_from_icrs(ra, dec, mjd, use_astropy = False) :
     Args:
         ra: float or 1D np.array RA in degrees
         dec: float or 1D np.array dec in degrees
+        mjd: observation date
+        use_astropy: obvious
         
     Returns: alt, az 
         alt: float or 1D np.array refracted altitude in degrees

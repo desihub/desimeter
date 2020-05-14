@@ -1,4 +1,3 @@
-
 def mjd2lst(mjd) :
     
     """

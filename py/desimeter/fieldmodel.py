@@ -1,4 +1,3 @@
-
 """
 Utility functions to fit guide stars
 """
@@ -144,6 +143,7 @@ class FieldModel(object):
         if lst is not None :
             self.lst = lst
         elif self.lst is None :
+            from desimeter.time import mjd2lst
             log.warning("Compute LST from MJD={}".format(self.mjd))
             self.lst = mjd2lst(self.mjd)
         log.info("Use LST={}".format(self.lst))

@@ -878,7 +878,7 @@ def labtovx(iray, jsurf):
     xLocal = Xprev - Oarray[jsurf, OX]
     yLocal = Yprev - Oarray[jsurf, OY]
     zLocal = Zprev - Oarray[jsurf, OZ]  # if forward: Rz is negative.  Reverse: Rz is positive.  
-    
+
     x = Rarray[iray,jsurf,Rx] = xLocal*Oarray[jsurf,OE11] + yLocal*Oarray[jsurf,OE21] + zLocal*Oarray[jsurf,OE31]
     y = Rarray[iray,jsurf,Ry] = xLocal*Oarray[jsurf,OE12] + yLocal*Oarray[jsurf,OE22] + zLocal*Oarray[jsurf,OE32]
     z = Rarray[iray,jsurf,Rz] = xLocal*Oarray[jsurf,OE13] + yLocal*Oarray[jsurf,OE23] + zLocal*Oarray[jsurf,OE33]
@@ -886,6 +886,9 @@ def labtovx(iray, jsurf):
     u = Rarray[iray,jsurf,Ru] = Uprev*Oarray[jsurf,OE11] + Vprev*Oarray[jsurf,OE21] + Wprev*Oarray[jsurf,OE31]
     v = Rarray[iray,jsurf,Rv] = Uprev*Oarray[jsurf,OE12] + Vprev*Oarray[jsurf,OE22] + Wprev*Oarray[jsurf,OE32]
     w = Rarray[iray,jsurf,Rw] = Uprev*Oarray[jsurf,OE13] + Vprev*Oarray[jsurf,OE23] + Wprev*Oarray[jsurf,OE33]
+
+    # bogus del to avoid 'unused variable' warnings on xyz,uvw
+    del x,y,z,u,v,w
 
     return OK
 

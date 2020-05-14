@@ -2,7 +2,7 @@
 Utility functions to find fiducials in a list of spots given a know pattern of pinholes
 """
 
-import os,sys
+import sys
 import numpy as np
 from desimeter.log import get_logger
 from astropy.table import Table,Column

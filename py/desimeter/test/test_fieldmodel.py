@@ -1,5 +1,5 @@
 """
-Test RA Dec <-> Tangent plane transformation code
+Test RA Dec <-> Tangent plane transformation code.
 """
 
 

@@ -48,11 +48,7 @@ def get_petal_alignment_data() :
     return petal_alignment_dict
 
 def apply_ptl2fp(spots) :
-    
-    log = get_logger()
-
     petal_alignment_dict = get_petal_alignment_data()
-        
     
     nspot = spots['PETAL_LOC'].size
 

@@ -7,7 +7,6 @@ import json
 from pkg_resources import resource_filename
 
 import numpy as np
-from astropy.table import Table,Column
 from scipy.optimize import minimize
 from scipy.interpolate import interp1d
 

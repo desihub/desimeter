@@ -91,7 +91,7 @@ def compute_triangles_with_fixed_orientation(x,y) :
                 tx[2]=x[k]
                 ty[2]=y[k]
                 length2=np.array([(tx[1]-tx[0])**2+(ty[1]-ty[0])**2,(tx[2]-tx[1])**2+(ty[2]-ty[1])**2,(tx[0]-tx[2])**2+(ty[0]-ty[2])**2])
-                r=np.sqrt(np.max(length2)/np.min(length2)) # ratio of longest to shortest side
+                #r=np.sqrt(np.max(length2)/np.min(length2)) # ratio of longest to shortest side
                 tk[triangle_index]=ordering[[i,j,k]]
                 txyz[triangle_index,0]=np.sqrt(np.max(length2)/np.min(length2)) # ratio of longest to shortest side
                 txyz[triangle_index,1]=((tx[1]-tx[0])*(tx[2]-tx[0])+(ty[1]-ty[0])*(ty[2]-ty[0]))/np.sqrt( ((tx[1]-tx[0])**2+(ty[1]-ty[0])**2)*((tx[2]-tx[0])**2+(ty[2]-ty[0])**2)) # cos of angle of first vertex

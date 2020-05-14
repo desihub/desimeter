@@ -90,8 +90,7 @@ def plot_params(table, savepath, statics_during_dynamic):
     return f'{posid}: plot saved to {savepath}'
 
 def plot_passfail(binned, savepath, title='', printf=print):
-    '''Plot time series of positioenr pass/fail groups, binned by error
-    ceilings.
+    '''Plot time series of positioenr pass/fail groups, binned by error ceilings.
     
     Inputs:
         binned   ... Data structure as returned by bin_errors() function.
