@@ -35,8 +35,8 @@ def compute_triangles_with_arbitrary_orientation(x,y) :
                 pairs=np.array([[0,1],[1,2],[0,2]])
                 ii=np.argsort(tl2)
                 ordering = np.zeros(3).astype(int)
-                ordering[0] = np.intersect1d(pairs[ii[0]],pairs[ii[2]]) # vertex connected to shortest and longest side  
-                ordering[1] = np.intersect1d(pairs[ii[0]],pairs[ii[1]]) # vertex connected to shortest and intermediate side  
+                ordering[0] = np.intersect1d(pairs[ii[0]],pairs[ii[2]]) # vertex connected to shortest and longest side
+                ordering[1] = np.intersect1d(pairs[ii[0]],pairs[ii[1]]) # vertex connected to shortest and intermediate side
                 ordering[2] = np.intersect1d(pairs[ii[1]],pairs[ii[2]]) # vertex connected to intermediate and longest side
 
                 ijk=ijk[ordering]
@@ -113,7 +113,7 @@ def match_same_system(x1,y1,x2,y2,remove_duplicates=True) :
                             indices_2[ii] is the index array of best matching entries in the second catalog.
                             (one should compare x1[ii] with x2[indices_2[ii]])
                             negative indices_2 indicate unmatched entries
-        distances : distances between pairs. It can be used to discard bad matches. 
+        distances : distances between pairs. It can be used to discard bad matches
 
     """
     xy1=np.array([x1,y1]).T
@@ -147,11 +147,11 @@ def match_arbitrary_translation_dilatation(x1,y1,x2,y2) :
         y2 : float numpy array of coordinates along second axis of cartesian coordinate system 2
 
     returns:
-        indices_2 : integer numpy array. if ii is a index array for entries in the first catalog, 
+        indices_2 : integer numpy array. if ii is a index array for entries in the first catalog,
                             indices_2[ii] is the index array of best matching entries in the second catalog.
                             (one should compare x1[ii] with x2[indices_2[ii]])
                             negative values for unmatched entries.
-        distance : distance between pairs of triangles. It can be used to discard bad matches. 
+        distance : distance between pairs of triangles. It can be used to discard bad matches.
 
     """
 
