@@ -242,8 +242,8 @@ def apply_aberration(ra,dec,mjd, use_astropy = False) :
         import astropy.time
 
         gcrs=GCRS(obstime=astropy.time.Time(mjd,format="mjd")) # precession? + aberration
-        fk5_J2000=FK5(equinox="J2000")
-        fk5=FK5(equinox=astropy.time.Time(mjd,format="mjd")) # precession
+        #fk5_J2000=FK5(equinox="J2000")
+        #fk5=FK5(equinox=astropy.time.Time(mjd,format="mjd")) # precession
         c1 = SkyCoord(ra,dec, frame='icrs', unit='deg')
         c2 = c1.transform_to(gcrs)
         ra_equ  = c2.ra.value
@@ -516,14 +516,11 @@ def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = Tr
         use_astropy: boolean; use astropy coordinates for precession and aberration if True
     """
 
-    log = get_logger()
-
     # undo hexapod rotation
     chex = cosd(hexrot_deg)
     shex = sind(hexrot_deg)
     x = chex*x_tan+shex*y_tan
     y = -shex*x_tan+chex*y_tan
-
 
     # need to apply precession ... etc to telescope pointing to interpret the x,y
     if precession :
