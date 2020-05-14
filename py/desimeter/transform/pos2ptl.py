@@ -5,25 +5,25 @@ and several fiber positioner systems.
 
     x_ptl, y_ptl   ... Units mm. Cartesian coordinates, relative to petal.
                        Corresponds to ptlXY in postransforms.py.
-                     
+
     x_flat, y_flat ... Units mm. Pseudo-cartesian, relative to petal.
                        Corresponds to flatXY in postransforms.py.
-    
+
     x_loc, y_loc   ... Units mm. Pseudo-cartesian, local to a fiber positioner.
                        On local tangent plane to asphere, to a good approximation.
                        Corresponds to poslocXY in postransforms.py.
-                       
+
     t_ext, p_ext   ... Units deg. Externally-measured angles of positioner's
                        kinematic "arms", in the "flat" or "loc" systems.
                        Corresponds to poslocTP in postransforms.py.
-                       
+
     t_int, p_int   ... Units deg. Internally-tracked angles of positioner's
                        kinematic "arms", in a system where theta (and therefore
                        also phi) depend on the angle at which the positioner
                        was physically mounted in the petal.
                        Corresponds to posintTP in postransforms.py.
                        Also corresponds to POS_T, POS_P in the online database.
-                       
+
 
 TYPICAL INPUTS / OUTPUTS:
 -------------------------
@@ -34,13 +34,13 @@ TYPICAL INPUTS / OUTPUTS:
 ------------
 "Flat" cooridnates are produced by the approximation (Q, S) ~ (Q, R). In other
 words:
-    
+
     1. (x_ptl, y_ptl) --> normal polar coordinates, with R = radial position.
     2. Approximate that polar R same as surface coordinate S along asphere.
     3. (Q, S) --> (x_flat, y_flat)
-    
+
 The "loc" coordinates are a translation within "flat".
-    
+
 The spatial warping in flat xy is < 1 um local to a given positioner. In the
 petal or global coordinates, the warping causes up to ~ 500 um variation from
 physical reality.
@@ -98,32 +98,32 @@ def flat2ptl(x_flat, y_flat):
 def flat2loc(u_flat, u_offset):
     '''Converts x_flat or y_flat coordinate to x_loc or y_loc.
     READ THE FINE PRINT: Args here are not  like "(x,y)". More like "(x,xo)".
-        
+
     INPUTS
         u_flat   ... x_flat or y_flat
         u_offset ... OFFSET_X or OFFSET_Y
-        
+
     OUTPUTS:
         u_loc    ... x_loc or y_loc
-        
+
     u_offset may either be a scalar (will be applied to all points), or
     a vector of unique values per point.
     '''
     u_offset = _to_numpy(u_offset) # so that minus sign works in next line
     u_loc = _add_offset(u_flat, -u_offset)
     return u_loc
-    
+
 def loc2flat(u_loc, u_offset):
     '''Converts x_loc or y_loc coordinate to x_flat or y_flat.
     READ THE FINE PRINT: Args here are not  like "(x,y)". More like "(x,xo)".
-    
+
     INPUTS:
         u_loc    ... x_loc or y_loc
         u_offset ... OFFSET_X or OFFSET_Y
-        
+
     OUTPUTS:
         u_flat   ... x_flat or y_flat
-    
+
     u_offset may either be a scalar (will be applied to all points), or
     a vector of unique values per point.
     '''
@@ -133,21 +133,21 @@ def loc2flat(u_loc, u_offset):
 def loc2ext(x_loc, y_loc, r1, r2, t_offset, p_offset):
     '''Converts (x_loc, y_loc) coordinates to (t_ext, p_ext).
     READ THE FINE PRINT: Returned tuple has 3 elements.
-    
+
     INPUTS:
         x_loc, y_loc ... positioner local (x,y), as described in module notes
         r1, r2       ... kinematic arms LENGTH_R1 and LENGTH_R2, scalar or vector
         t_offset, p_offset ... [deg] OFFSET_T and OFFSET_P
-        
+
     OUTPUTS:
         t_ext, p_ext ... externally-measured (theta,phi), see module notes
         unreachable  ... vector of same length, containing booleans
-        
+
     The vector "unreachable" identifies any points where the desired (x,y) can
     not be reached by the positioner. In such cases, the returned t_ext, p_ext
     correspond to a point which is as near as possible to x_loc, y_loc. This
     matches how it works on the instrument.
-    
+
     (The purpose of returning these "nearest possible" points, rather than a
     simple "fail", is to be operationally tolerant of targets that may be just
     a few um from the edge of reachability. In these cases, near-enough can
@@ -185,11 +185,11 @@ def loc2ext(x_loc, y_loc, r1, r2, t_offset, p_offset):
 
 def ext2loc(t_ext, p_ext, r1, r2):
     '''Converts (t_ext, p_ext) coordinates to (x_loc, y_loc).
-    
+
     INPUTS:
         t_ext, p_ext ... [deg] externally-measured (theta,phi), see module notes
         r1, r2       ... kinematic arms LENGTH_R1 and LENGTH_R2, scalar or vector
-        
+
     OUTPUTS:
         x_loc, y_loc ... positioner local (x,y), as described in module notes
     '''
@@ -204,14 +204,14 @@ def ext2loc(t_ext, p_ext, r1, r2):
 def ext2int(u_ext, u_offset):
     '''Converts t_ext or p_ext coordinate to t_int or p_int.
     READ THE FINE PRINT: Args here are not  like "(t,p)". More like "(t,to)".
-    
+
     INPUTS:
         u_ext    ... t_ext or p_ext
         u_offset ... OFFSET_T or OFFSET_P
-        
+
     OUTPUTS:
         u_int   ... t_int or p_int
-    
+
     u_offset may either be a scalar (will be applied to all points), or
     a vector of unique values per point.
     '''
@@ -222,14 +222,14 @@ def ext2int(u_ext, u_offset):
 def int2ext(u_int, u_offset):
     """Converts t_int or p_int coordinate to t_ext or p_ext.
     READ THE FINE PRINT: Args here are not  like "(t,p)". More like "(t,to)".
-        
+
     INPUTS:
         u_int    ... t_int or p_int
         u_offset ... OFFSET_T or OFFSET_P
-        
+
     OUTPUTS:
         u_ext   ... t_int or p_int
-    
+
     u_offset may either be a scalar (will be applied to all points), or
     a vector of unique values per point.
     """
@@ -242,37 +242,37 @@ def delta_angle(u_start, u_final, direction=0):
     behavior of the instrument, because real positioners have theta travel
     ranges that go a bit beyond +/-180 deg. So specifying "direction" (when
     known) can cover special cases like (b) below:
-    
+
         a. u_start = +179, u_final = -179, direction = 0 or -1 --> delta_u = -358
         b. u_final = +179, u_final = -179, direction = +1      --> delta_u = +2
-        
+
     INPUTS:
         u_start   ... units deg, start t_int or p_int
         u_final   ... units deg, final t_int or p_int
         direction ... direction delta should go around the circle
-        
-    All of the above inputs can be either a scalar or a vector.        
-    
+
+    All of the above inputs can be either a scalar or a vector.
+
     The direction flags work like this:
-        
+
          1 --> counter-clockwise --> output du >= 0, and abs(du)
         -1 --> clockwise         --> output du <= 0, and abs(du)
          0 --> unspecified       --> sign(du) = sign(u1-u0)
-        
+
     For the special case where abs(du) > 360 deg, while at the same time
     sign(u_final - u_start) != direction, then some decision must be made
     about how to handle the number of revolutions about the circle. In this
     case, the opposite-direction output will be kept within magnitude 360 deg.
     For example,
-    
+
         u_start = 0, u_final = 400, direction = 0 or +1 --> delta_u = +400
         u_start = 0, u_final = 400, direction = -1      --> delta_u = -320
         u_start = 0, u_final = 800, direction = 0 or +1 --> delta_u = +800
         u_start = 0, u_final = 800, direction = -1      --> delta_u = -280
-        
+
     Integer numbers of exact revolutions are given the same number of revolutions
     in either direction. For example,
-    
+
         u_start = 0, u_final = 720, direction = 0 or +1 or -1 --> delta_u = 720
     OUTPUTS:
         delta_u ... angular distance (signed)
@@ -281,7 +281,7 @@ def delta_angle(u_start, u_final, direction=0):
     u_final = _to_numpy(u_final)
     direction = np.ones(np.shape(u_start)) * _to_numpy(direction)
     direction = np.sign(direction) # ensure vals are only +1, 0, or -1
-    natural_delta = u_final - u_start    
+    natural_delta = u_final - u_start
     zero_dir = direction == 0
     direction[zero_dir] = np.sign(natural_delta)[zero_dir]
     opposites = direction != np.sign(natural_delta)
@@ -294,7 +294,7 @@ def delta_angle(u_start, u_final, direction=0):
 def int2loc(t_int, p_int, r1, r2, t_offset, p_offset):
     '''Composite of int2ext followed by ext2loc.  See docs of those functions
     for more details.
-    
+
     INPUTS:   t_int, p_int, r1, r2, t_offset, p_offset
     OUTPUTS:  x_loc, y_loc
     '''
@@ -306,7 +306,7 @@ def int2loc(t_int, p_int, r1, r2, t_offset, p_offset):
 def loc2int(x_loc, y_loc, r1, r2, t_offset, p_offset):
     '''Composite of loc2ext followed by ext2int. See docs of those functions
     for more details.
-    
+
     INPUTS:   x_loc, y_loc, r1, r2, t_offset, p_offset
     OUTPUTS:  t_int, p_int, unreachable
     '''
