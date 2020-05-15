@@ -4,7 +4,7 @@ Utility class to fit a translation , dilatation , rotation in a cartesian plane
 
 import json
 import numpy as np
-from desimeter.trig import arctan2d, cosd, sind, rot2deg
+from desimeter.trig import arctan2d, rot2deg
 
 class SimpleCorr(object):
 

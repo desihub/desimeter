@@ -8,7 +8,7 @@ import numpy as np
 from desimeter.transform.radec2tan import xy2hadec,hadec2xy,tan2radec,radec2tan
 from desimeter.transform.tan2fp import tan2fp,fp2tan
 from desimeter.transform.gfa2fp import gfa2fp
-from desimeter.trig import cosd, sind, arctan2d, rot2deg
+from desimeter.trig import cosd, arctan2d, rot2deg
 
 from desimeter.log import get_logger
 from astropy.table import Table
