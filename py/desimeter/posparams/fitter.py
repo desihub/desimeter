@@ -65,21 +65,21 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
                ):
     '''Best-fit function for parameters used in the transformation between
     internally-tracked (theta,phi) and externally measured (x,y).
-    
+
     The natural order of usage is in two passes:
         1. mode='static' --> best-fit static parameters
         2. mode='dynamic', feeding in results from (1)
-    
+
     INPUTS:
         posintT  ... list of theta angles as internally-tracked (a.k.a. POS_T, a.k.a. t_ext)
         posintP  ... list of phi angles as internally-tracked (a.k.a. POS_P, a.k.a. p_ext)
-        
+
         ptlX     ... list of x as meas with FVC and converted to petal coords (a.k.a. X_PTL)
         ptlY     ... list of y as meas with FVC and converted to petal coords (a.k.a. Y_PTL)
 
         gearT    ... list of GEAR_CALIB_T at the time the robot made the move
         gearP    ... list of GEAR_CALIB_P at the time the robot made the move
-        
+
         mode     ... 'static' or 'dynamic'
                      In static mode, all "dynamic" parameters will be held fixed,
                      no matter the value of the keep_fixed argument. And vice-
@@ -87,13 +87,13 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
 
         nominals ... dict with keys = param name and vals = initial values for
                      each parameter
-                   
+
         bounds   ... dict with keys = param name and vals = (min,max) limits to
                      use in the best-fit search
-        
+
         keep_fixed  ... list of any parameters you want forced to their nominal
                         values, and then never varied, when doing the best-fit.
-                              
+
     OUTPUTS:
         best_params ... dict of best-fit results, keys = param names
         final_err   ... numeric error of the best-fit params
