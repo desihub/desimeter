@@ -112,7 +112,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     assert all(key in nominals for key in all_keys)
     assert all(key in bounds for key in all_keys)
     assert all(key in all_keys for key in keep_fixed)
-    
+
     # selection of which parameters are variable
     if mode == 'static':
         keep_fixed = set(keep_fixed).union(dynamic_keys)
