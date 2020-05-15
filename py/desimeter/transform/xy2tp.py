@@ -58,7 +58,7 @@ def xy2tp(xy, r, ranges):
     numeric_contraction = epsilon*10 # slight contraction to avoid numeric divide-by-zero type of errors
     x, y, r1, r2 = xy[0], xy[1], r[0], r[1]
     unreachable = False
-    
+
     # adjust targets within reachable annulus
     hypot = (x**2.0 + y**2.0)**0.5
     angle = math.atan2(y, x)
@@ -75,7 +75,7 @@ def xy2tp(xy, r, ranges):
         HYPOT = inner
     X = HYPOT*math.cos(angle)
     Y = HYPOT*math.sin(angle)
-    
+
     # transform from cartesian XY to angles TP
     arccos_arg = (X**2.0 + Y**2.0 - (r1**2.0 + r2**2.0)) / (2.0 * r1 * r2)
     arccos_arg = max(arccos_arg, -1.0) # deal with slight numeric errors where arccos_arg comes back like -1.0000000000000002
@@ -83,7 +83,7 @@ def xy2tp(xy, r, ranges):
     P = math.acos(arccos_arg)
     T = angle - math.atan2(r2*math.sin(P), r1 + r2*math.cos(P))
     TP = [math.degrees(T), math.degrees(P)]
-    
+
     # wrap angles into travel ranges
     for i in [0, 1]:
         range_min, range_max = min(ranges[i]), max(ranges[i])
@@ -97,7 +97,7 @@ def xy2tp(xy, r, ranges):
             if TP[i] > range_max:
                 TP[i] = range_max
                 unreachable = True
-                
+
     # centralize theta
     T_ctr = (ranges[0][0] + ranges[0][1])/2.0
     T_options = linspace(TP[0], T_ctr, n_theta_centralizing_iters)

@@ -59,8 +59,8 @@ all_keys = static_keys + dynamic_keys
 
 def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
                mode='static',
-               nominals=default_values,
-               bounds=default_bounds,
+               nominals=None,
+               bounds=None,
                keep_fixed=None,
                ):
     '''Best-fit function for parameters used in the transformation between
@@ -98,6 +98,12 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
         best_params ... dict of best-fit results, keys = param names
         final_err   ... numeric error of the best-fit params
     '''
+    if nominals is None:
+        nominals = default_values
+    if bounds is None:
+        bounds = default_bounds
+    if keep_fixed is None:
+        keep_fixed = []
     # arg checking
     assert len(posintT) == len(posintP) == len(ptlX) == len(ptlY) == len(gearT) == len(gearP)
     assert all(isinstance(arg, list) for arg in (posintT, posintP, ptlX, ptlY, gearT, gearP))
@@ -105,8 +111,6 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     assert mode in {'static', 'dynamic'}
     assert all(key in nominals for key in all_keys)
     assert all(key in bounds for key in all_keys)
-    if keep_fixed is None:
-        keep_fixed = []
     assert all(key in all_keys for key in keep_fixed)
     
     # selection of which parameters are variable
@@ -129,7 +133,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     x_flat, y_flat = pos2ptl.ptl2flat(x_ptl, y_ptl)
     if mode == 'dynamic':
         n_pts -= 1 # since in dynamic mode we are using delta values
-        
+
         # Note how measured_int0 depends on having been fed good "static" param
         # values. Also note extraction of only theta and phi from the tuple
         # returned by loc2int. The 2nd element is the "unreachable" boolean
@@ -144,7 +148,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
         del unreachable
         dt_int = pos2ptl.delta_angle(u_start=t_int[:-1], u_final=t_int[1:], direction=0)
         dp_int = pos2ptl.delta_angle(u_start=p_int[:-1], u_final=p_int[1:], direction=0)
-        
+
         # compensate for any gear calibrations in place at time of move
         # this is somewhat aesthetic, so that SCALE_* correponds 1:1 with GEAR_CALIB_*
         # e.g. with a gearT==0.5 (and let's suppose that calibration is physically

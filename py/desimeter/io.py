@@ -20,7 +20,7 @@ def load_metrology():
     filename = os.path.join(desimeter_data_dir(),'fp-metrology.csv')
     log=get_logger()
     log.debug("loading {}".format(filename))
-    
+
     metrology = Table.read(filename)
     return metrology
 

@@ -80,7 +80,7 @@ def fitcentroid_gaussian(stamp,sigma=1.,noise=10.):
     ii0 = np.tile(np.arange(n0),(n1,1)).T
     ii1 = np.tile(np.arange(n1),(n0,1))
 
-    for loop in range(5):
+    for _ in range(5):
         mod    = psf(ii0,ii1,xc,yc,sigma)
         dmoddx = dpsfdxc(ii0,ii1,xc,yc,sigma)
         dmoddy = dpsfdyc(ii0,ii1,xc,yc,sigma)

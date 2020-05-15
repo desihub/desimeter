@@ -185,8 +185,7 @@ def bin_errors(table, bins=5, mode='static', printf=print):
     periods = sorted(set(table[DATE_SEC]))
     posids = set(table['POS_ID'])
     subtables = {}
-    for i in range(len(periods)):
-        period = periods[i]
+    for i,period in enumerate(periods):
         start = period - period_duration
         if i == 0:
             after = start <= table[DATE_SEC]

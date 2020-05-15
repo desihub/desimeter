@@ -193,7 +193,7 @@ def _define_cases(table, datum_dates, data_window, printf=print):
         start_idxs.append(_row_idx_for_time(table, start_date))
         final_idxs.append(_row_idx_for_time(table, final_date))
         widths.append(final_idxs[-1] - start_idxs[-1])
-    for J in range(len(final_idxs)):
+    for J,final_idx in enumerate(final_idxs):
         backwards_sum = lambda i: sum(w for w in widths[i:J+1])
         satisfies_min_width = lambda i: backwards_sum(i) > data_window
         should_expand_backwards = lambda i: not(satisfies_min_width(i)) and i > 0
@@ -204,7 +204,7 @@ def _define_cases(table, datum_dates, data_window, printf=print):
         if not satisfies_min_width(I) and can_expand_forwards:
             continue  # skip ahead and try the next datum date
         case = {'start_idx': start_idxs[I],
-                'final_idx': final_idxs[J]}
+                'final_idx': final_idx}
         if case not in cases:
             cases.append(case)
     posid = _get_posid(table)
