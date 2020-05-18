@@ -334,10 +334,8 @@ class TanCorr(object):
             x1t,y1t  = hadec2xy(ha,dec,self.dha,self.ddec)
             dx = np.mean(x2-x1t)
             dy = np.mean(y2-y1t)
-            #print(i,dx,dy)
-            #### FIXME -- cosd / deg2rad etc here
-            self.dha -= dx/np.cos(self.ddec)*180./np.pi
-            self.ddec -= dy*180./np.pi
+            self.dha  -= np.rad2deg(dx)
+            self.ddec -= np.rad2deg(dy)
         x1t,y1t  = hadec2xy(ha,dec,self.dha,self.ddec)
 
         # now fit simultaneously extra offset, rotation, scale
