@@ -181,6 +181,11 @@ for petalid in petalids :
             
         
         jj = np.where(np.in1d(tstamp_posmovedb,posid_tstamp_posmovedb[posid]))[0]
+
+        if jj.size == 0:
+            print("ERROR: {} {}/{} DB entries match desimeter data".format(posid,jj.size, len(data)))
+            continue
+
         print("for {} got {} entries in db, with {} matched to desimeter data".format(posid,len(data),jj.size))
         kk = np.argsort(tstamp_posmovedb[jj])
         jj = jj[kk]

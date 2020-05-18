@@ -50,8 +50,8 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
         return f'{posid}: dropped from analysis (invalid table)'
     _make_petal_xy(table, printf=printf)
     _apply_filters(table, printf=printf)
-    if not table:
-        return f'{posid}: dropped from analysis (no data remaining after filters applied)'
+    if not table or len(table) < 10:
+        return f'{posid}: dropped from analysis (insufficient data remaining after filters applied)'
     _make_sec_from_epoch(table, printf=printf)
     period_sec = period_days * 24 * 60 * 60
     datum_dates = np.arange(min(table['DATE_SEC']), max(table['DATE_SEC']), period_sec)
@@ -187,6 +187,27 @@ def _define_cases(table, datum_dates, data_window, printf=print):
     widths = []
     start_idxs = []
     final_idxs = []
+    posid = _get_posid(table)
+
+    #- Catch special cases of single day and/or short input table
+    num_moves = len(table)
+    if len(datum_dates) == 1:
+        for istart in range(0, num_moves, data_window):
+            ifinal = min(len(table)-1, istart+data_window-1)
+            #- check if window is smaller than requested
+            if (ifinal-istart < data_window):
+                if istart == 0:
+                    #- even one window is smaller than requested
+                    print(f'WARNING: total num_moves {num_moves} < data_window {data_window}')
+                else:
+                    #- pad backwards, overlapping with previous window
+                    istart = ifinal - data_window
+
+            cases.append(dict(start_idx=0, final_idx=ifinal))
+
+        printf(f'{posid}: {len(cases):5d} analysis cases defined')
+        return cases
+
     for j in range(1, len(datum_dates)):
         start_date = datum_dates[j - 1]
         final_date = datum_dates[j]
@@ -207,7 +228,7 @@ def _define_cases(table, datum_dates, data_window, printf=print):
                 'final_idx': final_idx}
         if case not in cases:
             cases.append(case)
-    posid = _get_posid(table)
+
     printf(f'{posid}: {len(cases):5d} analysis cases defined')
     return cases
 
