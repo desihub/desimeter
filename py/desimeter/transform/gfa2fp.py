@@ -3,7 +3,6 @@ Transforms between GFA pixel coordinates and FP mm
 """
 
 import numpy as np
-from scipy.optimize import minimize
 from desimeter import io
 from desimeter.log import get_logger
 from desimeter.simplecorr import SimpleCorr
@@ -25,14 +24,13 @@ def gfa2fp(petal_loc, xgfa, ygfa):
     if _gfa_transforms is None:
         metrology = io.load_metrology()
         _gfa_transforms = fit_gfa2fp(metrology)
-    
+
     log = get_logger()
     if petal_loc not in _gfa_transforms:
         log.error('PETAL_LOC {} GFA metrology missing'.format(petal_loc))
-    
-    params = _gfa_transforms[petal_loc]
+
     xfp, yfp = _gfa_transforms[petal_loc].apply(xgfa, ygfa)
-    
+
     return xfp, yfp
 
 def fp2gfa(petal_loc, xfp, yfp):
@@ -53,9 +51,9 @@ def fp2gfa(petal_loc, xfp, yfp):
     log = get_logger()
     if petal_loc not in _gfa_transforms:
         log.error('PETAL_LOC {} GFA metrology missing'.format(petal_loc))
-    
+
     xgfa, ygfa = _gfa_transforms[petal_loc].apply_inverse(xfp, yfp)
-    
+
     return xgfa, ygfa
 
 def fit_gfa2fp(metrology):
@@ -77,9 +75,9 @@ def fit_gfa2fp(metrology):
     #- and the Unified Metrology Table in DESI-5421
     xgfa = np.array([0, nx-1, nx-1, 0])
     ygfa = np.array([0, 0, ny-1, ny-1])
-    
+
     gfa_transforms = dict()
-    
+
     for p in range(10):
         ii = (metrology['PETAL_LOC'] == p)
         if np.count_nonzero(ii) > 0:
@@ -98,7 +96,7 @@ def fit_gfa2fp(metrology):
             x12 /= np.sqrt(np.sum(x12**2))
             norm_vector= np.cross(x01,x12)
             # I checked the sign of all components
-            
+
             #- compute correction to apply
             delta_z = 2.23 # mm
             delta_x = delta_z*norm_vector[0]/norm_vector[2]
@@ -108,11 +106,5 @@ def fit_gfa2fp(metrology):
             corr.dx += delta_x
             corr.dy += delta_y
             gfa_transforms[p] = corr
-            
+
     return gfa_transforms
-        
-        
-
-
-
-

@@ -7,7 +7,7 @@ import math
 import scipy.optimize
 import numpy as np
 
-# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
+# imports below require <path to desimeter>/py' to be added to system PYTHONPATH.
 import desimeter.transform.pos2ptl as pos2ptl
 
 # default parameter values and bounds
@@ -59,27 +59,27 @@ all_keys = static_keys + dynamic_keys
 
 def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
                mode='static',
-               nominals=default_values,
-               bounds=default_bounds,
-               keep_fixed=[],
+               nominals=None,
+               bounds=None,
+               keep_fixed=None,
                ):
     '''Best-fit function for parameters used in the transformation between
     internally-tracked (theta,phi) and externally measured (x,y).
-    
+
     The natural order of usage is in two passes:
         1. mode='static' --> best-fit static parameters
         2. mode='dynamic', feeding in results from (1)
-    
+
     INPUTS:
         posintT  ... list of theta angles as internally-tracked (a.k.a. POS_T, a.k.a. t_ext)
         posintP  ... list of phi angles as internally-tracked (a.k.a. POS_P, a.k.a. p_ext)
-        
+
         ptlX     ... list of x as meas with FVC and converted to petal coords (a.k.a. X_PTL)
         ptlY     ... list of y as meas with FVC and converted to petal coords (a.k.a. Y_PTL)
 
         gearT    ... list of GEAR_CALIB_T at the time the robot made the move
         gearP    ... list of GEAR_CALIB_P at the time the robot made the move
-        
+
         mode     ... 'static' or 'dynamic'
                      In static mode, all "dynamic" parameters will be held fixed,
                      no matter the value of the keep_fixed argument. And vice-
@@ -87,17 +87,23 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
 
         nominals ... dict with keys = param name and vals = initial values for
                      each parameter
-                   
+
         bounds   ... dict with keys = param name and vals = (min,max) limits to
                      use in the best-fit search
-        
+
         keep_fixed  ... list of any parameters you want forced to their nominal
                         values, and then never varied, when doing the best-fit.
-                              
+
     OUTPUTS:
         best_params ... dict of best-fit results, keys = param names
         final_err   ... numeric error of the best-fit params
     '''
+    if nominals is None:
+        nominals = default_values
+    if bounds is None:
+        bounds = default_bounds
+    if keep_fixed is None:
+        keep_fixed = []
     # arg checking
     assert len(posintT) == len(posintP) == len(ptlX) == len(ptlY) == len(gearT) == len(gearP)
     assert all(isinstance(arg, list) for arg in (posintT, posintP, ptlX, ptlY, gearT, gearP))
@@ -106,7 +112,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     assert all(key in nominals for key in all_keys)
     assert all(key in bounds for key in all_keys)
     assert all(key in all_keys for key in keep_fixed)
-    
+
     # selection of which parameters are variable
     if mode == 'static':
         keep_fixed = set(keep_fixed).union(dynamic_keys)
@@ -127,7 +133,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     x_flat, y_flat = pos2ptl.ptl2flat(x_ptl, y_ptl)
     if mode == 'dynamic':
         n_pts -= 1 # since in dynamic mode we are using delta values
-        
+
         # Note how measured_int0 depends on having been fed good "static" param
         # values. Also note extraction of only theta and phi from the tuple
         # returned by loc2int. The 2nd element is the "unreachable" boolean
@@ -139,9 +145,10 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
             nominals['LENGTH_R1'], nominals['LENGTH_R2'],
             nominals['OFFSET_T'], nominals['OFFSET_P']
             )
+        del unreachable
         dt_int = pos2ptl.delta_angle(u_start=t_int[:-1], u_final=t_int[1:], direction=0)
         dp_int = pos2ptl.delta_angle(u_start=p_int[:-1], u_final=p_int[1:], direction=0)
-        
+
         # compensate for any gear calibrations in place at time of move
         # this is somewhat aesthetic, so that SCALE_* correponds 1:1 with GEAR_CALIB_*
         # e.g. with a gearT==0.5 (and let's suppose that calibration is physically
@@ -150,7 +157,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
         # output SCALE_T --> 0.5
         dt_int /= gearT[1:]
         dp_int /= gearP[1:]
-        
+
         # now remove first point, to match up with lists of deltas
         x_flat = x_flat[1:]
         y_flat = y_flat[1:]
@@ -193,7 +200,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     optimizer_result = scipy.optimize.minimize(fun=err_norm,
                                                x0=initial_params,
                                                bounds=bounds_vector)
-    
+
     # organize and return results
     best_params = {key: optimizer_result.x[param_idx[key]] for key in params_to_fit}
     fixed_params = {key: nominals[key] for key in keep_fixed}
@@ -207,4 +214,3 @@ def wrap_at_180(angle):
     if angle > 180:
         angle -= 360
     return angle
-    
