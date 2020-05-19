@@ -1,0 +1,74 @@
+#!/usr/bin/env python
+
+"""
+utility script to merge individual posparams fits back into a single table,
+using the last entry from each of the individual fits
+"""
+
+import sys, os, argparse
+import numpy as np
+from astropy.table import Table, vstack, join
+
+import desimeter.io
+from desimeter.log import get_logger
+
+parser = argparse.ArgumentParser(usage = "{prog} [options]")
+parser.add_argument("-i", "--input", type=str, nargs='*', required=True,
+                    help="input data files")
+parser.add_argument("-o", "--output", type=str, required=True,
+                    help="output merged table file")
+parser.add_argument("--merge-metrology", action="store_true", help="merge full metrology information")
+parser.add_argument("--merge-location", action="store_true", help="merge only LOCATION from metrology")
+# parser.add_argument("-v", "--verbose", action="store_true", help="some flag")
+
+args = parser.parse_args()
+log = get_logger()
+log.info(f'Loading {len(args.input)} individual posparams files')
+
+#- Load individual posparams files
+posparams = vstack([Table.read(filename)[-1:] for filename in args.input])
+
+#- TODO: update this to also work for full focalplane metrology which has
+#-       PETAL_ID and DEVICE_LOC but not DEVICE_ID
+if args.merge_metrology or args.merge_location:
+    metrology = desimeter.io.load_metrology()
+
+    #- Add POS_ID to match posparams POS_ID naming scheme (1234 vs. M01234)
+    metrology['POS_ID'] = np.zeros(len(metrology), dtype=posparams['POS_ID'].dtype)
+    for i, device_id in enumerate(metrology['DEVICE_ID']):
+        if device_id in posparams['POS_ID']:
+            metrology['POS_ID'][i] = device_id
+        elif device_id.startswith('P'):
+            metrology['POS_ID'][i] = device_id
+        else:
+            metrology['POS_ID'][i] = 'M0'+device_id
+
+    orig_ids = set(list(posparams['POS_ID']))
+    if args.merge_metrology:
+        log.info('Merging full metrology information')
+        posparams = join(posparams, metrology, keys='POS_ID')
+    elif args.merge_location:
+        log.info('Merging only LOCATION column from metrology')
+        posparams = join(posparams, metrology['POS_ID', 'LOCATION'], keys='POS_ID')
+    else:
+        raise RuntimeError('Should not have gotten here')
+
+    final_ids = set(list(posparams['POS_ID']))
+
+    log.info(f'{len(final_ids)}/{len(orig_ids)} POS_ID matched to metrology')
+    if len(final_ids) < len(orig_ids):
+        missing_ids = orig_ids - final_ids
+        log.warning(f'POS_IDs missing from metrology so dropping: {missing_ids}')
+
+if len(posparams) == 0:
+    log.critical('No POS_ID matches between posparams and metrology; do you have $DESIMETER_DATA set properly?')
+
+#- Write output
+posparams.write(args.output, overwrite=True)
+log.info(f'Wrote {args.output}')
+
+
+
+
+
+
