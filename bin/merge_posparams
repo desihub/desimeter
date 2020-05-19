@@ -12,9 +12,12 @@ from astropy.table import Table, vstack, join
 import desimeter.io
 from desimeter.log import get_logger
 
-parser = argparse.ArgumentParser(usage = "{prog} [options]")
+parser = argparse.ArgumentParser(
+    usage = "merge_posparams -i M*.csv -o posparams.csv",
+    description = 'Merge individual M*.csv posparams files into a single table, '
+                  'optionally also merging metrology information')
 parser.add_argument("-i", "--input", type=str, nargs='*', required=True,
-                    help="input data files")
+                    help="individual posparams fit files")
 parser.add_argument("-o", "--output", type=str, required=True,
                     help="output merged table file")
 parser.add_argument("--merge-metrology", action="store_true", help="merge full metrology information")
