@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from astropy.table import Table
 
 from desimeter.transform.pos2ptl import int2ptl
-
+from desimeter.posparams.posmoveselection import posmove_selection
 
 import argparse
 parser = argparse.ArgumentParser(description=__doc__)
@@ -14,19 +14,24 @@ parser.add_argument('-i', '--infile', type=str, required=True,
                     help='path to input csv file like M02012.csv')
 parser.add_argument('-p', '--paramfile', type=str, default=None, required=False,
                     help='path to paramfits.csv')
+parser.add_argument('--log-note-selection', type=str, default=None, required=False,
+                    help="required keywords in LOG_NOTE selection, seperated by '&', like ''arc calibration & use_desimeter=True'")
 
 args = parser.parse_args()
 
 filename=args.infile
 t=Table.read(filename)
 print(t.dtype.names)
-npts=len(t)
 
 #plt.figure()
 #plt.hist(t['DELTAT'],bins=100)
 
-ok=t["OFFSET_T"]!=0
-t=t[:][ok]
+t=posmove_selection(t,args.log_note_selection)
+
+npts=len(t)
+print("Number of selected entries: {}".format(npts))
+if npts==0 : sys.exit(0)
+
 x_ptl = np.zeros(npts)
 y_ptl = np.zeros(npts)
 for i in range(npts) :
