@@ -22,6 +22,8 @@ parser.add_argument("-o", "--output", type=str, required=True,
                     help="output merged table file")
 parser.add_argument("--no-check", action="store_true",
                     help="do not check indices agains metrology")
+parser.add_argument("--no-metrology", action="store_true",
+                    help="do not merge indices from metrology if missing")
 
 
 args = parser.parse_args()
@@ -32,16 +34,35 @@ tables=list()
 for filename in args.input :
     t=Table.read(filename)
     if len(t)==0 : continue
-    if t["MOVE_CMD"].dtype == "int64"  : t["MOVE_CMD"]=np.repeat("none",len(t))
-    if t["MOVE_VAL1"].dtype == "int64" : t["MOVE_VAL1"]=np.repeat("none",len(t))
-    if t["MOVE_VAL2"].dtype == "int64" : t["MOVE_VAL2"]=np.repeat("none",len(t))
+    if "MOVE_CMD" in t :
+        if t["MOVE_CMD"].dtype == "int64"  : t["MOVE_CMD"]=np.repeat("none",len(t))
+    if "MOVE_VAL1" in t :
+        if t["MOVE_VAL1"].dtype == "int64" : t["MOVE_VAL1"]=np.repeat("none",len(t))
+    if "MOVE_VAL2" in t :
+        if t["MOVE_VAL2"].dtype == "int64" : t["MOVE_VAL2"]=np.repeat("none",len(t))
     tables.append(t)
 
 posparams = vstack(tables)
+if "LOCATION" not in posparams :
+    if "PETAL_LOC" in posparams and "DEVICE_LOC" in posparams :
+        posparams["LOCATION"]=1000*np.array(list(posparams["PETAL_LOC"])).astype(int)+np.array(list(posparams["DEVICE_LOC"])).astype(int)
 
-posparams["LOCATION"]=1000*np.array(list(posparams["PETAL_LOC"])).astype(int)+np.array(list(posparams["DEVICE_LOC"])).astype(int)
+if "DEVICE_LOC" not in posparams and (not args.no_metrology) :
+    # need to merge metrology
+    metrology = desimeter.io.load_metrology()
 
-if not args.no_check :
+    pid2ind = {pid:i for i,pid in enumerate(metrology["POS_ID"])}
+    npos=len(posparams)
+    keys = ["LOCATION","DEVICE_LOC","PETAL_LOC","PETAL_ID"]
+    for k in keys :
+        posparams[k]=-1*np.ones(npos,dtype=int)
+    for j,pid in enumerate(posparams["POS_ID"]) :
+        if pid in pid2ind :
+            i=pid2ind[pid]
+            for k in keys :
+                posparams[k][j]=metrology[k][i]
+
+if not args.no_check and not args.no_metrology :
     metrology = desimeter.io.load_metrology()
 
     pid2ind = {pid:i for i,pid in enumerate(metrology["POS_ID"])}
