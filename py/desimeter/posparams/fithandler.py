@@ -29,17 +29,18 @@ output_keys = {'POS_ID': False,
 output_keys.update({key:True for key in fitter.all_keys})
 
 def run_best_fits(posid, path, period_days, data_window, savedir,
-                  static_quantile, printf=print):
+                  static_quantile, printf=print, min_window=10):
     '''Define best-fit analysis cases for one positioner.
 
     INPUTS:
         posid ... positioner id string
         path ... file path to csv containing measured (x,y) vs internal (t,p) data
         period_days ... minimum number of days per best-fit
-        data_window ... mininum number of data points per best-fit
+        data_window ... number of data points per best-fit
         savedir ... directory to save result files
         static_quantile ... least-error group of static params to median --> overall best
         printf ... print function (so you can control how this module spits any messages)
+        min_window ... (optional) minimum number of data points to attempt a fit
 
     OUTPUTS:
         logstr ... string describing (very briefly) what was done. suitable for
@@ -50,8 +51,8 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
         return f'{posid}: dropped from analysis (invalid table)'
     _make_petal_xy(table, printf=printf)
     _apply_filters(table, printf=printf)
-    if not table or len(table) < 10:
-        return f'{posid}: dropped from analysis (insufficient data remaining after filters applied)'
+    if not table or len(table) < min_window:
+        return f'ERROR: {posid} dropped from analysis because {len(table)}<{min_window} is insufficient data remaining after filters applied'
     _make_sec_from_epoch(table, printf=printf)
     period_sec = period_days * 24 * 60 * 60
     datum_dates = np.arange(min(table['DATE_SEC']), max(table['DATE_SEC']), period_sec)
