@@ -41,20 +41,28 @@ posparams = vstack(tables)
 
 posparams["LOCATION"]=1000*np.array(list(posparams["PETAL_LOC"])).astype(int)+np.array(list(posparams["DEVICE_LOC"])).astype(int)
 
+device_id_key="DEVICE_ID"
+if not device_id_key in posparams.dtype.names : # add device id because that's how it's called elsewhere in the code
+    device_id_key = "POS_ID"
+if not device_id_key in posparams.dtype.names : # add device id because that's how it's called elsewhere in the code
+    log.error("no POS_ID nor DEVICE_ID???")
+    sys.exit(12)
+
+
 if not args.no_check :
     metrology = desimeter.io.load_metrology()
 
-    pid2ind = {pid:i for i,pid in enumerate(metrology["POS_ID"])}
+    pid2ind = {pid:i for i,pid in enumerate(metrology["DEVICE_ID"])}
 
     has_error = False
-    for j,pid in enumerate(posparams["POS_ID"]) :
+    for j,pid in enumerate(posparams[device_id_key]) :
         if not pid in pid2ind :
-            log.warning("POS_ID={} not in metrology table".format(pid))
+            log.warning("DEVICE_ID={} not in metrology table".format(pid))
             continue
         i=pid2ind[pid]
         for k in ["DEVICE_LOC","LOCATION","PETAL_LOC","PETAL_ID"] :
             if posparams[k][j] != metrology[k][i] :
-                log.error("for POS_ID={} {}={} != {} from metrology".format(pid,k,posparams[k][j],metrology[k][i]))
+                log.error("for {}={} {}={} != {} from metrology".format(device_id_key,pid,k,posparams[k][j],metrology[k][i]))
                 has_errors = True
     if has_error :
         sys.exit(12)
