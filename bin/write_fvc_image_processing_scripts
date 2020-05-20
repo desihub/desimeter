@@ -6,6 +6,7 @@ import numpy as np
 import astropy.io.fits as pyfits
 from astropy.table import Table
 import argparse
+import subprocess
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Match posmovedb and FVC data""")
@@ -25,13 +26,14 @@ if not os.path.isdir(args.jobdir) :
     os.makedirs(args.jobdir)
 if not os.path.isdir(args.outdir) :
     os.makedirs(args.outdir)
-    
+
 
 ifile=open(args.infile)
 
 jobid=0
 jobfilename=os.path.join(args.jobdir,"job-%03d.sh"%jobid)
 jobfile=open(jobfilename,"w")
+jobfile.write("#!/bin/bash\n")
 donefilename=os.path.join(args.jobdir,"DONE.txt")
 if not os.path.isfile(donefilename) :
     with open(donefilename,"w") as dfile :
@@ -46,13 +48,15 @@ for line in ifile.readlines() :
     #print(filename)
     if count >= args.ntasks_per_job :
         jobfile.close()
+        subprocess.call(['chmod', '+x', filename])
         print("wrote",jobfilename)
         jobid += 1
         jobfilename=os.path.join(args.jobdir,"job-%03d.sh"%jobid)
         jobfile=open(jobfilename,"w")
+        jobfile.write("#!/bin/bash\n")
         count=0
     try :
-    #if 1 :    
+    #if 1 :
         h=pyfits.open(filename)
 
         file_hdus=[]
@@ -101,7 +105,7 @@ for line in ifile.readlines() :
                 lines+="echo {} >> {}\n".format(ofilename,donefilename)
                 lines+="else\necho {} exists\nfi\n".format(ofilename)
                 jobfile.write(lines)
-                
+
         h.close()
     except :
         print("a failure")
@@ -113,6 +117,7 @@ for line in ifile.readlines() :
     #if count>20 : break
 
 jobfile.close()
+subprocess.call(['chmod', '+x', filename])
 print("wrote",jobfilename)
 
 t=Table()
@@ -121,7 +126,3 @@ t["FILE"]=filenames
 ofilename=os.path.join(args.outdir,"fvc-desimeter-and-dates.csv")
 t.write(ofilename,format="csv")
 print("wrote",ofilename)
-
-        
-
-
