@@ -7,6 +7,7 @@ from astropy.table import Table
 
 from desimeter.transform.pos2ptl import int2ptl
 from desimeter.posparams.posmoveselection import posmove_selection
+from desimeter.circles import fit_circle
 
 import argparse
 parser = argparse.ArgumentParser(description=__doc__)
@@ -17,6 +18,7 @@ parser.add_argument('-p', '--paramfile', type=str, default=None, required=False,
 parser.add_argument('--log-note-selection', type=str, default=None, required=False,
                     help="required keywords in LOG_NOTE selection, seperated by '&', like ''arc calibration & use_desimeter=True'")
 parser.add_argument('--print-angles', action='store_true')
+parser.add_argument('--fit-circle', action='store_true')
 
 args = parser.parse_args()
 
@@ -92,6 +94,14 @@ if args.print_angles :
 plt.plot(x_ptl,y_ptl,"x",label="expected from posmove db")
 if x_ptl_b is not None :
    plt.plot(x_ptl_b,y_ptl_b,"+",label="expected after desimeter calibration")
+
+if args.fit_circle :
+   xc,yc,r = fit_circle(x_fp,y_fp)
+   a=np.linspace(0,2*np.pi,200)
+   plt.plot(xc+r*np.cos(a),yc+r*np.sin(a),"--",color="gray")
+   print(xc,yc,r)
+
+
 
 plt.xlabel("X (mm)")
 plt.ylabel("Y (mm)")
