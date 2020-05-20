@@ -67,7 +67,6 @@ for i in ii :
 spots=spots[:][r>1.] # exclude bad data??
 
 spots = apply_ptl2fp(spots)
-
 spots["LOCATION"] = spots["PETAL_LOC"]*1000+spots["DEVICE_LOC"]
 
 # add positioner id and bus id
@@ -84,7 +83,7 @@ if os.path.isfile(filename) :
         if not pid.startswith('P'):
             pid = 'M'+"%05d"%(int(pid))
         posids.append(pid)
-    spots["POS_ID"]=posids
+    spots["DEVICE_ID"]=posids
 
     spots["BUS_ID"]=np.array([ ids["BUS_ID"][loc2ind[loc]] for loc in spots["DEVICE_LOC"] ])
 
