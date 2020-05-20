@@ -20,58 +20,46 @@ parser.add_argument("-i", "--input", type=str, nargs='*', required=True,
                     help="individual posparams fit files")
 parser.add_argument("-o", "--output", type=str, required=True,
                     help="output merged table file")
-parser.add_argument("--merge-metrology", action="store_true", help="merge full metrology information")
-parser.add_argument("--merge-location", action="store_true", help="merge only LOCATION from metrology")
-# parser.add_argument("-v", "--verbose", action="store_true", help="some flag")
+parser.add_argument("--no-check", action="store_true",
+                    help="do not check indices agains metrology")
+
 
 args = parser.parse_args()
 log = get_logger()
 log.info(f'Loading {len(args.input)} individual posparams files')
 
-#- Load individual posparams files
-posparams = vstack([Table.read(filename)[-1:] for filename in args.input])
+tables=list()
+for filename in args.input :
+    t=Table.read(filename)
+    if len(t)==0 : continue
+    if t["MOVE_CMD"].dtype == "int64"  : t["MOVE_CMD"]=np.repeat("none",len(t))
+    if t["MOVE_VAL1"].dtype == "int64" : t["MOVE_VAL1"]=np.repeat("none",len(t))
+    if t["MOVE_VAL2"].dtype == "int64" : t["MOVE_VAL2"]=np.repeat("none",len(t))
+    tables.append(t)
 
-#- TODO: update this to also work for full focalplane metrology which has
-#-       PETAL_ID and DEVICE_LOC but not DEVICE_ID
-if args.merge_metrology or args.merge_location:
+posparams = vstack(tables)
+
+posparams["LOCATION"]=1000*np.array(list(posparams["PETAL_LOC"])).astype(int)+np.array(list(posparams["DEVICE_LOC"])).astype(int)
+
+if not args.no_check :
     metrology = desimeter.io.load_metrology()
 
-    #- Add POS_ID to match posparams POS_ID naming scheme (1234 vs. M01234)
-    metrology['POS_ID'] = np.zeros(len(metrology), dtype=posparams['POS_ID'].dtype)
-    for i, device_id in enumerate(metrology['DEVICE_ID']):
-        if device_id in posparams['POS_ID']:
-            metrology['POS_ID'][i] = device_id
-        elif device_id.startswith('P'):
-            metrology['POS_ID'][i] = device_id
-        else:
-            metrology['POS_ID'][i] = 'M0'+device_id
+    pid2ind = {pid:i for i,pid in enumerate(metrology["POS_ID"])}
 
-    orig_ids = set(list(posparams['POS_ID']))
-    if args.merge_metrology:
-        log.info('Merging full metrology information')
-        posparams = join(posparams, metrology, keys='POS_ID')
-    elif args.merge_location:
-        log.info('Merging only LOCATION column from metrology')
-        posparams = join(posparams, metrology['POS_ID', 'LOCATION'], keys='POS_ID')
-    else:
-        raise RuntimeError('Should not have gotten here')
+    has_error = False
+    for j,pid in enumerate(posparams["POS_ID"]) :
+        if not pid in pid2ind :
+            log.warning("POS_ID={} not in metrology table".format(pid))
+            continue
+        i=pid2ind[pid]
+        for k in ["DEVICE_LOC","LOCATION","PETAL_LOC","PETAL_ID"] :
+            if posparams[k][j] != metrology[k][i] :
+                log.error("for POS_ID={} {}={} != {} from metrology".format(pid,k,posparams[k][j],metrology[k][i]))
+                has_errors = True
+    if has_error :
+        sys.exit(12)
 
-    final_ids = set(list(posparams['POS_ID']))
-
-    log.info(f'{len(final_ids)}/{len(orig_ids)} POS_ID matched to metrology')
-    if len(final_ids) < len(orig_ids):
-        missing_ids = orig_ids - final_ids
-        log.warning(f'POS_IDs missing from metrology so dropping: {missing_ids}')
-
-if len(posparams) == 0:
-    log.critical('No POS_ID matches between posparams and metrology; do you have $DESIMETER_DATA set properly?')
 
 #- Write output
 posparams.write(args.output, overwrite=True)
 log.info(f'Wrote {args.output}')
-
-
-
-
-
-
