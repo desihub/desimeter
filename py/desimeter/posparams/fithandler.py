@@ -14,6 +14,7 @@ from astropy.table import join
 # imports below require <path to desimeter>/py' to be added to system PYTHONPATH.
 import desimeter.posparams.fitter as fitter
 import desimeter.transform.ptl2fp as ptl2fp
+from desimeter.posparams.posmoveselection import posmove_selection
 
 # column headers for processed results of best-fits
 # boolean says whether it has "STATIC"/"DYNAMIC" options
@@ -29,7 +30,7 @@ output_keys = {'POS_ID': False,
 output_keys.update({key:True for key in fitter.all_keys})
 
 def run_best_fits(posid, path, period_days, data_window, savedir,
-                  static_quantile, printf=print, min_window=10):
+                  static_quantile, printf=print, min_window=10, log_note_selection=None):
     '''Define best-fit analysis cases for one positioner.
 
     INPUTS:
@@ -41,12 +42,13 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
         static_quantile ... least-error group of static params to median --> overall best
         printf ... print function (so you can control how this module spits any messages)
         min_window ... (optional) minimum number of data points to attempt a fit
+        log_note_selection ... (optional) required keywords in LOG_NOTE selection, seperated by '&', like ''arc calibration & use_desimeter=True'
 
     OUTPUTS:
         logstr ... string describing (very briefly) what was done. suitable for
                    printing to stdout, etc
     '''
-    table = _read(posid=posid, path=path, printf=printf)
+    table = _read(posid=posid, path=path, printf=printf, log_note_selection=log_note_selection)
     if not table:
         return f'{posid}: dropped from analysis (invalid table)'
     _make_petal_xy(table, printf=printf)
@@ -87,7 +89,7 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
     logstr = f'{posid}: Best-fit results on {len(cases)} data windows written to {merged_filepath}'
     return logstr
 
-def _read(posid, path, printf=print):
+def _read(posid, path, printf=print, log_note_selection=None):
     '''Read csv file at path. File should contain positioner measured vs
     commanded data. Data is appropriately type cast as necessary.
 
@@ -102,6 +104,10 @@ def _read(posid, path, printf=print):
                      'POS_ID', 'PETAL_LOC'}
     typecast_funcs = {'CTRL_ENABLED': _str2bool}
     table = Table.read(path)
+
+
+    table = posmove_selection(table,log_note_selection)
+
     table.sort('DATE')
     key_search = [key in table.columns for key in required_keys]
     if table and all(key_search) and str(posid) == _get_posid(table):

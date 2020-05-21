@@ -315,6 +315,18 @@ def loc2int(x_loc, y_loc, r1, r2, t_offset, p_offset):
     p_int = ext2int(p_ext, p_offset)
     return t_int, p_int, unreachable
 
+def int2ptl(t_int, p_int, r1, r2, t_offset, p_offset, x_offset, y_offset):
+    '''Composite of int2ext ext2loc loc2flat flat2ptl.
+
+    INPUTS:   t_int, p_int, r1, r2, t_offset, p_offset, x_offset, y_offset
+    OUTPUTS:  x_ptl, y_ptl
+    '''
+    x_loc, y_loc = int2loc(t_int, p_int, r1, r2, t_offset, p_offset)
+    x_flat = loc2flat(x_loc, x_offset)
+    y_flat = loc2flat(y_loc, y_offset)
+    x_ptl, y_ptl = flat2ptl(x_flat,y_flat)
+    return x_ptl, y_ptl
+
 def _to_numpy(u):
     '''Internal function to cast values to consistent numpy vectors.'''
     if isinstance(u, list):
