@@ -122,7 +122,7 @@ def plot_passfail(binned, savepath, title='', printf=print):
         plt.ylabel(p['ylabel'], fontsize=14)
         plt.legend(title='THRESHOLDS (mm)')
         path = split[0] + p['suffix'] + split[1]
-        plt.title(title, fontfamily='monospace')
+        plt.title(title, family='monospace')
         plt.grid(color='0.9')
         plt.minorticks_on()
         plt.gca().tick_params(axis='x', which='minor', bottom=False)
