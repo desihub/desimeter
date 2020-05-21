@@ -67,9 +67,5 @@ As of 2020-05-12, desimeter provides the following tools:
 * ``fit_posparams`` ... Fits positioner calibration parameters, by comparing measured (x,y) to internally-tracked (theta,phi).
 
 * ``plot_posparams`` ... Plots results from fit_posparams per positioner. Also plots cumulative positioner errors over time, as calculated when performing those best-fits.
-
-* ``plot_positioner`` ...
-
-* ``plot_posmove`` ...
 	
 
