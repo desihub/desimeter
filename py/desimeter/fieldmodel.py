@@ -110,8 +110,6 @@ class FieldModel(object):
             raise RuntimeError("no star is matched with sufficient precision!")
 
         return catalog[:][selection]
-
-
     
     def fit_tancorr(self,catalog,mjd=None,hexrot_deg=None,lst=None) :
 
@@ -167,13 +165,13 @@ class FieldModel(object):
 
         for loop in range(3) : # loop because change of pointing induces a rotation of the field
             
-            # we transform GAIA coordinates to the tangent plane
+            # we transform Gaia coordinates to the tangent plane
             x_tan_gaia,y_tan_gaia = radec2tan(ra_gaia,dec_gaia,self.ra,self.dec,mjd=self.mjd,lst_deg=self.lst,hexrot_deg = self.hexrot_deg, precession = self.precession, aberration = self.aberration, polar_misalignment = self.polar_misalignment)
         
             # now that we have both sets of coordinates, we fit a transformation from one to the other
             correction.fit(x_tan_meas,y_tan_meas,x_tan_gaia,y_tan_gaia)
 
-            # opposite sign for the telescope offset because I have converted GAIA RA Dec to tangent plane ...
+            # opposite sign for the telescope offset because I have converted Gaia RA Dec to tangent plane ...
             self.dec -= correction.ddec
             self.ra  += correction.dha/np.cos(self.dec*np.pi/180.) # HA = LST-RA
 
@@ -329,7 +327,7 @@ class TanCorr(object):
 
         assert((x1.shape == y1.shape)&(x2.shape == y2.shape)&(x1.shape == x2.shape))
         
-        # first ajust an offset using spherical coordinates
+        # first adjust an offset using spherical coordinates
         # assume fiducial pointing of telescope to convert
         # tangent plane coords to angles
         self.dha=0.

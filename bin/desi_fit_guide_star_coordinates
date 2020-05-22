@@ -21,6 +21,8 @@ parser.add_argument('--fits-header', type = str, default = None,
 parser.add_argument('--plot', action = 'store_true')
 parser.add_argument('--save-plot', type=str, default=None,
                     help='Base filename for plots')
+parser.add_argument('--gfa-image', type=str, default=None,
+                    help='Path to reduced GFA image, for plotting')
 parser.add_argument('--cat', '--catalog', dest='cat', type=str, default=None,
                     help='Output catalog filename')
 
@@ -96,10 +98,13 @@ if args.cat:
 
 if args.plot or args.save_plot:
     import matplotlib.pyplot as plt
+    import matplotlib as mpl
 
     t=catalog
     xgfa=t["xcentroid"]
     ygfa=t["ycentroid"]
+    dxgfa=t["dxcentroid"]
+    dygfa=t["dycentroid"]
     pet=t["petal_loc"]
 
     # re-read the model to also test the I/O
@@ -169,7 +174,13 @@ if args.plot or args.save_plot:
             plt.show()
 
         plt.clf()
+        fig, ax = plt.subplots()
         plt.plot(xgfa[I], ygfa[I], 'b.')
+        # error ellipse exaggeration
+        EX = 10.
+        for x,y,dx,dy in zip(xgfa[I], ygfa[I], dxgfa[I], dygfa[I]):
+            e = mpl.patches.Ellipse((x,y), width=EX*dx*2., height=EX*dy*2.)
+            ax.add_artist(e)
         gfx,gfy = fm.radec2fp(ra[I], dec[I])
         gx,gy = fp2gfa(petal, gfx, gfy)
         plt.quiver(xgfa[I], ygfa[I], xgfa[I]-gx, ygfa[I]-gy,
@@ -187,6 +198,61 @@ if args.plot or args.save_plot:
         else:
             plt.show()
 
+        if args.gfa_image:
+            img = fitsio.read(args.gfa_image, ext=cam)
+            plt.clf()
+            fig, axis = plt.subplots()
+            mn,mx = np.percentile(img.ravel(), [50,98])
+            plt.imshow(img, interpolation='nearest', origin='lower',
+                       cmap='gray', vmin=mn, vmax=mx)
+            ax = plt.axis()
+            plt.plot(xgfa[I], ygfa[I], 'r*', ms=20, mec='r', mfc='none', mew=1)
+            # error ellipse exaggeration
+            # EX = 10.
+            # for x,y,dx,dy in zip(xgfa[I], ygfa[I], dxgfa[I], dygfa[I]):
+            #     e = mpl.patches.Ellipse((x,y), width=EX*dx*2., height=EX*dy*2.,
+            #                             ec='red', fc='none')
+            #     axis.add_artist(e)
+            # gfx,gfy = fm.radec2fp(ra[I], dec[I])
+            # gx,gy = fp2gfa(petal, gfx, gfy)
+            # plt.quiver(xgfa[I], ygfa[I], xgfa[I]-gx, ygfa[I]-gy,
+            #            label='Measurements - Gaia',
+            #            angles='xy', scale_units='xy', scale=0.01)
+            plt.axis(ax)
+            plt.xlabel("GFA x (pixels)")
+            plt.ylabel("GFA y (pixels)")
+            #plt.legend()
+            plt.title('GFA expid %i, %s: pixel space'% (header['EXPID'], cam))
+            if args.save_plot:
+                plt.savefig(args.save_plot + '4-%s.png' % cam)
+            else:
+                plt.show()
+
+            gfx,gfy = fm.radec2fp(ra[I], dec[I])
+            gx,gy = fp2gfa(petal, gfx, gfy)
+            dx,dy = xgfa[I]-gx, ygfa[I]-gy
+            dists = np.hypot(dx,dy)
+            print('Median distance: %.2f pix' % np.median(dists))
+            print('Largest differences:', ', '.join(['%.1f' % d for d in np.sort(dists)[-10:]]), 'pix')
+            sigx = dx / dxgfa[I]
+            sigy = dy / dygfa[I]
+            sig = np.hypot(sigx, sigy)
+            print('Largest differences:', ', '.join(['%.1f' % d for d in np.sort(sig)[-10:]]), 'sigmas')
+            Iworst = np.argsort(sig)[-10:]
+            print('Worst S/N: pix differences:', ', '.join(['%.1f' % d for d in dists[Iworst]]))
+            print('Pixel uncertainties x:', ', '.join(['%.3f' % d for d in dxgfa[I[Iworst]]]))
+            print('Pixel uncertainties y:', ', '.join(['%.3f' % d for d in dygfa[I[Iworst]]]))
+                
+            plt.clf()
+            plt.semilogy(dists, sig, 'b.')
+            plt.xlabel('Pixel offsets (pixels)')
+            plt.ylabel('Pixel offsets / Measured position uncertainty (sigmas)')
+            if args.save_plot:
+                plt.savefig(args.save_plot + '6-%s.png' % cam)
+            else:
+                plt.show()
+
+            
     plt.clf()
     for cam in cams:
         I = np.flatnonzero(t['camera'] == cam)
@@ -198,6 +264,6 @@ if args.plot or args.save_plot:
     plt.xlabel('Match distance (arcsec)')
     plt.legend()
     if args.save_plot:
-        plt.savefig(args.save_plot + '4.png')
+        plt.savefig(args.save_plot + '5.png')
     else:
         plt.show()
