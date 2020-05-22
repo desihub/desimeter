@@ -1,4 +1,3 @@
-
 """
 Utility functions to fit guide stars
 """
@@ -9,6 +8,7 @@ import numpy as np
 from desimeter.transform.radec2tan import xy2hadec,hadec2xy,tan2radec,radec2tan
 from desimeter.transform.tan2fp import tan2fp,fp2tan
 from desimeter.transform.gfa2fp import gfa2fp
+from desimeter.trig import cosd, arctan2d, rot2deg
 
 from desimeter.log import get_logger
 from astropy.table import Table
@@ -28,16 +28,16 @@ class FieldModel(object):
         self.precession = True
         self.aberration = True
         self.polar_misalignment = True
-        
+
         self.sxx = 1.
         self.syy = 1.
         self.sxy = 0.
         self.fieldrot_zp_deg = 0. # zero point of field rotation (should be constant across exposures)
-        self.fieldrot_deg = 0. # rotation of field as defined in DESI-5190, to compare to fiberassign FIELDROT 
+        self.fieldrot_deg = 0. # rotation of field as defined in DESI-5190, to compare to fiberassign FIELDROT
         self.expid  = 0
         self.nstars = 0
         self.rms_arcsec = 0.
-    
+
     def tojson(self):
         params = dict()
         params['name'] = "Field model"
@@ -49,15 +49,15 @@ class FieldModel(object):
         params['hexrot_deg'] = self.hexrot_deg
         params['adc1'] = self.adc1
         params['adc2'] = self.adc2
-        
+
         params['sxx'] = self.sxx
         params['syy'] = self.syy
         params['sxy'] = self.sxy
-        params['fieldrot_zp_deg'] = self.fieldrot_zp_deg        
-        params['fieldrot_deg'] = self.fieldrot_deg        
+        params['fieldrot_zp_deg'] = self.fieldrot_zp_deg
+        params['fieldrot_deg'] = self.fieldrot_deg
         params['expid']=self.expid
         params['nstars'] = self.nstars
-        params['rms_arcsec'] = self.rms_arcsec        
+        params['rms_arcsec'] = self.rms_arcsec
         return json.dumps(params)
 
     @classmethod
@@ -73,7 +73,7 @@ class FieldModel(object):
         tx.hexrot_deg = params['hexrot_deg']
         tx.adc1 = params['adc1']
         tx.adc2 = params['adc2']
-        
+
         tx.sxx = params['sxx']
         tx.syy = params['syy']
         tx.sxy = params['sxy']
@@ -81,14 +81,12 @@ class FieldModel(object):
         tx.fieldrot_deg = params['fieldrot_deg']
         tx.expid = params['expid']
         tx.nstars = params['nstars']
-        tx.rms_arcsec = params['rms_arcsec']        
+        tx.rms_arcsec = params['rms_arcsec']
         return tx
 
-    
     def read_guide_stars_catalog(self,filename,max_sep_arcsec = 2.) :
 
         log = get_logger()
-        
         log.info("reading guide stars in {}".format(filename))
 
         # here we could do some conversion of column names
@@ -100,26 +98,25 @@ class FieldModel(object):
 
         max_sep_arcsec = 2.
         log.info("selection stars for which we have a good match (< {} arcsec)".format(max_sep_arcsec))
-        
-        dra  = (catalog["ra"]-catalog["ra_gaia"])*np.cos(catalog["dec_gaia"]/180*np.pi)*3600. # arcsec
-        ddec = (catalog["dec"]-catalog["dec_gaia"])*3600. # arcsec
-        dr = np.sqrt(dra**2+ddec**2)
+
+        dra  = (catalog["ra"]-catalog["ra_gaia"])*cosd(catalog["dec_gaia"]) * 3600. # arcsec
+        ddec = (catalog["dec"]-catalog["dec_gaia"]) * 3600. # arcsec
+        dr = np.hypot(dra, ddec)
         selection = (dr<2) # arcsec
         if np.sum(selection)==0 :
             log.error("no star is matched with sufficient precision!")
             raise RuntimeError("no star is matched with sufficient precision!")
 
         return catalog[:][selection]
-    
-    def fit_tancorr(self,catalog,mjd=None,hexrot_deg=None,lst=None) :
 
+    def fit_tancorr(self,catalog,mjd=None,hexrot_deg=None,lst=None) :
         log = get_logger()
-        
+
         x_gfa  = catalog["xcentroid"]
         y_gfa  = catalog["ycentroid"]
         ra_gaia  = catalog["ra_gaia"]
         dec_gaia = catalog["dec_gaia"]
-        
+
         # mjd,hexprot_deg,lst could have been set before
         if mjd is not None :
             self.mjd = mjd
@@ -132,7 +129,7 @@ class FieldModel(object):
             raise RuntimeError("mjd is None")
         else :
             log.info("Use MJD={}".format(self.mjd))
-        
+
         if hexrot_deg is not None :
             self.hexrot_deg = hexrot_deg
         elif self.hexrot_deg is None :
@@ -142,13 +139,14 @@ class FieldModel(object):
         if lst is not None :
             self.lst = lst
         elif self.lst is None :
+            from desimeter.time import mjd2lst
             log.warning("Compute LST from MJD={}".format(self.mjd))
             self.lst = mjd2lst(self.mjd)
         log.info("Use LST={}".format(self.lst))
-            
-        # first transfo: gfa2fp
+
+        # first transform: gfa2fp
         x_fp,y_fp = self.all_gfa2fp(x_gfa,y_gfa,petal_loc=catalog["petal_loc"])
-        
+
         # keep only petal data for which we have the metrology
         selection = (x_fp!=0)
         x_gfa    = x_gfa[selection]
@@ -163,19 +161,17 @@ class FieldModel(object):
 
         correction = TanCorr()
 
-        for loop in range(3) : # loop because change of pointing induces a rotation of the field
-            
+        for _ in range(3) : # loop because change of pointing induces a rotation of the field
             # we transform Gaia coordinates to the tangent plane
             x_tan_gaia,y_tan_gaia = radec2tan(ra_gaia,dec_gaia,self.ra,self.dec,mjd=self.mjd,lst_deg=self.lst,hexrot_deg = self.hexrot_deg, precession = self.precession, aberration = self.aberration, polar_misalignment = self.polar_misalignment)
-        
+
             # now that we have both sets of coordinates, we fit a transformation from one to the other
             correction.fit(x_tan_meas,y_tan_meas,x_tan_gaia,y_tan_gaia)
 
             # opposite sign for the telescope offset because I have converted Gaia RA Dec to tangent plane ...
             self.dec -= correction.ddec
-            self.ra  += correction.dha/np.cos(self.dec*np.pi/180.) # HA = LST-RA
+            self.ra  += correction.dha/cosd(self.dec) # HA = LST-RA
 
-        
         # save params to this
         log.info("RMS coord. residual = {:3.2f} arcsec".format(correction.rms_arcsec))
         log.info("Rotation angle (field rot ZP) ={:4.3f} deg".format(correction.rot_deg))
@@ -198,19 +194,19 @@ class FieldModel(object):
 
         # cross of side length 1 degree in tangent plane
         phi = np.arange(4)*np.pi/2.
-        x1 = np.append(0.,np.pi/180.*np.cos(phi))
-        y1 = np.append(0.,np.pi/180.*np.sin(phi))
+        x1 = np.append(0., np.deg2rad(np.cos(phi)))
+        y1 = np.append(0., np.deg2rad(np.sin(phi)))
 
-        # convert to sky 
+        # convert to sky
         xfp,yfp = tan2fp(x1,y1,self.adc1,self.adc2)
         ra,dec  = self.fp2radec(xfp,yfp)
-        
+
         # vanilla transformation from ha,dec to tangent plane
         ha      = self.lst - ra
         x2,y2   = hadec2xy(ha,dec,ha[0],dec[0])
 
-        return  180./np.pi*np.mean((y1[1:]*x2[1:]-x1[1:]*y2[1:])/np.sqrt((x1[1:]**2+y1[1:]**2)*(x2[1:]**2+y2[1:]**2)))
-            
+        return  np.rad2deg(np.mean((y1[1:]*x2[1:]-x1[1:]*y2[1:])/np.sqrt((x1[1:]**2+y1[1:]**2)*(x2[1:]**2+y2[1:]**2))))
+
     # tangent plane correction from the instrument to the sky
     def tancorr_inst2sky(self,x_tan,y_tan) :
         t2t = TanCorr()
@@ -237,11 +233,10 @@ class FieldModel(object):
         # rotation params
         t2t.rot_deg = self.fieldrot_zp_deg
         return t2t.apply_inverse(x_tan,y_tan)
-        
-    def all_gfa2fp(self,x_gfa,y_gfa,petal_loc) :
 
+    def all_gfa2fp(self,x_gfa,y_gfa,petal_loc) :
         log = get_logger()
-        
+
         # simple loop on petals
         petals = np.unique(petal_loc)
         x_fp = np.zeros(x_gfa.shape)
@@ -252,11 +247,11 @@ class FieldModel(object):
                 x,y = gfa2fp(petal,x_gfa[ii],y_gfa[ii])
                 x_fp[ii]  = x
                 y_fp[ii]  = y
-            except KeyError as e :
+            except KeyError:
                 log.warning("missing metrology")
-                pass
+
         return x_fp,y_fp
-    
+
     def fp2radec(self,x_fp,y_fp) :
         x_tan,y_tan = fp2tan(x_fp,y_fp,self.adc1,self.adc2)
         x_tan,y_tan = self.tancorr_inst2sky(x_tan,y_tan) # correction
@@ -269,8 +264,6 @@ class FieldModel(object):
         x_fp,y_fp   = tan2fp(x_tan,y_tan,self.adc1,self.adc2)
         return x_fp,y_fp
 
-    
-    
 class TanCorr(object):
 
     def __init__(self) :
@@ -282,7 +275,7 @@ class TanCorr(object):
         self.rot_deg = 0.
         self.nstars = 0
         self.rms_arcsec = 0.
-    
+
     def tojson(self):
         params = dict()
         params['name'] = "Tangent Plane Correction"
@@ -292,9 +285,9 @@ class TanCorr(object):
         params['sxx'] = self.sxx
         params['syy'] = self.syy
         params['sxy'] = self.sxy
-        params['rot_deg'] = self.rot_deg        
+        params['rot_deg'] = self.rot_deg
         params['nstars'] = self.nstars
-        params['rms_arcsec'] = self.rms_arcsec        
+        params['rms_arcsec'] = self.rms_arcsec
         return json.dumps(params)
 
     @classmethod
@@ -310,13 +303,13 @@ class TanCorr(object):
         tx.sxy = params['sxy']
         tx.rot_deg = params['rot_deg']
         tx.nstars = params['nstars']
-        tx.rms_arcsec = params['rms_arcsec']        
+        tx.rms_arcsec = params['rms_arcsec']
         return tx
 
     def fit(self, x1, y1, x2, y2) :
         """
         Adjust tranformation from focal plane x1,y1 to x2,y2
-        
+
         Args:
            x1,y1,x2,y2 : 1D np.arrays of coordinates in tangent plane
 
@@ -326,8 +319,8 @@ class TanCorr(object):
         """
 
         assert((x1.shape == y1.shape)&(x2.shape == y2.shape)&(x1.shape == x2.shape))
-        
         # first adjust an offset using spherical coordinates
+
         # assume fiducial pointing of telescope to convert
         # tangent plane coords to angles
         self.dha=0.
@@ -335,13 +328,12 @@ class TanCorr(object):
         x1t=x1+0.
         y1t=y1+0.
         ha,dec = xy2hadec(x1,y1,0,0)
-        for i in range(4) :
+        for _ in range(4):
             x1t,y1t  = hadec2xy(ha,dec,self.dha,self.ddec)
             dx = np.mean(x2-x1t)
             dy = np.mean(y2-y1t)
-            #print(i,dx,dy)
-            self.dha -= dx/np.cos(self.ddec)*180./np.pi
-            self.ddec -= dy*180./np.pi
+            self.dha  -= np.rad2deg(dx)
+            self.ddec -= np.rad2deg(dy)
         x1t,y1t  = hadec2xy(ha,dec,self.dha,self.ddec)
 
         # now fit simultaneously extra offset, rotation, scale
@@ -357,21 +349,22 @@ class TanCorr(object):
         ay = Ai.dot(np.sum(y2*H,axis=1))
         y2p = ay[0] + ay[1]*x1t + ay[2]*y1t # y2p = predicted y2 from y1t
 
-         # tangent plane coordinates are in radians
-        self.rms_arcsec = np.sqrt( np.mean( (x2-x2p)**2 + (y2-y2p)**2 ) )*(180*3600)/np.pi
-        
+        # tangent plane coordinates are in radians
+        rms = np.sqrt( np.mean( (x2-x2p)**2 + (y2-y2p)**2 ) )
+        self.rms_arcsec = np.rad2deg(rms) * 3600.
+
         # interpret this back into telescope pointing offset, field rotation, dilatation
 
         # pointing offset
         # increasing gaia stars x means telescope is more to the left so tel_ha should be decreased
         # increasing gaia stars y means telescope is more to the bottom so tel_dec should be decreased
         # tangent plane coordinates are in rad
-        ddha  = -ax[0]*180./np.pi
-        dddec = -ay[0]*180./np.pi
-        
+        ddha  = -np.rad2deg(ax[0])
+        dddec = -np.rad2deg(ay[0])
+
         self.dha  += ddha
         self.ddec += dddec
-                
+
         # dilatation and rotation
         # |ax1 ax2| |sxx sxy| |ca  -sa|
         # |ay1 ay2|=|syx syy|*|sa   ca|
@@ -380,11 +373,11 @@ class TanCorr(object):
         # ax1+ay2 = (sxx+syy)*ca
         # ay1-ax2 = (sxx+syy)*sa
 
-        sxx_p_syy = np.sqrt( (ax[1]+ay[2])**2+(ay[1]-ax[2])**2 )
+        sxx_p_syy = np.hypot(ax[1] + ay[2], ay[1] - ax[2])
         sa=(ay[1]-ax[2])/sxx_p_syy
         ca=(ax[1]+ay[2])/sxx_p_syy
 
-        self.rot_deg = np.arctan2(sa,ca)*180/np.pi
+        self.rot_deg = arctan2d(sa,ca)
 
         sxy = sa*ax[1]+ca*ay[1] - sxx_p_syy*ca*sa
         sxx =(ax[1]-sxy*sa)/ca
@@ -396,28 +389,21 @@ class TanCorr(object):
 
     def apply(self,x,y) :
         scale_matrix = np.array([[self.sxx,self.sxy],[self.sxy,self.syy]])
-        ca=np.cos(self.rot_deg/180*np.pi)
-        sa=np.sin(self.rot_deg/180*np.pi)
-        rot_matrix = np.array([[ca,-sa],[sa,ca]])
+        rot_matrix = rot2deg(self.rot_deg)
         ha,dec  = xy2hadec(x,y,0,0)
         x1t,y1t = hadec2xy(ha,dec,self.dha,self.ddec)
         xy=scale_matrix.dot(rot_matrix.dot(np.array([x1t,y1t])))
         return xy[0],xy[1]
 
     def apply_inverse(self,x,y) :
-
         det = self.sxx*self.syy - self.sxy**2
         scale_matrix = np.array([[self.syy,-self.sxy],[-self.sxy,self.sxx]])/det
-        
-        ca=np.cos(self.rot_deg/180*np.pi)
-        sa=np.sin(self.rot_deg/180*np.pi)
-        rot_matrix = np.array([[ca,sa],[-sa,ca]])
+        rot_matrix = rot2deg(-self.rot_deg)
         ha,dec  = xy2hadec(x,y,0,0)
         x1t,y1t = hadec2xy(ha,dec,self.dha,self.ddec)
         xy=rot_matrix.dot(scale_matrix.dot(np.array([x1t,y1t])))
         return xy[0],xy[1]
-        
-        
+
 def fieldrot(ra,dec,mjd,lst_deg,hexrot_deg=0) :
     """
     Computes the field rotation in degrees.
@@ -427,10 +413,10 @@ def fieldrot(ra,dec,mjd,lst_deg,hexrot_deg=0) :
       dec: scalar, float, Dec in degrees
       mjd: scalar, float, MJD in days
       lst_deg: scalar, float, LST in degrees (ha = lst_deg - ra)
-    
+
     Optional:
       hexrot_deg: scalar, float, Hexapod rotation in degrees (default=0)
-    
+
     Returns:
       field rotation angle in degrees
 
@@ -445,7 +431,7 @@ def fieldrot(ra,dec,mjd,lst_deg,hexrot_deg=0) :
     fm.hexrot_deg=hexrot_deg
     return fm.compute_fieldrot()
 
-def dfieldrotdt(ra,dec,mjd,lst_deg) :    
+def dfieldrotdt(ra,dec,mjd,lst_deg) :
     """
     Computes the derivative with time of the field rotation in arcsec per minute.
 
@@ -454,11 +440,10 @@ def dfieldrotdt(ra,dec,mjd,lst_deg) :
       dec: scalar, float, Dec in degrees
       mjd: scalar, float, MJD in days
       lst_deg: scalar, float, LST in degrees (ha = lst_deg - ra)
-    
+
     Returns:
       field rotation angle derivative with time in arcsec per minute
 
     """
-    
-    one_minute_in_degrees = 1./60./24.*360 # 
+    one_minute_in_degrees = 1./60./24.*360 #
     return 3600.*(fieldrot(ra,dec,mjd,lst_deg+one_minute_in_degrees,hexrot_deg=0) - fieldrot(ra,dec,mjd,lst_deg,hexrot_deg=0))

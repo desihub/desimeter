@@ -5,13 +5,13 @@ focal surface. Performed by interpolation of a lookup table. That table was
 extracted from DESI-0530.
 
     R ... (mm) radial distance from optical (Z) axis
-    
+
     S ... (mm) distance along focal surface from optical axis, in a plane that
           intersects the Z axis
-    
+
     Z ... (mm) parallel to optical axis, wtih + direction pointing toward primary
           mirror, and Z==0 at the peak of the asphere
-    
+
     N ... (deg) nutation angle, between optical axis and the central (theta)
           axis of a fiber positioner at that location
 """
@@ -25,7 +25,7 @@ data_directory = resource_filename('desimeter','data')
 lookup_file = 'focal_surface_lookup.csv'
 lookup_path = os.path.join(data_directory, lookup_file)
 table = Table.read(lookup_path, format='csv', comment='#')
-    
+
 R = np.array(table['R'], dtype=np.float64)
 Z = np.array(table['Z'], dtype=np.float64)
 S = np.array(table['S'], dtype=np.float64)

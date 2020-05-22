@@ -205,7 +205,7 @@ class FVC2FP(object):
         #- in the correction at rxfp,ryfp but rather the correction at
         #- a different rx,ry that when applies becomes rxfp, ryfp
         dx = dy = 0.0
-        for i in range(20):
+        for _ in range(20):
             dx2, dy2 = getZhaoBurgeXY(self.zbpolids, self.zbcoeffs, rxfp-dx, ryfp-dy)
             dmax = max(np.max(np.abs(dx2-dx)), np.max(np.abs(dy2-dy)))
             dx, dy = dx2, dy2

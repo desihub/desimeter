@@ -1,8 +1,8 @@
 """
-Test FVC <-> FP transformation code
+Test FVC <-> FP transformation code.
 """
 
-import os, glob
+import os
 import unittest
 from pkg_resources import resource_filename
 import tempfile

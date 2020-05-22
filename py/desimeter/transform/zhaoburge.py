@@ -4,7 +4,6 @@
 #-------------------IMPORT ZONE-----------------------
 
 import numpy as np
-import time
 
 #-----------ZERNIKE NORMALIZED EDGE=1 PACKAGE-----------
 #-----------Using BORN-WOLF {n,m} definitions-----------
@@ -96,7 +95,6 @@ def zernFormulaText(nm):           # BIG NINE: #8
         expon = int(n-2*i)                # start with highest exponent
         # print "  expon = ", expon
         sign = 1 if i%2 == 0 else -1      # alternating signs in Zernike series
-        strsign = '+' if i%2==0 else '-'
         numer = sign * factorial(n-i)
         denom = factorial(i) * factorial(halfsum-i) * factorial(halfdif-i)
         coef = numer / denom
@@ -158,7 +156,7 @@ def getZhaoBurgeXY(polids, coeffs, x, y):
     dx = np.zeros(len(x))
     dy = np.zeros(len(y))
     for polid, coeff in zip(polids,coeffs):
-        zbx, zby, name = getZhaoBurgeTerm(polid, x, y)
+        zbx, zby, _ = getZhaoBurgeTerm(polid, x, y)
         dx += coeff*zbx
         dy += coeff*zby
 
@@ -321,7 +319,7 @@ def fitZhaoBurge(x, y, xp, yp, polids=None):
     nzb = polids.size
     H = np.zeros((2*nx, nzb))
     for i,polid in enumerate(polids) :
-        zbx, zby, name = getZhaoBurgeTerm(polid, x, y)
+        zbx, zby, _ = getZhaoBurgeTerm(polid, x, y)
         H[0:nx, i] = zbx
         H[nx:, i] = zby
 

@@ -41,7 +41,7 @@ def get_logger(level=None):
 
         # add ch to logger
         logger.addHandler(ch)
-        
+
         _loggers[level] = logger
 
     return _loggers[level]

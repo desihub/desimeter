@@ -3,7 +3,7 @@
 #
 # -*- coding: utf-8 -*-
 """
-Tools for DESI coordinate measurements and transforms
+Tools for DESI coordinate measurements and transforms.
 """
 
 from ._version import __version__

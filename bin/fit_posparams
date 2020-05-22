@@ -11,13 +11,13 @@ Data sources:
     --------------
     The positioner moves database contains time-stamped data for values POS_T
     and POS_P. These correspond to focalplane coordinates posintTP.
-    
+
     x and y:
     --------
     The NERSC and KPNO servers contain numerous FITS files. These are processed
     by desimeter. A result X_FP, Y_FP is generated from the centroids. This
     corresponds to focalplane coordinates ptlXY.
-    
+
     As of 2020-04-08, J. Guy identified 9472 such files from the commissioning
     operations so far at the Mayall, and has run them through desimeter. See
     Julien's email to desi-commiss@desi.lbl.gov of 2020-04-08, in which he
@@ -51,6 +51,9 @@ parser.add_argument('-sq', '--static_quantile', type=float, default=0.05,
                     help='sort static param fits by fit error, take this fraction with least error, and median them to decide the single set of best values')
 parser.add_argument('-v', '--verbose', action='store_true',
                     help='extra verbosity of print outs at terminal')
+parser.add_argument('--log-note-selection', type=str, default=None, required=False,
+                    help="required keywords in LOG_NOTE selection, seperated by '&', like ''arc calibration & use_desimeter=True'")
+
 args = parser.parse_args()
 
 # proceed with the rest
@@ -60,7 +63,7 @@ import multiprocessing
 from pkg_resources import resource_filename
 import glob
 
-# imports below require <path to desimeter>/py' to be added to system PYTHONPATH. 
+# imports below require <path to desimeter>/py' to be added to system PYTHONPATH.
 import desimeter.posparams.fithandler as fithandler
 
 # paths
@@ -86,7 +89,7 @@ for file in infiles:
 if not csv_files:
     print('No recognizable csv files found for analysis.')
     sys.exit()
-    
+
 # verbosity control
 if args.verbose:
     printf = print
@@ -105,6 +108,7 @@ if __name__ == '__main__':
                       'savedir': args.outdir,
                       'static_quantile': args.static_quantile,
                       'printf': printf,
+                      'log_note_selection': args.log_note_selection
                       }
             if args.n_processes_max == 1:
                 logstr = fithandler.run_best_fits(**kwargs)

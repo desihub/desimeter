@@ -71,7 +71,7 @@ for path in infiles:
         this_table = Table.read(path, format='csv')
         tables += [this_table]
 table = vstack(tables)
-table.sort('POS_ID', 'DATA_END_DATE_SEC')
+table.sort(['POS_ID', 'DATA_END_DATE_SEC'])
 analysis_timestamp = Time(min(table['ANALYSIS_DATE_STATIC'])).iso.split('.')[0]
 analysis_timestamp_for_filename = Time(analysis_timestamp).isot.replace('-','').replace(':','')[:-4]
 
