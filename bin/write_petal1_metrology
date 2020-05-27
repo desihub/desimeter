@@ -78,6 +78,12 @@ if os.path.isfile(filename) :
     for k in ["DEVICE_ID","DEVICE_TYPE","BUS_ID"] :
         spots[k]=np.array([ ids[k][loc2ind[loc]] for loc in spots["DEVICE_LOC"] ])
 
+for loc in [461,501] :
+    i=np.where(spots["DEVICE_LOC"]==loc)[0][0]
+    log.warning("SPECIAL CASE FOR DEVICE_LOC={} (DEVICE_ID={}): Force DEVICE_TYPE=ETC".format(loc,spots["DEVICE_ID"][i]))
+    spots["DEVICE_TYPE"][i]="ETC"
+
+
 
 spots.write(args.outfile,format='csv',overwrite=True)
 
