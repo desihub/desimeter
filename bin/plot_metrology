@@ -20,6 +20,8 @@ selection=(spots['DEVICE_TYPE']=="FIF")
 plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",label="FIF")
 selection=(spots['DEVICE_TYPE']=="GIF")
 plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",label="GIF")
+selection=(spots['DEVICE_TYPE']=="ETC")
+plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",label="ETC")
 
 first=True
 for petal in np.unique(spots['PETAL_LOC']) :
@@ -37,5 +39,3 @@ for petal in np.unique(spots['PETAL_LOC']) :
         plt.plot(x,y,"-",label=label,color="k")
 plt.legend()
 plt.show()
-
-
