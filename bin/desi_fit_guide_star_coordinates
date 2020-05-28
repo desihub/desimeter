@@ -4,6 +4,7 @@ import argparse
 import sys,os
 import numpy as np
 import fitsio
+from collections import Counter
 
 from desimeter.log import get_logger
 from desimeter.fieldmodel import FieldModel
@@ -43,6 +44,9 @@ if not "TARGTRA" in header :
         log.error("no TARGTRA in headers of HDU 0 or 1 of file {}".format(args.fits_header))
         sys.exit(12)
 
+target_ra  = header["TARGTRA"]
+target_dec = header["TARGTDEC"]
+        
 fm.ra  = header["TARGTRA"]
 fm.dec = header["TARGTDEC"]
 fm.expid = header["EXPID"]
@@ -280,8 +284,12 @@ if args.plot or args.save_plot:
 catalog['dxcentroid'] = np.maximum(0.1, catalog['dxcentroid'])
 catalog['dycentroid'] = np.maximum(0.1, catalog['dycentroid'])
 
-# No duplicate matches (?)
-assert(len(set(catalog['source_id'])) == len(catalog))
+# Drop duplicate matches (?)
+#assert(len(set(catalog['source_id'])) == len(catalog))
+nmatch = Counter(catalog['source_id'])
+keep = [nmatch[sid] == 1 for sid in catalog['source_id']]
+print('Cutting to', sum(keep), 'unique matches to Gaia stars')
+catalog = catalog[:][keep]
 
 nsteps = 3
 
@@ -363,7 +371,7 @@ for step in range(nsteps):
             else:
                 plt.show()
             
-            
+
     if step < nsteps-1:
         # Cut worst outliers
         thresh = 3.**2 * np.median(dr2)
@@ -391,6 +399,8 @@ if args.cat:
     t['fit_gaia_fy'] = np.zeros(len(t), np.float32)
     t['fit_gaia_x'] = np.zeros(len(t), np.float32)
     t['fit_gaia_y'] = np.zeros(len(t), np.float32)
+    t['target_ra' ] = np.zeros(len(t), np.float32) + target_ra
+    t['target_dec'] = np.zeros(len(t), np.float32) + target_dec
     # Skip chips missing GFA metrology
     ii=(xfp!=0)
     t = t[ii]
