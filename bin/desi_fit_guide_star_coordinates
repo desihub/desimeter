@@ -49,6 +49,7 @@ fm.expid = header["EXPID"]
 focus_terms = header['FOCUS'].split(',')
 # The FOCUS header has comma-separated floats.
 fm.hexrot_deg = float(focus_terms[5])/3600.
+print('Hexrot_deg:', fm.hexrot_deg)
 fm.adc1 = header["ADC1PHI"]
 fm.adc2 = header["ADC2PHI"]
 
@@ -64,37 +65,37 @@ with open(args.outfile, 'w') as file:
     file.write(fm.tojson())
 print("wrote",args.outfile)
 
-if args.cat:
-    t=catalog
-    xgfa=t["xcentroid"]
-    ygfa=t["ycentroid"]
-    pet=t["petal_loc"]
-    xfp,yfp = fm.all_gfa2fp(xgfa,ygfa,pet)
-    ra2,dec2=fm.fp2radec(xfp,yfp)
-    t['fit_fx'] = xfp
-    t['fit_fy'] = yfp
-    t['fit_ra'] = ra2
-    t['fit_dec'] = dec2
-    ra=t["ra_gaia"]
-    dec=t["dec_gaia"]
-    t['fit_gaia_fx'] = np.zeros(len(t), np.float32)
-    t['fit_gaia_fy'] = np.zeros(len(t), np.float32)
-    t['fit_gaia_x'] = np.zeros(len(t), np.float32)
-    t['fit_gaia_y'] = np.zeros(len(t), np.float32)
-    # Skip chips missing GFA metrology
-    ii=(xfp!=0)
-    t = t[ii]
-    cams = np.unique(t['camera'])
-    for cam in cams:
-        I = np.flatnonzero(t['camera'] == cam)
-        petal = t["petal_loc"][I[0]]
-        gfx,gfy = fm.radec2fp(t['ra_gaia'][I], t['dec_gaia'][I])
-        gx,gy = fp2gfa(petal, gfx, gfy)
-        t['fit_gaia_fx'][I] = gfx
-        t['fit_gaia_fy'][I] = gfy
-        t['fit_gaia_x'][I] = gx
-        t['fit_gaia_y'][I] = gy
-    t.write(args.cat, format='fits', overwrite=True)
+# if args.cat:
+#     t=catalog
+#     xgfa=t["xcentroid"]
+#     ygfa=t["ycentroid"]
+#     pet=t["petal_loc"]
+#     xfp,yfp = fm.all_gfa2fp(xgfa,ygfa,pet)
+#     ra2,dec2=fm.fp2radec(xfp,yfp)
+#     t['fit_fx'] = xfp
+#     t['fit_fy'] = yfp
+#     t['fit_ra'] = ra2
+#     t['fit_dec'] = dec2
+#     ra=t["ra_gaia"]
+#     dec=t["dec_gaia"]
+#     t['fit_gaia_fx'] = np.zeros(len(t), np.float32)
+#     t['fit_gaia_fy'] = np.zeros(len(t), np.float32)
+#     t['fit_gaia_x'] = np.zeros(len(t), np.float32)
+#     t['fit_gaia_y'] = np.zeros(len(t), np.float32)
+#     # Skip chips missing GFA metrology
+#     ii=(xfp!=0)
+#     t = t[ii]
+#     cams = np.unique(t['camera'])
+#     for cam in cams:
+#         I = np.flatnonzero(t['camera'] == cam)
+#         petal = t["petal_loc"][I[0]]
+#         gfx,gfy = fm.radec2fp(t['ra_gaia'][I], t['dec_gaia'][I])
+#         gx,gy = fp2gfa(petal, gfx, gfy)
+#         t['fit_gaia_fx'][I] = gfx
+#         t['fit_gaia_fy'][I] = gfy
+#         t['fit_gaia_x'][I] = gx
+#         t['fit_gaia_y'][I] = gy
+#     t.write(args.cat, format='fits', overwrite=True)
 
 if args.plot or args.save_plot:
     import matplotlib.pyplot as plt
@@ -157,10 +158,10 @@ if args.plot or args.save_plot:
                    angles='xy', scale_units='xy', scale=0.01)
         # GFA physical CCD size
         H,W = 1032,2048
-        xx = np.array([1, 1, W, W, 1])
-        yy = np.array([1, H, H, 1, 1])
+        xccd = np.array([1, 1, W, W, 1])
+        yccd = np.array([1, H, H, 1, 1])
         petal = pet[I[0]]
-        x_c,y_c = fm.all_gfa2fp(xx, yy, np.zeros(len(xx),int) + petal)
+        x_c,y_c = fm.all_gfa2fp(xccd, yccd, np.zeros(len(xccd),int) + petal)
         ra_c,dec_c = fm.fp2radec(x_c,y_c)
         plt.plot(ra_c, dec_c, 'k-')
         xl,xh = plt.xlim()
@@ -186,7 +187,7 @@ if args.plot or args.save_plot:
         plt.quiver(xgfa[I], ygfa[I], xgfa[I]-gx, ygfa[I]-gy,
                    label='Measurements - Gaia',
                    angles='xy', scale_units='xy', scale=0.01)
-        plt.plot(xx, yy, 'k-')
+        plt.plot(xccd, yccd, 'k-')
         m = 20
         plt.axis([1-m, W+m, 1-m, H+m])
         plt.axis('equal')
@@ -267,3 +268,144 @@ if args.plot or args.save_plot:
         plt.savefig(args.save_plot + '5.png')
     else:
         plt.show()
+
+
+
+
+
+### More extensive cuts on matched stars.
+
+#subcat = catalog[]
+
+#catalog = fm.read_guide_stars_catalog(args.infile)
+
+# FIDDLE with measured source position uncertainties -- we don't really
+# expect to get perfect matches, so downweight brightest stars.
+catalog['dxcentroid'] = np.maximum(0.1, catalog['dxcentroid'])
+catalog['dycentroid'] = np.maximum(0.1, catalog['dycentroid'])
+
+# No duplicate matches (?)
+assert(len(set(catalog['source_id'])) == len(catalog))
+
+nsteps = 3
+
+for step in range(nsteps):
+
+    fm.fit_tancorr(catalog, weighted=True)
+
+    t=catalog
+    xgfa=t["xcentroid"]
+    ygfa=t["ycentroid"]
+    dxgfa=t["dxcentroid"]
+    dygfa=t["dycentroid"]
+    pet=t["petal_loc"]
+
+    xfp,yfp = fm.all_gfa2fp(xgfa,ygfa,pet)
+    ra2,dec2=fm.fp2radec(xfp,yfp)
+
+    ra=t["ra_gaia"]
+    dec=t["dec_gaia"]
+
+    ii=(xfp!=0)
+    dy=dec2[ii]-dec[ii]
+    dx=(ra2[ii]-ra[ii])*np.cos(dec[ii]/180*np.pi)
+    dr2=dx**2+dy**2
+    rms=np.sqrt(np.mean(dr2))
+    print("rms (Gaia RA,Dec - Measurement) = {:3.2f} arcsec".format(rms*3600.))
+    rmeds=np.sqrt(np.median(dr2))
+    print("r[median]s (Gaia RA,Dec - Measurement) = {:3.2f} arcsec".format(rmeds*3600.))
+
+    cams = np.unique(t['camera'])
+    for cam in cams:
+        I = np.flatnonzero(t['camera'] == cam)
+        xx = xfp[I]
+        # Skip chips missing GFA metrology
+        if np.all(xx == 0.):
+            continue
+        # GFA physical CCD size
+        H,W = 1032,2048
+        petal = pet[I[0]]
+
+        plt.clf()
+        fig, ax = plt.subplots()
+        plt.plot(xgfa[I], ygfa[I], 'b.')
+        # error ellipse exaggeration
+        EX = 10.
+        for x,y,dx,dy in zip(xgfa[I], ygfa[I], dxgfa[I], dygfa[I]):
+            e = mpl.patches.Ellipse((x,y), width=EX*dx*2., height=EX*dy*2.)
+            ax.add_artist(e)
+        gfx,gfy = fm.radec2fp(ra[I], dec[I])
+        gx,gy = fp2gfa(petal, gfx, gfy)
+        plt.quiver(xgfa[I], ygfa[I], xgfa[I]-gx, ygfa[I]-gy,
+                   label='Measurements - Gaia',
+                   angles='xy', scale_units='xy', scale=0.01)
+        plt.plot(xccd, yccd, 'k-')
+        m = 20
+        plt.axis([1-m, W+m, 1-m, H+m])
+        plt.axis('equal')
+        plt.xlabel("GFA x (pixels)")
+        plt.ylabel("GFA y (pixels)")
+        plt.legend()
+        if args.save_plot:
+            plt.savefig(args.save_plot + '%i-%s.png' % (6 + step, cam))
+        else:
+            plt.show()
+
+        plt.clf()
+        for cam in cams:
+            I = np.flatnonzero(t['camera'] == cam)
+            cosdec = np.cos(np.deg2rad(np.mean(dec)))
+            # FIXME
+            dist = np.hypot((ra2[I] - ra[I])*cosdec, dec2[I] - dec[I])
+            dist *= 3600.
+            plt.hist(dist, range=(0,2), bins=50, histtype='step', label=cam)
+        plt.xlabel('Match distance (arcsec)')
+        plt.legend()
+        if args.save_plot:
+            plt.savefig(args.save_plot + '%i-%s.png' % (6 + step, 'dists'))
+        else:
+            plt.show()
+            
+            
+    if step < nsteps-1:
+        # Cut worst outliers
+        thresh = 3.**2 * np.median(dr2)
+        dy = dec2 - dec
+        dx = (ra2 - ra)*np.cos(dec/180*np.pi)
+        dr2 = dx**2 + dy**2
+        keep = (dr2 < thresh)
+        print('Keeping', np.sum(keep), 'of', len(dr2), 'stars for next round')
+        catalog = catalog[:][keep]
+
+if args.cat:
+    t=catalog
+    xgfa=t["xcentroid"]
+    ygfa=t["ycentroid"]
+    pet=t["petal_loc"]
+    xfp,yfp = fm.all_gfa2fp(xgfa,ygfa,pet)
+    ra2,dec2=fm.fp2radec(xfp,yfp)
+    t['fit_fx'] = xfp
+    t['fit_fy'] = yfp
+    t['fit_ra'] = ra2
+    t['fit_dec'] = dec2
+    ra=t["ra_gaia"]
+    dec=t["dec_gaia"]
+    t['fit_gaia_fx'] = np.zeros(len(t), np.float32)
+    t['fit_gaia_fy'] = np.zeros(len(t), np.float32)
+    t['fit_gaia_x'] = np.zeros(len(t), np.float32)
+    t['fit_gaia_y'] = np.zeros(len(t), np.float32)
+    # Skip chips missing GFA metrology
+    ii=(xfp!=0)
+    t = t[ii]
+    cams = np.unique(t['camera'])
+    for cam in cams:
+        I = np.flatnonzero(t['camera'] == cam)
+        petal = t["petal_loc"][I[0]]
+        gfx,gfy = fm.radec2fp(t['ra_gaia'][I], t['dec_gaia'][I])
+        gx,gy = fp2gfa(petal, gfx, gfy)
+        t['fit_gaia_fx'][I] = gfx
+        t['fit_gaia_fy'][I] = gfy
+        t['fit_gaia_x'][I] = gx
+        t['fit_gaia_y'][I] = gy
+    t.write(args.cat, format='fits', overwrite=True)
+        

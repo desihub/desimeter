@@ -109,7 +109,8 @@ class FieldModel(object):
 
         return catalog[:][selection]
 
-    def fit_tancorr(self,catalog,mjd=None,hexrot_deg=None,lst=None) :
+    def fit_tancorr(self, catalog, mjd=None, hexrot_deg=None, lst=None,
+                    weighted=False, robust=False):
         log = get_logger()
 
         x_gfa  = catalog["xcentroid"]
@@ -159,14 +160,35 @@ class FieldModel(object):
         # transform focal plane to tangent plane
         x_tan_meas,y_tan_meas = fp2tan(x_fp,y_fp,self.adc1,self.adc2)
 
+        if weighted:
+            # These are in milli-arcsec; Gaia errors are usually negligible
+            #dra_gaia = catalog['ra_error']
+            #ddec_gaia = catalog['dec_error']
+            dx_gfa = catalog['dxcentroid'][selection]
+            dy_gfa = catalog['dycentroid'][selection]
+            # We'll just do finite differences rather than proper error propagation!
+            x2_fp,y2_fp = self.all_gfa2fp(x_gfa + dx_gfa, y_gfa + dy_gfa, petal_loc=catalog["petal_loc"][selection])
+            x2_tan_meas, y2_tan_meas = fp2tan(x2_fp, y2_fp, self.adc1, self.adc2)
+            dx_tan_meas, dy_tan_meas = x2_tan_meas - x_tan_meas, y2_tan_meas - y_tan_meas
+            # Since (in principle) the transformations could mix
+            # dx_gfa,dy_gfa, and because in practice they'll usually
+            # be ~the same anyawy, just give a single positional
+            # uncertainty per source.
+            d_tan_meas = np.hypot(dx_tan_meas, dy_tan_meas) / np.sqrt(2.)
+
         correction = TanCorr()
 
-        for _ in range(3) : # loop because change of pointing induces a rotation of the field
+        # loop because change of pointing induces a rotation of the field
+        for _ in range(3):
             # we transform Gaia coordinates to the tangent plane
             x_tan_gaia,y_tan_gaia = radec2tan(ra_gaia,dec_gaia,self.ra,self.dec,mjd=self.mjd,lst_deg=self.lst,hexrot_deg = self.hexrot_deg, precession = self.precession, aberration = self.aberration, polar_misalignment = self.polar_misalignment)
 
             # now that we have both sets of coordinates, we fit a transformation from one to the other
-            correction.fit(x_tan_meas,y_tan_meas,x_tan_gaia,y_tan_gaia)
+            kwa = dict()
+            if weighted:
+                kwa.update(dxy=d_tan_meas)
+            correction.fit(x_tan_meas, y_tan_meas, x_tan_gaia, y_tan_gaia,
+                           robust=robust, **kwa)
 
             # opposite sign for the telescope offset because I have converted Gaia RA Dec to tangent plane ...
             self.dec -= correction.ddec
@@ -186,6 +208,7 @@ class FieldModel(object):
         self.nstars = correction.nstars
         self.rms_arcsec = correction.rms_arcsec
 
+        ## FIXME -- implement robust, weighted on this!
         # I now derive the field rotation
         self.fieldrot_deg = self.compute_fieldrot()
 
@@ -306,7 +329,7 @@ class TanCorr(object):
         tx.rms_arcsec = params['rms_arcsec']
         return tx
 
-    def fit(self, x1, y1, x2, y2) :
+    def fit(self, x1, y1, x2, y2, dxy=None, robust=False):
         """
         Adjust tranformation from focal plane x1,y1 to x2,y2
 
@@ -329,25 +352,89 @@ class TanCorr(object):
         y1t=y1+0.
         ha,dec = xy2hadec(x1,y1,0,0)
         for _ in range(4):
-            x1t,y1t  = hadec2xy(ha,dec,self.dha,self.ddec)
-            dx = np.mean(x2-x1t)
-            dy = np.mean(y2-y1t)
+            x1t,y1t = hadec2xy(ha,dec,self.dha,self.ddec)
+
+            diffx = (x2 - x1t)
+            diffy = (y2 - y1t)
+
+            if dxy is not None:
+                # uncertainties on x,y
+                sigx = sigy = dxy
+                #wtx = 1./sigx**2
+                #wty = 1./sigy**2
+                #diffx = (x2 - x1t) / sigx**2
+                #diffy = (y2 - y1t) / sigy**2
+            else:
+                #diffx = (x2 - x1t)
+                #diffy = (y2 - y1t)
+                #wtx = wty = 1.
+                #sigx = np.std(diffx)
+                #sigy = np.std(diffy) #np.ones_like(diffx)
+                sigx = sigy = np.ones_like(diffx)
+
+            if robust:
+                mx = np.median(diffx)
+                my = np.median(diffy)
+                keep = np.flatnonzero(np.hypot((diffx - mx)/sigx,
+                                               (diffy - my)/sigy) < (np.sqrt(2.)*5.))
+                print('Keeping', len(keep), 'of', len(diffx), 'stars')
+                print('median diff', mx,my)
+                print('diffs from median: x', diffx-mx)
+                print('diffs from median: y', diffy-my)
+                print('sigmas x', sigx)
+                print('sigmas y', sigy)
+                print('sigma diffs from med x:', (diffx-mx)/sigx)
+                print('sigma diffs from med y:', (diffy-my)/sigy)
+
+                dx = np.sum((diffx / sigx**2)[keep]) / np.sum(sigx[keep]**2)
+                dy = np.sum((diffy / sigy**2)[keep]) / np.sum(sigy[keep]**2)
+            else:
+                wx = 1./sigx**2
+                wy = 1./sigy**2
+                dx = np.sum(diffx * wx) / np.sum(wx)
+                dy = np.sum(diffy * wy) / np.sum(wy)
+                
             self.dha  -= np.rad2deg(dx)
             self.ddec -= np.rad2deg(dy)
+
         x1t,y1t  = hadec2xy(ha,dec,self.dha,self.ddec)
 
+        # UNIMPLEMENTED
+        assert(not robust)
+
         # now fit simultaneously extra offset, rotation, scale
-        self.nstars=x1t.size
-        H=np.zeros((3,self.nstars))
-        H[0] = 1.
-        H[1] = x1t
-        H[2] = y1t
-        A = H.dot(H.T)
-        Ai = np.linalg.inv(A)
-        ax = Ai.dot(np.sum(x2*H,axis=1))
-        x2p = ax[0] + ax[1]*x1t + ax[2]*y1t # x2p = predicted x2 from x1t (=x1 after telescope pointing offset)
-        ay = Ai.dot(np.sum(y2*H,axis=1))
-        y2p = ay[0] + ay[1]*x1t + ay[2]*y1t # y2p = predicted y2 from y1t
+        if dxy is not None:
+            wt = 1/np.hypot(sigx, sigy)
+            #print('Weights:', wt)
+        else:
+            wt = np.ones_like(x1t)
+
+        self.nstars = x1t.size
+        A = np.zeros((self.nstars, 3))
+        A[:,0] = wt
+        A[:,1] = wt * x1t
+        A[:,2] = wt * y1t
+        B = np.vstack((wt * x2, wt * y2)).T
+        X,res,rank,s = np.linalg.lstsq(A, B, rcond=None)
+        ax = X[:,0]
+        ay = X[:,1]
+        print('Lstsq ax', ax, 'ay', ay)
+        
+        # H=np.zeros((3,self.nstars))
+        # H[0] = 1.
+        # H[1] = x1t
+        # H[2] = y1t
+        # A = H.dot(H.T)
+        # Ai = np.linalg.inv(A)
+        # ax = Ai.dot(np.sum(x2*H,axis=1))
+        # x2p = ax[0] + ax[1]*x1t + ax[2]*y1t # x2p = predicted x2 from x1t (=x1 after telescope pointing offset)
+        # ay = Ai.dot(np.sum(y2*H,axis=1))
+        # y2p = ay[0] + ay[1]*x1t + ay[2]*y1t # y2p = predicted y2 from y1t
+        # print('Old ax', ax, 'ay', ay)
+
+        # x2p = predicted x2 from x1t (=x1 after telescope pointing offset)
+        x2p = ax[0] + ax[1]*x1t + ax[2]*y1t
+        y2p = ay[0] + ay[1]*x1t + ay[2]*y1t
 
         # tangent plane coordinates are in radians
         rms = np.sqrt( np.mean( (x2-x2p)**2 + (y2-y2p)**2 ) )
