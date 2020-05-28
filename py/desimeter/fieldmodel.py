@@ -110,7 +110,7 @@ class FieldModel(object):
         return catalog[:][selection]
 
     def fit_tancorr(self, catalog, mjd=None, hexrot_deg=None, lst=None,
-                    weighted=False, robust=False):
+                    weighted=False):
         log = get_logger()
 
         x_gfa  = catalog["xcentroid"]
@@ -188,7 +188,7 @@ class FieldModel(object):
             if weighted:
                 kwa.update(dxy=d_tan_meas)
             correction.fit(x_tan_meas, y_tan_meas, x_tan_gaia, y_tan_gaia,
-                           robust=robust, **kwa)
+                           **kwa)
 
             # opposite sign for the telescope offset because I have converted Gaia RA Dec to tangent plane ...
             self.dec -= correction.ddec
@@ -208,7 +208,7 @@ class FieldModel(object):
         self.nstars = correction.nstars
         self.rms_arcsec = correction.rms_arcsec
 
-        ## FIXME -- implement robust, weighted on this!
+        ## FIXME -- implement weighted version of this!
         # I now derive the field rotation
         self.fieldrot_deg = self.compute_fieldrot()
 
@@ -353,47 +353,15 @@ class TanCorr(object):
         ha,dec = xy2hadec(x1,y1,0,0)
         for _ in range(4):
             x1t,y1t = hadec2xy(ha,dec,self.dha,self.ddec)
-
-            diffx = (x2 - x1t)
-            diffy = (y2 - y1t)
-
             if dxy is not None:
                 # uncertainties on x,y
-                sigx = sigy = dxy
-                #wtx = 1./sigx**2
-                #wty = 1./sigy**2
-                #diffx = (x2 - x1t) / sigx**2
-                #diffy = (y2 - y1t) / sigy**2
+                sig = dxy
             else:
-                #diffx = (x2 - x1t)
-                #diffy = (y2 - y1t)
-                #wtx = wty = 1.
-                #sigx = np.std(diffx)
-                #sigy = np.std(diffy) #np.ones_like(diffx)
-                sigx = sigy = np.ones_like(diffx)
+                sig = np.ones_like(x1t)
+            wt = 1./sig**2
+            dx = np.sum((x2 - x1t) * wt) / np.sum(wt)
+            dy = np.sum((y2 - y1t) * wt) / np.sum(wt)
 
-            if robust:
-                mx = np.median(diffx)
-                my = np.median(diffy)
-                keep = np.flatnonzero(np.hypot((diffx - mx)/sigx,
-                                               (diffy - my)/sigy) < (np.sqrt(2.)*5.))
-                print('Keeping', len(keep), 'of', len(diffx), 'stars')
-                print('median diff', mx,my)
-                print('diffs from median: x', diffx-mx)
-                print('diffs from median: y', diffy-my)
-                print('sigmas x', sigx)
-                print('sigmas y', sigy)
-                print('sigma diffs from med x:', (diffx-mx)/sigx)
-                print('sigma diffs from med y:', (diffy-my)/sigy)
-
-                dx = np.sum((diffx / sigx**2)[keep]) / np.sum(sigx[keep]**2)
-                dy = np.sum((diffy / sigy**2)[keep]) / np.sum(sigy[keep]**2)
-            else:
-                wx = 1./sigx**2
-                wy = 1./sigy**2
-                dx = np.sum(diffx * wx) / np.sum(wx)
-                dy = np.sum(diffy * wy) / np.sum(wy)
-                
             self.dha  -= np.rad2deg(dx)
             self.ddec -= np.rad2deg(dy)
 
@@ -404,11 +372,11 @@ class TanCorr(object):
 
         # now fit simultaneously extra offset, rotation, scale
         if dxy is not None:
-            wt = 1/np.hypot(sigx, sigy)
-            #print('Weights:', wt)
+            wt = 1/sig
         else:
             wt = np.ones_like(x1t)
 
+        # Set up the weighted least-squares problem
         self.nstars = x1t.size
         A = np.zeros((self.nstars, 3))
         A[:,0] = wt
@@ -418,19 +386,6 @@ class TanCorr(object):
         X,res,rank,s = np.linalg.lstsq(A, B, rcond=None)
         ax = X[:,0]
         ay = X[:,1]
-        print('Lstsq ax', ax, 'ay', ay)
-        
-        # H=np.zeros((3,self.nstars))
-        # H[0] = 1.
-        # H[1] = x1t
-        # H[2] = y1t
-        # A = H.dot(H.T)
-        # Ai = np.linalg.inv(A)
-        # ax = Ai.dot(np.sum(x2*H,axis=1))
-        # x2p = ax[0] + ax[1]*x1t + ax[2]*y1t # x2p = predicted x2 from x1t (=x1 after telescope pointing offset)
-        # ay = Ai.dot(np.sum(y2*H,axis=1))
-        # y2p = ay[0] + ay[1]*x1t + ay[2]*y1t # y2p = predicted y2 from y1t
-        # print('Old ax', ax, 'ay', ay)
 
         # x2p = predicted x2 from x1t (=x1 after telescope pointing offset)
         x2p = ax[0] + ax[1]*x1t + ax[2]*y1t

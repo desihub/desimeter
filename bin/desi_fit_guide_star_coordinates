@@ -275,10 +275,6 @@ if args.plot or args.save_plot:
 
 ### More extensive cuts on matched stars.
 
-#subcat = catalog[]
-
-#catalog = fm.read_guide_stars_catalog(args.infile)
-
 # FIDDLE with measured source position uncertainties -- we don't really
 # expect to get perfect matches, so downweight brightest stars.
 catalog['dxcentroid'] = np.maximum(0.1, catalog['dxcentroid'])
@@ -315,56 +311,57 @@ for step in range(nsteps):
     rmeds=np.sqrt(np.median(dr2))
     print("r[median]s (Gaia RA,Dec - Measurement) = {:3.2f} arcsec".format(rmeds*3600.))
 
-    cams = np.unique(t['camera'])
-    for cam in cams:
-        I = np.flatnonzero(t['camera'] == cam)
-        xx = xfp[I]
-        # Skip chips missing GFA metrology
-        if np.all(xx == 0.):
-            continue
-        # GFA physical CCD size
-        H,W = 1032,2048
-        petal = pet[I[0]]
-
-        plt.clf()
-        fig, ax = plt.subplots()
-        plt.plot(xgfa[I], ygfa[I], 'b.')
-        # error ellipse exaggeration
-        EX = 10.
-        for x,y,dx,dy in zip(xgfa[I], ygfa[I], dxgfa[I], dygfa[I]):
-            e = mpl.patches.Ellipse((x,y), width=EX*dx*2., height=EX*dy*2.)
-            ax.add_artist(e)
-        gfx,gfy = fm.radec2fp(ra[I], dec[I])
-        gx,gy = fp2gfa(petal, gfx, gfy)
-        plt.quiver(xgfa[I], ygfa[I], xgfa[I]-gx, ygfa[I]-gy,
-                   label='Measurements - Gaia',
-                   angles='xy', scale_units='xy', scale=0.01)
-        plt.plot(xccd, yccd, 'k-')
-        m = 20
-        plt.axis([1-m, W+m, 1-m, H+m])
-        plt.axis('equal')
-        plt.xlabel("GFA x (pixels)")
-        plt.ylabel("GFA y (pixels)")
-        plt.legend()
-        if args.save_plot:
-            plt.savefig(args.save_plot + '%i-%s.png' % (6 + step, cam))
-        else:
-            plt.show()
-
-        plt.clf()
+    if args.plot or args.save_plot:
+        cams = np.unique(t['camera'])
         for cam in cams:
             I = np.flatnonzero(t['camera'] == cam)
-            cosdec = np.cos(np.deg2rad(np.mean(dec)))
-            # FIXME
-            dist = np.hypot((ra2[I] - ra[I])*cosdec, dec2[I] - dec[I])
-            dist *= 3600.
-            plt.hist(dist, range=(0,2), bins=50, histtype='step', label=cam)
-        plt.xlabel('Match distance (arcsec)')
-        plt.legend()
-        if args.save_plot:
-            plt.savefig(args.save_plot + '%i-%s.png' % (6 + step, 'dists'))
-        else:
-            plt.show()
+            xx = xfp[I]
+            # Skip chips missing GFA metrology
+            if np.all(xx == 0.):
+                continue
+            # GFA physical CCD size
+            H,W = 1032,2048
+            petal = pet[I[0]]
+    
+            plt.clf()
+            fig, ax = plt.subplots()
+            plt.plot(xgfa[I], ygfa[I], 'b.')
+            # error ellipse exaggeration
+            EX = 10.
+            for x,y,dx,dy in zip(xgfa[I], ygfa[I], dxgfa[I], dygfa[I]):
+                e = mpl.patches.Ellipse((x,y), width=EX*dx*2., height=EX*dy*2.)
+                ax.add_artist(e)
+            gfx,gfy = fm.radec2fp(ra[I], dec[I])
+            gx,gy = fp2gfa(petal, gfx, gfy)
+            plt.quiver(xgfa[I], ygfa[I], xgfa[I]-gx, ygfa[I]-gy,
+                       label='Measurements - Gaia',
+                       angles='xy', scale_units='xy', scale=0.01)
+            plt.plot(xccd, yccd, 'k-')
+            m = 20
+            plt.axis([1-m, W+m, 1-m, H+m])
+            plt.axis('equal')
+            plt.xlabel("GFA x (pixels)")
+            plt.ylabel("GFA y (pixels)")
+            plt.legend()
+            if args.save_plot:
+                plt.savefig(args.save_plot + '%i-%s.png' % (6 + step, cam))
+            else:
+                plt.show()
+    
+            plt.clf()
+            for cam in cams:
+                I = np.flatnonzero(t['camera'] == cam)
+                cosdec = np.cos(np.deg2rad(np.mean(dec)))
+                # FIXME
+                dist = np.hypot((ra2[I] - ra[I])*cosdec, dec2[I] - dec[I])
+                dist *= 3600.
+                plt.hist(dist, range=(0,2), bins=50, histtype='step', label=cam)
+            plt.xlabel('Match distance (arcsec)')
+            plt.legend()
+            if args.save_plot:
+                plt.savefig(args.save_plot + '%i-%s.png' % (6 + step, 'dists'))
+            else:
+                plt.show()
             
             
     if step < nsteps-1:
