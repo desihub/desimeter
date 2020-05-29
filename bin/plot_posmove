@@ -18,6 +18,7 @@ parser.add_argument('-p', '--paramfile', type=str, default=None, required=False,
 parser.add_argument('--log-note-selection', type=str, default=None, required=False,
                     help="required keywords in LOG_NOTE selection, seperated by '&', like ''arc calibration & use_desimeter=True'")
 parser.add_argument('--print-angles', action='store_true')
+parser.add_argument('--print-log-notes', action='store_true')
 parser.add_argument('--fit-circle', action='store_true')
 
 args = parser.parse_args()
@@ -47,6 +48,7 @@ x_fp=t["X_FP"]
 y_fp=t["Y_FP"]
 pos_t=t["POS_T"]
 pos_p=t["POS_P"]
+log_note=t["LOG_NOTE"]
 
 if args.paramfile is not None :
    param=Table.read(args.paramfile)
@@ -86,9 +88,16 @@ if 0 :
 plt.figure(name)
 a=plt.subplot(111,title=name)
 plt.plot(x_fp,y_fp,"o",label="measured with desimeter")
+
+for i in range(x_fp.size) :
+   print("{} x={:4.3f} y={:4.3f} note='{}'".format(posid,x_fp[i],y_fp[i],log_note[i].split(";")[0]))
+
 if args.print_angles :
    for i in range(x_fp.size) :
       plt.text(x_fp[i],y_fp[i],"T={:3.0f} P={:3.0f}".format(pos_t[i],pos_p[i]))
+if args.print_log_notes :
+   for i in range(x_fp.size) :
+      plt.text(x_fp[i],y_fp[i],log_note[i].split(";")[0])
 
 #plt.plot(x_flat,y_flat,"x",label="expected from posmove db")
 plt.plot(x_ptl,y_ptl,"x",label="expected from posmove db")
