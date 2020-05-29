@@ -64,7 +64,7 @@ def fit_circle(x, y):
 
     return xc_2b, yc_2b, R_2b
 
-def _fast_fit_circle(x,y) :
+def _fast_fit_circle(x,y,use_median=False) :
     """
     Fast and approximate method to fit a circle from a set of 2D cartesian coordinates (better use fit_circle).
 
@@ -101,8 +101,33 @@ def _fast_fit_circle(x,y) :
     yc=my[i1]+ny[i1]*s1[i1]
 
     # first estimate of center is mean of all intersections
-    xc=np.mean(xc)
-    yc=np.mean(yc)
-    r=np.mean(np.hypot(x-xc, y-yc))
+    if use_median :
+        xc=np.median(xc)
+        yc=np.median(yc)
+        r=np.median(np.hypot(x-xc, y-yc))
+    else :
+        xc=np.mean(xc)
+        yc=np.mean(yc)
+        r=np.mean(np.hypot(x-xc, y-yc))
 
     return xc,yc,r
+
+
+def robust_fit_circle(x, y, nsig=4.):
+
+    ok=np.repeat(True,x.size)
+    for loop in range(12) :
+        xc,yc,r = _fast_fit_circle(x[ok],y[ok],use_median=True)
+        radii = np.hypot(x-xc, y-yc)
+        res = np.abs(radii-r)
+        rms = 1.483*np.median(res)
+        worst = np.argmax(res)
+        if res[worst] < nsig*rms :
+            break
+        ok[worst]=False
+        if np.sum(ok) < 3 :
+            print("game over: cannot fit a circle with less than 3 points")
+            return 0.,0.,0.,ok
+
+    xc,yc,r = fit_circle(x[ok],y[ok])
+    return xc,yc,r,ok
