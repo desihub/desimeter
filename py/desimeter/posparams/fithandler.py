@@ -265,17 +265,23 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
         printf(f'  start idx = {m:5d}, date = {subtable["DATE"][0]}')
         printf(f'  final idx = {n:5d}, date = {subtable["DATE"][-1]}')
         printf(f'  num points = {n-m+1:5d}')
-        params, err = fitter.fit_params(posintT=xytp_data['posintT'],
-                                        posintP=xytp_data['posintP'],
-                                        ptlX=xytp_data['ptlX'],
-                                        ptlY=xytp_data['ptlY'],
-                                        gearT=xytp_data['gearT'],
-                                        gearP=xytp_data['gearP'],
-                                        mode=mode,
-                                        nominals=param_nominals,
-                                        bounds=fitter.default_bounds,
-                                        keep_fixed=[],
-                                        )
+        try :
+            params, err = fitter.fit_params(posintT=xytp_data['posintT'],
+                                            posintP=xytp_data['posintP'],
+                                            ptlX=xytp_data['ptlX'],
+                                            ptlY=xytp_data['ptlY'],
+                                            gearT=xytp_data['gearT'],
+                                            gearP=xytp_data['gearP'],
+                                            mode=mode,
+                                            nominals=param_nominals,
+                                            bounds=fitter.default_bounds,
+                                            keep_fixed=[],
+            )
+        except ValueError as e :
+            printf("{}: fit failed because '{}'".format(posid,e))
+            # still return something so we have a file
+            err = 1000.
+            params = param_nominals
 
         output['ANALYSIS_DATE'].append(Time.now().iso)
         output['POS_ID'].append(posid)
