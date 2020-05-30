@@ -90,14 +90,14 @@ a=plt.subplot(111,title=name)
 plt.plot(x_fp,y_fp,"o",label="measured with desimeter")
 
 for i in range(x_fp.size) :
-   print("{} x={:4.3f} y={:4.3f} note='{}'".format(posid,x_fp[i],y_fp[i],log_note[i].split(";")[0]))
+   print("{} pos_t={:4.3f} pos_p={:4.3f} x={:4.3f} y={:4.3f} note='{}'".format(posid,pos_t[i],pos_p[i],x_fp[i],y_fp[i],log_note[i]))
 
 if args.print_angles :
    for i in range(x_fp.size) :
       plt.text(x_fp[i],y_fp[i],"T={:3.0f} P={:3.0f}".format(pos_t[i],pos_p[i]))
 if args.print_log_notes :
    for i in range(x_fp.size) :
-      plt.text(x_fp[i],y_fp[i],log_note[i].split(";")[0])
+      plt.text(x_fp[i],y_fp[i],str(log_note[i]).split(";")[0])
 
 #plt.plot(x_flat,y_flat,"x",label="expected from posmove db")
 plt.plot(x_ptl,y_ptl,"x",label="expected from posmove db")
