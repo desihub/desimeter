@@ -205,7 +205,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
         for val in unique_p_int :
             selection = np.where(p_int==val)[0]
             if selection.size<3 : continue # no circle to fit here
-            xc,yc,r,ok = robust_fit_circle(x_flat[selection],y_flat[selection])
+            xc,yc,_,_ = robust_fit_circle(x_flat[selection],y_flat[selection])
             offset_x.append(xc)
             offset_y.append(yc)
         if len(offset_x)>0 :

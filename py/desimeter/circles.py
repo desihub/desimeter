@@ -116,7 +116,7 @@ def _fast_fit_circle(x,y,use_median=False) :
 def robust_fit_circle(x, y, nsig=4.):
 
     ok=np.repeat(True,x.size)
-    for loop in range(12) :
+    for _ in range(12) :
         xc,yc,r = _fast_fit_circle(x[ok],y[ok],use_median=True)
         radii = np.hypot(x-xc, y-yc)
         res = np.abs(radii-r)
