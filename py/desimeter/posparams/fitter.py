@@ -9,6 +9,7 @@ import numpy as np
 
 # imports below require <path to desimeter>/py' to be added to system PYTHONPATH.
 import desimeter.transform.pos2ptl as pos2ptl
+from desimeter.circles import robust_fit_circle
 
 # default parameter values and bounds
 default_values = {'LENGTH_R1': 3.0,
@@ -194,6 +195,25 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
         err_y = y_exp - y_flat
         sumsq = np.sum(err_x**2 + err_y**2)
         return (sumsq / n_pts)**0.5
+
+    if mode=='static' :
+        # we initialize OFFSET_X and OFFSET_Y by fitting circles
+        # for all unique values of p_int
+        unique_p_int = np.unique(p_int)
+        offset_x=list()
+        offset_y=list()
+        for val in unique_p_int :
+            selection = np.where(p_int==val)[0]
+            if selection.size<3 : continue # no circle to fit here
+            xc,yc,r,ok = robust_fit_circle(x_flat[selection],y_flat[selection])
+            offset_x.append(xc)
+            offset_y.append(yc)
+        if len(offset_x)>0 :
+            offset_x = np.median(offset_x)
+            offset_y = np.median(offset_y)
+            if not "OFFSET_X" in keep_fixed : nominals["OFFSET_X"] = offset_x
+            if not "OFFSET_Y" in keep_fixed : nominals["OFFSET_Y"] = offset_y
+            print("init OFFSET_X={} OFFSET_Y={}".format(offset_x,offset_y))
 
     initial_params = [nominals[key] for key in params_to_fit]
     bounds_vector = [bounds[key] for key in params_to_fit]
