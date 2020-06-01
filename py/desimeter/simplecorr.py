@@ -17,6 +17,7 @@ class SimpleCorr(object):
         self.rot_deg = 0.
         self.nmatch = 0
         self.rms = 0.
+        self.from_metrology = False
 
     def tojson(self):
         params = dict()

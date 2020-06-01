@@ -7,7 +7,7 @@ import numpy as np
 
 from desimeter.transform.radec2tan import xy2hadec,hadec2xy,tan2radec,radec2tan
 from desimeter.transform.tan2fp import tan2fp,fp2tan
-from desimeter.transform.gfa2fp import gfa2fp
+from desimeter.transform.gfa2fp import gfa2fp, gfa2fp_has_metrology
 from desimeter.trig import cosd, arctan2d, rot2deg
 
 from desimeter.log import get_logger
@@ -146,7 +146,8 @@ class FieldModel(object):
         log.info("Use LST={}".format(self.lst))
 
         # first transform: gfa2fp
-        x_fp,y_fp = self.all_gfa2fp(x_gfa,y_gfa,petal_loc=catalog["petal_loc"])
+        x_fp,y_fp = self.all_gfa2fp(x_gfa,y_gfa,petal_loc=catalog["petal_loc"],
+                                    require_metrology=True)
 
         # keep only petal data for which we have the metrology
         selection = (x_fp!=0)
@@ -257,7 +258,7 @@ class FieldModel(object):
         t2t.rot_deg = self.fieldrot_zp_deg
         return t2t.apply_inverse(x_tan,y_tan)
 
-    def all_gfa2fp(self,x_gfa,y_gfa,petal_loc) :
+    def all_gfa2fp(self,x_gfa,y_gfa,petal_loc, require_metrology=False):
         log = get_logger()
 
         # simple loop on petals
@@ -265,6 +266,9 @@ class FieldModel(object):
         x_fp = np.zeros(x_gfa.shape)
         y_fp = np.zeros(y_gfa.shape)
         for petal in petals :
+            if require_metrology:
+                if not gfa2fp_has_metrology(petal):
+                    continue
             ii = (petal_loc==petal)
             try :
                 x,y = gfa2fp(petal,x_gfa[ii],y_gfa[ii])

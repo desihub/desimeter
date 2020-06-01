@@ -9,6 +9,17 @@ from desimeter.simplecorr import SimpleCorr
 
 #- Cached GFA pix -> GFA FP metrology scale, rotation, offsets per petal
 _gfa_transforms = None
+def _get_transform(petal_loc):
+    global _gfa_transforms
+    if _gfa_transforms is None:
+        metrology = io.load_metrology()
+        _gfa_transforms = fit_gfa2fp(metrology)
+
+    log = get_logger()
+    if petal_loc not in _gfa_transforms:
+        log.error('PETAL_LOC {} GFA metrology missing'.format(petal_loc))
+
+    return _gfa_transforms[petal_loc]
 
 def gfa2fp(petal_loc, xgfa, ygfa):
     """
@@ -20,18 +31,13 @@ def gfa2fp(petal_loc, xgfa, ygfa):
 
     Returns CS5 xfp, yfp in mm
     """
-    global _gfa_transforms
-    if _gfa_transforms is None:
-        metrology = io.load_metrology()
-        _gfa_transforms = fit_gfa2fp(metrology)
-
-    log = get_logger()
-    if petal_loc not in _gfa_transforms:
-        log.error('PETAL_LOC {} GFA metrology missing'.format(petal_loc))
-
-    xfp, yfp = _gfa_transforms[petal_loc].apply(xgfa, ygfa)
-
+    trans = _get_transform(petal_loc)
+    xfp, yfp = trans.apply(xgfa, ygfa)
     return xfp, yfp
+
+def gfa2fp_has_metrology(petal_loc):
+    trans = _get_transform(petal_loc)
+    return trans.from_metrology
 
 def fp2gfa(petal_loc, xfp, yfp):
     """
@@ -78,33 +84,59 @@ def fit_gfa2fp(metrology):
 
     gfa_transforms = dict()
 
+    # Fill in missing petal metrology with averages of measured ones.
+    xx,yy,zz = [],[],[]
     for p in range(10):
         ii = (metrology['PETAL_LOC'] == p)
-        if np.count_nonzero(ii) > 0:
+        if not np.any(ii):
+            continue
+        xx.append(np.asarray(metrology['X_PTL'][ii]))
+        yy.append(np.asarray(metrology['Y_PTL'][ii]))
+        zz.append(np.asarray(metrology['Z_PTL'][ii]))
+    xx = np.mean(np.vstack(xx), axis=0)
+    yy = np.mean(np.vstack(yy), axis=0)
+    zz = np.mean(np.vstack(zz), axis=0)
+
+    for p in range(10):
+        ii = (metrology['PETAL_LOC'] == p)
+        if np.any(ii):
             xfp = np.asarray(metrology['X_FP'][ii])
             yfp = np.asarray(metrology['Y_FP'][ii])
             zfp = np.asarray(metrology['Z_FP'][ii])
+            from_metrology = True
+        else:
+            # Approximate from average of measured ones!
+            # XYZ_PTL are for petal_loc = 3
+            rot = np.deg2rad(36. * (p - 3))
+            R = np.array([[np.cos(rot), -np.sin(rot)],
+                          [np.sin(rot), np.cos(rot)]])
+            xyr = np.dot(R, np.vstack((xx,yy)))
+            xfp = xyr[0,:]
+            yfp = xyr[1,:]
+            zfp = zz
+            from_metrology = False
 
-            #- fit transform
-            corr = SimpleCorr()
-            corr.fit(xgfa, ygfa, xfp, yfp)
+        #- fit transform
+        corr = SimpleCorr()
+        corr.fit(xgfa, ygfa, xfp, yfp)
 
-            #- measure norm of plane
-            x01 =  np.array( [ xfp[1]-xfp[0], yfp[1]-yfp[0], zfp[1]-zfp[0] ] )
-            x01 /= np.sqrt(np.sum(x01**2))
-            x12 =  np.array( [ xfp[2]-xfp[1], yfp[2]-yfp[1], zfp[2]-zfp[1] ] )
-            x12 /= np.sqrt(np.sum(x12**2))
-            norm_vector= np.cross(x01,x12)
-            # I checked the sign of all components
+        #- measure norm of plane
+        x01 =  np.array( [ xfp[1]-xfp[0], yfp[1]-yfp[0], zfp[1]-zfp[0] ] )
+        x01 /= np.sqrt(np.sum(x01**2))
+        x12 =  np.array( [ xfp[2]-xfp[1], yfp[2]-yfp[1], zfp[2]-zfp[1] ] )
+        x12 /= np.sqrt(np.sum(x12**2))
+        norm_vector= np.cross(x01,x12)
+        # I checked the sign of all components
 
-            #- compute correction to apply
-            delta_z = 2.23 # mm
-            delta_x = delta_z*norm_vector[0]/norm_vector[2]
-            delta_y = delta_z*norm_vector[1]/norm_vector[2]
+        #- compute correction to apply
+        delta_z = 2.23 # mm
+        delta_x = delta_z*norm_vector[0]/norm_vector[2]
+        delta_y = delta_z*norm_vector[1]/norm_vector[2]
 
-            #- apply correction to offsets
-            corr.dx += delta_x
-            corr.dy += delta_y
-            gfa_transforms[p] = corr
+        #- apply correction to offsets
+        corr.dx += delta_x
+        corr.dy += delta_y
+        corr.from_metrology = from_metrology
+        gfa_transforms[p] = corr
 
     return gfa_transforms
