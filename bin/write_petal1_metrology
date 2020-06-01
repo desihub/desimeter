@@ -71,21 +71,18 @@ spots["LOCATION"] = spots["PETAL_LOC"]*1000+spots["DEVICE_LOC"]
 
 # add positioner id and bus id
 
-filename=resource_filename('desimeter',"data/lbl-petal1/petal-01-ids.csv")
+filename=resource_filename('desimeter',"data/lbl-petal1/lbnl_positioner_indexes_20200324.csv")
 if os.path.isfile(filename) :
     ids=Table.read(filename)
-
     loc2ind={loc:i for i,loc in enumerate(ids["DEVICE_LOC"])}
+    for k in ["DEVICE_ID","DEVICE_TYPE","BUS_ID"] :
+        spots[k]=np.array([ ids[k][loc2ind[loc]] for loc in spots["DEVICE_LOC"] ])
 
-    posids=list()
-    for loc in spots["DEVICE_LOC"] :
-        pid=ids["DEVICE_ID"][loc2ind[loc]]
-        if not pid.startswith('P'):
-            pid = 'M'+"%05d"%(int(pid))
-        posids.append(pid)
-    spots["DEVICE_ID"]=posids
+for loc in [461,501] :
+    i=np.where(spots["DEVICE_LOC"]==loc)[0][0]
+    log.warning("SPECIAL CASE FOR DEVICE_LOC={} (DEVICE_ID={}): Force DEVICE_TYPE=ETC".format(loc,spots["DEVICE_ID"][i]))
+    spots["DEVICE_TYPE"][i]="ETC"
 
-    spots["BUS_ID"]=np.array([ ids["BUS_ID"][loc2ind[loc]] for loc in spots["DEVICE_LOC"] ])
 
 
 spots.write(args.outfile,format='csv',overwrite=True)

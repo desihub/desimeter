@@ -263,7 +263,7 @@ def transform(x, y, scale, rotation, offset_x, offset_y, zbpolids=None, zbcoeffs
 
     return xx, yy
 
-def fit_scale_rotation_offset(x, y, xp, yp, fitzb=False, zbpolids=None, zbcoeffs=None):
+def fit_scale_rotation_offset(x, y, xp, yp, fitzb=False, zbpolids=None, zbcoeffs=None, fixed_scale=None, fixed_rotation=None):
     """
     Fit scale, rotation, offset plus optional Zhao-Burge corrections
     for x,y -> xp,yp.
@@ -282,14 +282,20 @@ def fit_scale_rotation_offset(x, y, xp, yp, fitzb=False, zbpolids=None, zbcoeffs
 
     def func(params, x, y, xp, yp):
         scale, rotation, offset_x, offset_y = params[0:4]
+        if fixed_scale is not None: scale=fixed_scale # fixed value
+        if fixed_rotation is not None: rotation=fixed_rotation # fixed value
         xx, yy = transform(x, y, scale, rotation, offset_x, offset_y, zbpolids=zbpolids, zbcoeffs=zbcoeffs)
         dr2 = np.sum((xx-xp)**2 + (yy-yp)**2)
+        if fixed_scale is not None: dr2 += 1e6*(scale-fixed_scale)**2 # prior on fixed value
+        if fixed_rotation is not None: dr2 += 1e6*(rotation-fixed_rotation)**2 # prior on fixed value
         return dr2
 
     p0 = np.array([1.0,0.0,0.0,0.0])
     p  = minimize(func, p0, args=(x, y, xp, yp))
 
     scale, rotation, offset_x, offset_y = p.x
+    if fixed_scale is not None: scale=fixed_scale # fixed value
+    if fixed_rotation is not None: rotation=fixed_rotation # fixed value
 
     if fitzb :
 

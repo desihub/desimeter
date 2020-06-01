@@ -106,7 +106,7 @@ class FVC2FP(object):
 
         return tx
 
-    def fit(self, spots, metrology=None, update_spots=False, zbfit=True):
+    def fit(self, spots, metrology=None, update_spots=False, zbfit=True, fixed_scale=False, fixed_rotation=False):
         """
         TODO: document
         """
@@ -137,7 +137,21 @@ class FVC2FP(object):
         rxpix, rypix = self._reduce_xyfvc(fidspots['XPIX'], fidspots['YPIX'])
         rxfp, ryfp = self._reduce_xyfp(metrology['X_FP'], metrology['Y_FP'])
 
-        res = fit_scale_rotation_offset(rxpix, rypix, rxfp, ryfp, fitzb=zbfit, zbpolids=self.zbpolids, zbcoeffs=self.zbcoeffs)
+        if fixed_rotation :
+            fixed_rotation_value = self.rotation
+            log.info("Use fixed rotation = {:5.4f}".format(fixed_rotation_value))
+        else :
+            fixed_rotation_value = None
+
+        if fixed_scale :
+            fixed_scale_value = self.scale
+            log.info("Use fixed scale = {:5.4f}".format(fixed_scale_value))
+        else :
+            fixed_scale_value = None
+
+
+
+        res = fit_scale_rotation_offset(rxpix, rypix, rxfp, ryfp, fitzb=zbfit, zbpolids=self.zbpolids, zbcoeffs=self.zbcoeffs, fixed_scale = fixed_scale_value, fixed_rotation = fixed_rotation_value)
         self.scale = res[0]
         self.rotation = res[1]
         self.offset_x = res[2]
