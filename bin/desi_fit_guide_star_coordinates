@@ -64,43 +64,6 @@ fm.mjd = np.mean(catalog["mjd_obs"])
 fm.lst = mjd2lst(fm.mjd)
 fm.fit_tancorr(catalog)
 
-# save it
-with open(args.outfile, 'w') as file:
-    file.write(fm.tojson())
-print("wrote",args.outfile)
-
-# if args.cat:
-#     t=catalog
-#     xgfa=t["xcentroid"]
-#     ygfa=t["ycentroid"]
-#     pet=t["petal_loc"]
-#     xfp,yfp = fm.all_gfa2fp(xgfa,ygfa,pet)
-#     ra2,dec2=fm.fp2radec(xfp,yfp)
-#     t['fit_fx'] = xfp
-#     t['fit_fy'] = yfp
-#     t['fit_ra'] = ra2
-#     t['fit_dec'] = dec2
-#     ra=t["ra_gaia"]
-#     dec=t["dec_gaia"]
-#     t['fit_gaia_fx'] = np.zeros(len(t), np.float32)
-#     t['fit_gaia_fy'] = np.zeros(len(t), np.float32)
-#     t['fit_gaia_x'] = np.zeros(len(t), np.float32)
-#     t['fit_gaia_y'] = np.zeros(len(t), np.float32)
-#     # Skip chips missing GFA metrology
-#     ii=(xfp!=0)
-#     t = t[ii]
-#     cams = np.unique(t['camera'])
-#     for cam in cams:
-#         I = np.flatnonzero(t['camera'] == cam)
-#         petal = t["petal_loc"][I[0]]
-#         gfx,gfy = fm.radec2fp(t['ra_gaia'][I], t['dec_gaia'][I])
-#         gx,gy = fp2gfa(petal, gfx, gfy)
-#         t['fit_gaia_fx'][I] = gfx
-#         t['fit_gaia_fy'][I] = gfy
-#         t['fit_gaia_x'][I] = gx
-#         t['fit_gaia_y'][I] = gy
-#     t.write(args.cat, format='fits', overwrite=True)
-
 if args.plot or args.save_plot:
     import matplotlib.pyplot as plt
     import matplotlib as mpl
@@ -113,8 +76,8 @@ if args.plot or args.save_plot:
     pet=t["petal_loc"]
 
     # re-read the model to also test the I/O
-    with open(args.outfile) as file :
-        fm = FieldModel.fromjson(file.read())
+    #with open(args.outfile) as file :
+    #    fm = FieldModel.fromjson(file.read())
 
     xfp,yfp = fm.all_gfa2fp(xgfa,ygfa,pet, require_metrology=True)
     ra2,dec2=fm.fp2radec(xfp,yfp)
@@ -290,10 +253,8 @@ catalog['dycentroid'] = np.maximum(0.1, catalog['dycentroid'])
 nmatch = Counter(catalog['source_id'])
 keep = np.array([nmatch[sid] == 1 for sid in catalog['source_id']])
 print('Cutting to', sum(keep), 'unique matches to Gaia stars')
-#catalog = catalog[:][keep]
 
 nsteps = 3
-
 for step in range(nsteps):
 
     fm.fit_tancorr(catalog[:][keep], weighted=True)
@@ -385,6 +346,10 @@ for step in range(nsteps):
         keep[ikeep[newkeep == False]] = False
         print('Now', np.sum(keep), 'stars to keep')
         #catalog = catalog[:][keep]
+
+with open(args.outfile, 'w') as file:
+    file.write(fm.tojson())
+print("wrote",args.outfile)
 
 if args.cat:
     t=catalog
