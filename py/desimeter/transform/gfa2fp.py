@@ -49,17 +49,8 @@ def fp2gfa(petal_loc, xfp, yfp):
 
     Returns xgfa, ygfa pixel coordinates with (0,0) as center of corner pixel
     """
-    global _gfa_transforms
-    if _gfa_transforms is None:
-        metrology = io.load_metrology()
-        _gfa_transforms = fit_gfa2fp(metrology)
-
-    log = get_logger()
-    if petal_loc not in _gfa_transforms:
-        log.error('PETAL_LOC {} GFA metrology missing'.format(petal_loc))
-
-    xgfa, ygfa = _gfa_transforms[petal_loc].apply_inverse(xfp, yfp)
-
+    trans = _get_transform(petal_loc)
+    xgfa, ygfa = trans.apply_inverse(xfp, yfp)
     return xgfa, ygfa
 
 def fit_gfa2fp(metrology):

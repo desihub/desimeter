@@ -15,16 +15,11 @@ for date in opts.date:
     MM = date[:2]
     DD = date[2:]
     
-    # 2020-02-24
+    # plot title
     datestr = '2020-'+MM+'-'+DD
+    # short-form dir name
     plotdir = MM+DD+'/'
     fns = glob(plotdir + 'fm*.fits')
-    
-    # 2020-03-15
-    # datestr = '2020-03-15'
-    # plotdir = '0315/'
-    # fns = glob('0315/fm*.fits')
-    
     fns.sort()
     print(len(fns), 'files')
     
@@ -33,12 +28,11 @@ for date in opts.date:
         T = fits_table(fn)
         TT.append(T)
     T = merge_tables(TT)
-    
+
     # FIXME
     cosdec = np.cos(np.deg2rad(T.dec_gaia))
     T.dist = np.hypot((T.ra_gaia - T.fit_ra)*cosdec, T.dec_gaia - T.fit_dec)
     T.dist *= 3600.
-
 
     cams = np.unique(T.camera)
     for cam in cams:
@@ -135,3 +129,13 @@ for date in opts.date:
     plt.legend()
     plt.xlabel('Match distance (arcsec)')
     plt.savefig(plotdir + 'summary-3.png')
+
+    plt.clf()
+    ha = dict(range=(0,1), bins=20, histtype='step')
+    plt.hist(T.dist[T.kept], label='Used in fit', **ha)
+    plt.hist(T.dist[np.logical_not(T.kept)], label='Not used', **ha)
+    plt.legend()
+    plt.xlabel('Match distance (arcsec)')
+    plt.savefig(plotdir + 'summary-4.png')
+
+    

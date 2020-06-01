@@ -8,7 +8,7 @@ from collections import Counter
 
 from desimeter.log import get_logger
 from desimeter.fieldmodel import FieldModel
-from desimeter.transform.gfa2fp import fp2gfa
+from desimeter.transform.gfa2fp import fp2gfa, gfa2fp_has_metrology
 from desimeter.time import mjd2lst
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -116,7 +116,7 @@ if args.plot or args.save_plot:
     with open(args.outfile) as file :
         fm = FieldModel.fromjson(file.read())
 
-    xfp,yfp = fm.all_gfa2fp(xgfa,ygfa,pet)
+    xfp,yfp = fm.all_gfa2fp(xgfa,ygfa,pet, require_metrology=True)
     ra2,dec2=fm.fp2radec(xfp,yfp)
 
     ra=t["ra_gaia"]
@@ -165,7 +165,8 @@ if args.plot or args.save_plot:
         xccd = np.array([1, 1, W, W, 1])
         yccd = np.array([1, H, H, 1, 1])
         petal = pet[I[0]]
-        x_c,y_c = fm.all_gfa2fp(xccd, yccd, np.zeros(len(xccd),int) + petal)
+        x_c,y_c = fm.all_gfa2fp(xccd, yccd, np.zeros(len(xccd),int) + petal,
+                                require_metrology=True)
         ra_c,dec_c = fm.fp2radec(x_c,y_c)
         plt.plot(ra_c, dec_c, 'k-')
         xl,xh = plt.xlim()
@@ -287,24 +288,24 @@ catalog['dycentroid'] = np.maximum(0.1, catalog['dycentroid'])
 # Drop duplicate matches (?)
 #assert(len(set(catalog['source_id'])) == len(catalog))
 nmatch = Counter(catalog['source_id'])
-keep = [nmatch[sid] == 1 for sid in catalog['source_id']]
+keep = np.array([nmatch[sid] == 1 for sid in catalog['source_id']])
 print('Cutting to', sum(keep), 'unique matches to Gaia stars')
-catalog = catalog[:][keep]
+#catalog = catalog[:][keep]
 
 nsteps = 3
 
 for step in range(nsteps):
 
-    fm.fit_tancorr(catalog, weighted=True)
+    fm.fit_tancorr(catalog[:][keep], weighted=True)
 
-    t=catalog
+    t=catalog[:][keep]
     xgfa=t["xcentroid"]
     ygfa=t["ycentroid"]
     dxgfa=t["dxcentroid"]
     dygfa=t["dycentroid"]
     pet=t["petal_loc"]
 
-    xfp,yfp = fm.all_gfa2fp(xgfa,ygfa,pet)
+    xfp,yfp = fm.all_gfa2fp(xgfa,ygfa,pet, require_metrology=True)
     ra2,dec2=fm.fp2radec(xfp,yfp)
 
     ra=t["ra_gaia"]
@@ -378,17 +379,27 @@ for step in range(nsteps):
         dy = dec2 - dec
         dx = (ra2 - ra)*np.cos(dec/180*np.pi)
         dr2 = dx**2 + dy**2
-        keep = (dr2 < thresh)
-        print('Keeping', np.sum(keep), 'of', len(dr2), 'stars for next round')
-        catalog = catalog[:][keep]
+        newkeep = (dr2 < thresh)
+        print('Keeping', np.sum(newkeep), 'of', len(dr2), 'stars for next round')
+        ikeep, = np.nonzero(keep)
+        keep[ikeep[newkeep == False]] = False
+        print('Now', np.sum(keep), 'stars to keep')
+        #catalog = catalog[:][keep]
 
 if args.cat:
     t=catalog
+    t['kept'] = keep
     xgfa=t["xcentroid"]
     ygfa=t["ycentroid"]
     pet=t["petal_loc"]
     xfp,yfp = fm.all_gfa2fp(xgfa,ygfa,pet)
     ra2,dec2=fm.fp2radec(xfp,yfp)
+    has_met = np.zeros(len(t), bool)
+    P = np.unique(pet)
+    for petal in P:
+        ii = (pet == petal)
+        has_met[ii] = gfa2fp_has_metrology(petal)
+    t['has_metrology'] = has_met
     t['fit_fx'] = xfp
     t['fit_fy'] = yfp
     t['fit_ra'] = ra2
