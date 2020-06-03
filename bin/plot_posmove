@@ -19,6 +19,8 @@ parser.add_argument('--log-note-selection', type=str, default=None, required=Fal
                     help="required keywords in LOG_NOTE selection, seperated by '&', like ''arc calibration & use_desimeter=True'")
 parser.add_argument('--print-angles', action='store_true')
 parser.add_argument('--fit-circle', action='store_true')
+parser.add_argument('--no-db-calib', action='store_true',help='do not show expected positions using the calibration in the positioner file')
+
 
 args = parser.parse_args()
 
@@ -91,9 +93,10 @@ if args.print_angles :
       plt.text(x_fp[i],y_fp[i],"T={:3.0f} P={:3.0f}".format(pos_t[i],pos_p[i]))
 
 #plt.plot(x_flat,y_flat,"x",label="expected from posmove db")
-plt.plot(x_ptl,y_ptl,"x",label="expected from posmove db")
+if not args.no_db_calib :
+   plt.plot(x_ptl,y_ptl,"x",label="expected from posmove db")
 if x_ptl_b is not None :
-   plt.plot(x_ptl_b,y_ptl_b,"+",label="expected after desimeter calibration")
+   plt.plot(x_ptl_b,y_ptl_b,"+",color="red",label="expected after desimeter calibration")
 
 if args.fit_circle :
    xc,yc,r = fit_circle(x_fp,y_fp)
