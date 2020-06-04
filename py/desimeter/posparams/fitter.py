@@ -205,9 +205,13 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
         for val in unique_p_int :
             selection = np.where(p_int==val)[0]
             if selection.size<3 : continue # no circle to fit here
-            xc,yc,_,_ = robust_fit_circle(x_flat[selection],y_flat[selection])
-            offset_x.append(xc)
-            offset_y.append(yc)
+            try :
+                xc,yc,_,_ = robust_fit_circle(x_flat[selection],y_flat[selection])
+                offset_x.append(xc)
+                offset_y.append(yc)
+            except ValueError as e :
+                print("circle fit failed because '{}'".format(e))
+
         if len(offset_x)>0 :
             offset_x = np.median(offset_x)
             offset_y = np.median(offset_y)
