@@ -15,7 +15,7 @@ parser.add_argument('-i','--infile', type = str, default = None, required = True
                     help = 'path to desimeter CSV files')
 parser.add_argument('-o','--outfile', type = str, default = None, required = True,
                     help = 'path to output CSV ASCII file')
-parser.add_argument('--plot', action = 'store_true', 
+parser.add_argument('--plot', action = 'store_true',
                     help = 'plot some circles')
 
 args  = parser.parse_args()
@@ -53,7 +53,7 @@ for filename in args.infile :
             y[loc] = []
             xexp[loc] = float(t["X_FP_EXP"][location_and_pinhole==loc][0])
             yexp[loc] = float(t["Y_FP_EXP"][location_and_pinhole==loc][0])
-            
+
         x[loc].append(float(t["X_FP"][i]))
         y[loc].append(float(t["Y_FP"][i]))
 
@@ -65,7 +65,7 @@ print("number of fiducials:",np.sum(pinhole==1))
 print("number of pinholes:",np.sum(pinhole>=1))
 
 ndots=len(location_and_pinhole)
-        
+
 theta=np.linspace(0,2*np.pi,50)
 
 
@@ -83,9 +83,9 @@ for iloc,loc in enumerate(x.keys()) :
     ii=np.where(x[loc]!=0)[0]
     x[loc]=x[loc][ii]
     y[loc]=y[loc][ii]
-    
+
     #print("{} nmeas={} rms(x)={} rms(y)={}".format(loc,ii.size,np.std(x[loc]),np.std(y[loc])))
-    
+
     if pinhole[iloc] == 0 and np.std(x[loc])<1. :
         # this is a non-moving positioner, I don't use this
         if False and args.plot and count<nmaxplot :
@@ -93,7 +93,7 @@ for iloc,loc in enumerate(x.keys()) :
             plt.plot(np.mean(x[loc]),np.mean(y[loc]),"x",color="k",markersize=12)
         continue
     count += 1
-    
+
     xc=np.median(x[loc])
     yc=np.median(y[loc])
 
@@ -113,7 +113,7 @@ for iloc,loc in enumerate(x.keys()) :
         if iloc%100==0 :
             print("{}/{} loc={} x={} y={} r={}".format(iloc,len(x),loc,xc,yc,r))
         if r<0.1 : continue
-    
+
         if args.plot and count<nmaxplot :
             plt.figure("circles")
             plt.plot(x[loc],y[loc],"o")
@@ -121,8 +121,8 @@ for iloc,loc in enumerate(x.keys()) :
             theta=np.linspace(0,2*np.pi,50)
             plt.plot(xc+r*np.cos(theta),yc+r*np.sin(theta),"-",color="green")
             plt.plot(xc,yc,"+",color="green")
-        
-    
+
+
     xfp_metro[iloc]=xexp[loc]
     yfp_metro[iloc]=yexp[loc]
     xfp_meas[iloc]=xc
@@ -131,7 +131,7 @@ for iloc,loc in enumerate(x.keys()) :
 dx=xfp_meas-xfp_metro
 dy=yfp_meas-yfp_metro
 dr=np.sqrt(dx**2+dy**2)
-print("median offset = {:4.1f} um",np.median(dr[dr!=0])*1000.)
+print("median offset = {:4.1f} um".format(np.median(dr[dr!=0])*1000.))
 
 ii=np.where((xfp_metro!=0)&(dr<3.))[0]
 
@@ -139,13 +139,10 @@ ii=np.where((xfp_metro!=0)&(dr<3.))[0]
 t2=Table([location[ii],pinhole[ii],xfp_metro[ii],yfp_metro[ii],xfp_meas[ii],yfp_meas[ii]],names=["LOCATION","PINHOLE_ID","X_FP_METRO","Y_FP_METRO","X_FP","Y_FP"],dtype=[int,int,float,float,float,float])
 
 t2.write(args.outfile,format="csv",overwrite=True)
-print("wrote",args.outfile)         
+print("wrote",args.outfile)
 
 if args.plot :
     plt.figure("quiver",figsize=(6.1, 6))
     plt.quiver(xfp_meas[ii],yfp_meas[ii],dx[ii],dy[ii])
     plt.plot(xfp_meas[ii][pinhole[ii]>0],yfp_meas[ii][pinhole[ii]>0],".",c="red")
     plt.show()
-
-    
-
