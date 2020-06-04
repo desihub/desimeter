@@ -17,7 +17,11 @@ parser.add_argument('-o','--outfile', type = str, default = None, required = Tru
                     help = 'path to output transformation json file')
 parser.add_argument('--zbpolids', type=str, default="0,1,2,3,4,5,6,9,20,27,28,29,30", required = False,
                     help = 'list of ZB coefficients to fit. 0,1,2,27 are mandatory (2xtranslation,magnification,rotation)')
+parser.add_argument('--other-metrology', type=str, default=None, required = False,
+                    help = 'use other metrology table')
 parser.add_argument('--plot',action='store_true',help="plot")
+
+
 
 args  = parser.parse_args()
 zbpolids = parse_fibers(args.zbpolids)
@@ -25,6 +29,13 @@ if not np.all(np.in1d([0,1,2,27],zbpolids)) :
     print("error, need at least 0,1,2,27 in zppolids")
     sys.exit(12)
 
+if args.other_metrology is not None :
+    print("Using other metrogy table {}".format(args.other_metrology))
+    other_metrology = Table.read(args.other_metrology)
+
+
+pinholeid=[]
+deviceloc=[]
 x1=[]
 y1=[]
 x2=[]
@@ -35,15 +46,48 @@ for filename in args.infile :
     t=Table.read(filename)
     x1.append(t["X_FP"])
     y1.append(t["Y_FP"])
+
+    if other_metrology is not None :
+        print("matching to other metrology...")
+        if not "LOCATION" in t.dtype.names or not "PINHOLE_ID" in t.dtype.names :
+            print("I cannot match with other metrology because no LOCATION or no PINHOLE_ID in the circles table")
+            sys.exit(12)
+        eloc=(np.array(t["LOCATION"])*10+np.array(t["PINHOLE_ID"])).astype(int)
+        meloc=(np.array(other_metrology["LOCATION"])*10+np.array(other_metrology["PINHOLE_ID"])).astype(int)
+        l2i={l:i for i,l in enumerate(meloc)}
+        for j in range(t["X_FP"].size):
+            if eloc[j] in l2i :
+                i=l2i[eloc[j]]
+                t["X_FP_METRO"][j]=other_metrology["X_FP"][i]
+                t["Y_FP_METRO"][j]=other_metrology["Y_FP"][i]
+            else :
+                t["X_FP_METRO"][j]=0.
+                t["Y_FP_METRO"][j]=0.
+        print("match to other metrology is done")
+
     x2.append(t["X_FP_METRO"])
     y2.append(t["Y_FP_METRO"])
-    
 
+
+    if "PINHOLE_ID" in t.dtype.names :
+        pinholeid.append(t["PINHOLE_ID"])
+    if "DEVICE_LOC" in t.dtype.names :
+        deviceloc.append(t["DEVICE_LOC"])
+    elif "LOCATION" in t.dtype.names :
+        deviceloc.append(t["LOCATION"]%1000)
 x1 = np.hstack(x1)
 y1 = np.hstack(y1)
 x2 = np.hstack(x2)
 y2 = np.hstack(y2)
 
+if len(pinholeid)>0 :
+    pinholeid =  np.hstack(pinholeid)
+else :
+    pinholeid = None
+if len(deviceloc)>0 :
+    deviceloc =  np.hstack(deviceloc)
+else :
+    deviceloc = None
 
 from desimeter.transform.fvc2fp import FVC2FP #,read_jsonfile
 from desimeter.io import fvc2fp_filename
@@ -85,7 +129,7 @@ transfo.write_jsonfile(args.outfile)
 print("wrote {}".format(args.outfile))
 
 if args.plot :
-    
+
     refit=True
 
     plt.figure("theta-centers")
@@ -94,8 +138,11 @@ if args.plot :
     plt.quiver(x1,y1,x1-x2,y1-y2)
     nmad2d=1.20*np.median(np.sqrt((x1-x2)**2+(y1-y2)**2))
     rms2d=np.sqrt(np.mean((x1-x2)**2+(y1-y2)**2))
-    plt.text(50,160,"rms (2D)  = {:4.0f} um".format(rms2d*1000.))
-    plt.text(50,140,"nmad (2D) = {:4.0f} um".format(nmad2d*1000.))
+    x0=np.min(x1)-10
+    y0=np.max(y1)+5
+    ystep=30
+    plt.text(x0,y0,"rms (2D)  = {:4.0f} um".format(rms2d*1000.))
+    plt.text(x0,y0-ystep,"nmad (2D) = {:4.0f} um".format(nmad2d*1000.))
 
     if refit :
         plt.subplot(212,title="after adjustment")
@@ -113,11 +160,21 @@ if args.plot :
 
         ii=np.argsort(dist)[::-1]
         print(ii[:10],dist[ii[:10]])
+        x0=np.min(x1b)-10
+        y0=np.max(y1b)+5
 
-        plt.text(50,160,"rms (2D)  = {:4.0f} um".format(rms2d*1000.))
-        plt.text(50,140,"nmad (2D) = {:4.0f} um".format(nmad2d*1000.))
+        plt.text(x0,y0,"ALL rms (2D)  = {:4.0f} um".format(rms2d*1000.))
+        plt.text(x0,y0-ystep,"ALL nmad (2D) = {:4.0f} um".format(nmad2d*1000.))
 
+        # only the fiducials:
+        if pinholeid is not None :
+            fid=(pinholeid>0)
+            plt.plot(x1b[fid],y1b[fid],".",c='red')
+            fid_rms2d=np.sqrt(np.mean(dist[fid]**2))
+            fid_nmad2d=1.20*np.median(dist[fid])
+            print("nmad2d(FID)=",fid_nmad2d)
+            print("rms2d(FID)=",fid_rms2d)
+            plt.text(x0,y0-2*ystep,"FID rms (2D)  = {:4.0f} um".format(fid_rms2d*1000.),color="red")
+            plt.text(x0,y0-3*ystep,"FID nmad (2D) = {:4.0f} um".format(fid_nmad2d*1000.),color="red")
 
-
-    plt.legend()
     plt.show()
