@@ -26,7 +26,9 @@ if not os.path.isdir(args.jobdir) :
     os.makedirs(args.jobdir)
 if not os.path.isdir(args.outdir) :
     os.makedirs(args.outdir)
-
+tdir=os.path.join(args.outdir,"transfo")
+if not os.path.isdir(tdir) :
+    os.mkdir(tdir)
 
 ifile=open(args.infile)
 
@@ -82,21 +84,20 @@ for line in ifile.readlines() :
             if date is not None :
                 bfilename=os.path.basename(filename).replace(".fits.fz","").replace(".fits.gz","").replace(".fits","").replace(".","-")
                 ofilename="{}/{}-{}-{}.csv".format(args.outdir,bfilename,extname,date)
-
+                otranfofilename="{}/{}-{}-{}.json".format(tdir,bfilename,extname,date)
                 print(date,ofilename)
-
                 dates.append(date)
                 filenames.append(ofilename)
 
-                if os.path.isfile(ofilename) :
-                    print(ofilename,"exists")
+                if os.path.isfile(ofilename) and os.path.isfile(otranfofilename):
+                    print("{} and {} exist".format(ofilename,otranfofilename))
                     continue
                 count += 1
 
                 lines="done=`grep {} {} | wc -l`\n".format(ofilename,donefilename)
                 #lines="if [ ! -f {} ] ; then\n".format(ofilename)
                 lines+="if (( done == 0 )) ; then\n"
-                lines+="desi_fvc_proc -i {} -o {}".format(filename,ofilename)
+                lines+="desi_fvc_proc -i {} -o {} --output-transform {}".format(filename,ofilename,otranfofilename)
                 if extname!="0" :
                     lines+=" --ext {}".format(extname)
                 if args.options is not None :
