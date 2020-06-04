@@ -274,9 +274,7 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
                                         mode=mode,
                                         nominals=param_nominals,
                                         bounds=fitter.default_bounds,
-                                        keep_fixed=[],
-                                        )
-
+                                        keep_fixed=[])
         output['ANALYSIS_DATE'].append(Time.now().iso)
         output['POS_ID'].append(posid)
         for suffix in {'', '_SEC'}:

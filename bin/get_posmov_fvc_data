@@ -81,7 +81,7 @@ tstamp_fvc=tstamp_fvc[jj]
 
 
 for petalid in petalids :
-    
+
     print("get list of positioners for petalid {} ...".format(petalid))
     cx.execute("select distinct pos_id,device_loc from posmovedb.positioner_moves_p{}".format(petalid))
     data=cx.fetchall()
@@ -92,7 +92,7 @@ for petalid in petalids :
     print(posids)
     print(locations)
     print("number of positioners= {}".format(len(posids)))
-    
+
     print("get unique recorded times ...".format(petalid))
     cx.execute("select distinct time_recorded from posmovedb.positioner_moves_p{}".format(petalid))
     data=cx.fetchall()
@@ -131,7 +131,7 @@ for petalid in petalids :
         posid_deltat[posid]=[]
         posid_x_dmt[posid]=[]
         posid_y_dmt[posid]=[]
-        
+
     print("loop on FVC images and collect positioner coordinates ...")
     for count,i in enumerate(selection) :
         filename = dmt["FILE"][dmt_index[i]]
@@ -156,7 +156,7 @@ for petalid in petalids :
         posid_deltat[posid]=np.array(posid_deltat[posid])
         posid_x_dmt[posid]=np.array(posid_x_dmt[posid])
         posid_y_dmt[posid]=np.array(posid_y_dmt[posid])
-        
+
     print("now for each positioner read pos_t and pos_p in db...")
     for posid,deviceloc in zip(posids,devicelocs) :
         #cx.execute("select pos_t,pos_p,time_recorded,pos_id,petal_id,device_loc,log_note from posmovedb.positioner_moves_p{} where pos_id='{}' and time_recorded BETWEEN date '{}' and date '{}'".format(petalid,posid,args.date_min,args.date_max))
@@ -171,15 +171,15 @@ for petalid in petalids :
         for i in range(res["log_note"].size) :
             if res["log_note"][i] is not None:
                 res["log_note"][i]=str(res["log_note"][i]).replace(",",";")
-                
+
         for i in range(len(date)) :
             #date[i].tzinfo = None  # does this help?
             date[i] = datetime.datetime(date[i].year,date[i].month,date[i].day,date[i].hour,date[i].minute,date[i].second) # get rid of time zone
         tstamp_posmovedb =  np.array([d.timestamp() for d in date])
 
 
-            
-        
+
+
         jj = np.where(np.in1d(tstamp_posmovedb,posid_tstamp_posmovedb[posid]))[0]
 
         if jj.size == 0:
@@ -198,11 +198,11 @@ for petalid in petalids :
         y_dmt = posid_y_dmt[posid][jj]
         deltat = posid_deltat[posid][jj]
         tstamp_fvc = posid_tstamp_fvc[posid][jj]
-        
+
         if not args.nocalib :
-            
+
             # adding calib info
-            
+
             cmd="select * from posmovedb.positioner_calibration_p{} where pos_id='{}' order by time_recorded".format(petalid,posid)
             cx.execute(cmd)
             data2=cx.fetchall()
@@ -217,7 +217,7 @@ for petalid in petalids :
             ckeys=['pos_calib_index','calib_date','length_r1','length_r2','offset_x','offset_y','offset_t','offset_p','physical_range_t','physical_range_p','gear_calib_t','gear_calib_p','total_limit_seeks_t', 'total_limit_seeks_p', 'last_primary_hardstop_dir_t', 'last_primary_hardstop_dir_p', 'keepout_expansion_phi_radial', 'keepout_expansion_phi_angular', 'keepout_expansion_theta_radial', 'keepout_expansion_theta_angular']
             for k in ckeys :
                 res[k]=[]
-            
+
             for t in tstamp_posmovedb :
                 j=np.where(tstamp_calib<t)[0][-1]
                 for k in ckeys :
@@ -228,7 +228,7 @@ for petalid in petalids :
                     res[k].append(res2[k2][j])
             for k in ckeys :
                 res[k]=np.array(res[k])
-            
+
         # save this
         jj=np.where(x_dmt!=0)[0]
         ot = Table()
@@ -244,12 +244,10 @@ for petalid in petalids :
         ot["DELTAT"]  = deltat[jj]
         ot["TSTAMP_POSMOVE"]  = tstamp_posmovedb[jj]
         ot["TSTAMP_FVC"]  = tstamp_fvc[jj]
-        
+
         if not os.path.isdir(args.outdir) :
             os.makedirs(args.outdir)
         ofilename="{}/{}.csv".format(args.outdir,posid)
         ot.write(ofilename,overwrite=True)
         print("wrote",ofilename)
         #sys.exit(12)
-    
- 

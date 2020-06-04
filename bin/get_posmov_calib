@@ -8,6 +8,7 @@ from astropy.table import Table
 import datetime
 
 import argparse
+from desimeter.util import parse_fibers
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Get latest calibration""")
@@ -16,28 +17,17 @@ parser.add_argument('-o','--outfile', type= str, required=True, help="output csv
 parser.add_argument('--host', type= str, required=False, default='db.replicator.dev-cattle.stable.spin.nersc.org', help="db.replicator.dev-cattle.stable.spin.nersc.org for kpno or beyonce.lbl.gov for petaltest")
 parser.add_argument('--port', type= int, required=False, default=60042, help="60042 for kpno or 5432 for petaltest")
 parser.add_argument('--password', type= str, required=False, default=None, help="nothing for kpno")
+parser.add_argument('--petal-ids', type= str, required=False, default=None, help="select petal ids")
 
 args  = parser.parse_args()
+
+petalids=None
+if args.petal_ids is not None :
+    petalids=parse_fibers(args.petal_ids)
 
 print("db query...")
 comm = psycopg2.connect(host=args.host,port=args.port, database='desi_dev', user='desi_reader',password=args.password)
 cx=comm.cursor()
-
-print("get list of petalid ...")
-cx.execute("select relname from pg_class where relkind='r' and relname !~ '^(pg_|sql_)';")
-tables=[d[0] for d in cx.fetchall()]
-petalids=[]
-for table in tables :
-    if table.find("positioner_calibration_p")>=0 :
-        tmp=table.replace("positioner_calibration_p","")
-        #print(tmp)
-        try :
-            i=int(tmp)
-            if i<20 :
-                print(table)
-                petalids.append(i)
-        except ValueError :
-            pass
 
 #sys.exit(12)
 petal_id2loc = dict()
@@ -51,6 +41,25 @@ petal_id2loc[8]=4
 petal_id2loc[9]=9
 petal_id2loc[10]=5
 petal_id2loc[11]=6
+petal_id2loc[1]=0
+
+if petalids is None :
+    print("get list of petalid ...")
+    cx.execute("select relname from pg_class where relkind='r' and relname !~ '^(pg_|sql_)';")
+    tables=[d[0] for d in cx.fetchall()]
+    petalids=[]
+    for table in tables :
+        if table.find("positioner_calibration_p")>=0 :
+            tmp=table.replace("positioner_calibration_p","")
+            #print(tmp)
+            try :
+                i=int(tmp)
+                if i<20 :
+                    print(table)
+                    petalids.append(i)
+            except ValueError :
+                pass
+
 
 
 table = Table()
@@ -58,14 +67,14 @@ table = Table()
 results={}
 
 for petalid in petalids :
-    
+
     print("get list of positioners for petalid {} ...".format(petalid))
     cx.execute("select distinct pos_id,device_loc from posmovedb.positioner_calibration_p{}".format(petalid))
     data=cx.fetchall()
     posids=np.array([d[0] for d in data])
     petalloc=petal_id2loc[petalid]
     print("number of positioners= {}".format(len(posids)))
-    
+
     for posid in posids :
         cx.execute("select petal_id,device_loc,pos_id,pos_calib_index,time_recorded,bus_id,length_r1,length_r2,offset_x,offset_y,offset_t,offset_p from posmovedb.positioner_calibration_p{} where pos_id='{}' order by time_recorded desc limit 1".format(petalid,posid))
         data=cx.fetchall()
@@ -79,7 +88,7 @@ for petalid in petalids :
             results[name].append(res[name])
         if not "petal_loc" in results.keys() :
             results["petal_loc"] = []
-        results["petal_loc"].append(petalloc) 
+        results["petal_loc"].append(petalloc)
 
 table = Table()
 for name in results.keys() :

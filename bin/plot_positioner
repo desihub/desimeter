@@ -23,27 +23,49 @@ fig = plt.figure(figsize=(6,6))
 
 locations=parse_fibers(args.locations)
 
-x=dict()
-y=dict()
+xfp=dict()
+yfp=dict()
+xpix=dict()
+ypix=dict()
 for l in locations :
-    x[l]=list()
-    y[l]=list()
+    xfp[l]=list()
+    yfp[l]=list()
+    xpix[l]=list()
+    ypix[l]=list()
+
+first=True
 for filename in  args.infile :
 
     table=Table.read(filename,format="csv")
 
+    if first:
+        plt.figure("focal_plane")
+        plt.plot(table["X_FP"],table["Y_FP"],"o",color="gray")
+        plt.figure("fvc")
+        plt.plot(table["XPIX"],table["YPIX"],"o",color="gray")
+
+        first=False
+
     for l in locations :
         ii = np.where(table["LOCATION"]==l)[0]
-        x[l].append(table["X_FP"][ii])
-        y[l].append(table["Y_FP"][ii])
-for l in locations :
-    plt.plot(x[l],y[l],"o",label="LOC={:04d}".format(l))
+        xfp[l].append(table["X_FP"][ii])
+        yfp[l].append(table["Y_FP"][ii])
+        xpix[l].append(table["XPIX"][ii])
+        ypix[l].append(table["YPIX"][ii])
 
+plt.figure("focal_plane")
+for l in locations :
+    plt.plot(xfp[l],yfp[l],"o",label="LOC={:04d}".format(l))
+plt.figure("fvc")
+for l in locations :
+    plt.plot(xpix[l],ypix[l],"o",label="LOC={:04d}".format(l))
+
+plt.figure("focal_plane")
 if args.legend :
     plt.legend()
 plt.xlabel("XFP (mm)")
 plt.ylabel("YFP (mm)")
 plt.grid()
+
+
 plt.show()
-
-
