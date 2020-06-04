@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
                                      description="""Combine petal metrology and petal alignment data into a single CSV file""")
 
 parser.add_argument('-o','--outfile', type = str, default = None, required = True, help = 'output csv file')
-
+parser.add_argument('--no-replacement',action="store_true")
 
 args  = parser.parse_args()
 log = get_logger()
@@ -70,14 +70,12 @@ for i in range(patch["X_FP"].size) :
         log.info("Adding LOCATION={} PINHOLE_ID={}".format(patch["LOCATION"][i],patch["PINHOLE_ID"][i]))
         spots.add_row(patch[:][i])
     else :
-        j=jj
-        log.info("Replacing LOCATION={} PINHOLE_ID={}".format(patch["LOCATION"][i],patch["PINHOLE_ID"][i]))
-        spots[:][j] = patch[:][i]
+        if not args.no_replacement :
+            j=jj
+            log.info("Replacing LOCATION={} PINHOLE_ID={}".format(patch["LOCATION"][i],patch["PINHOLE_ID"][i]))
+            spots[:][j] = patch[:][i]
 
-        
+
 spots.write(args.outfile,format='csv',overwrite=True)
 
 log.info("wrote {}".format(args.outfile))
-
-
-
