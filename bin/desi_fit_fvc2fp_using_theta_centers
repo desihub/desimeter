@@ -32,7 +32,8 @@ if not np.all(np.in1d([0,1,2,27],zbpolids)) :
 if args.other_metrology is not None :
     print("Using other metrogy table {}".format(args.other_metrology))
     other_metrology = Table.read(args.other_metrology)
-
+else :
+    other_metrology = None
 
 pinholeid=[]
 deviceloc=[]
