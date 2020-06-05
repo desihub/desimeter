@@ -1,0 +1,121 @@
+#!/usr/bin/env python
+
+import sys
+import numpy as np
+import matplotlib.pyplot as plt
+from astropy.table import Table
+
+from desimeter.transform.pos2ptl import int2ptl
+from desimeter.posparams.posmoveselection import posmove_selection
+from desimeter.circles import fit_circle
+
+import argparse
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('-i', '--infile', type=str, required=True,
+                    help='path to input csv file like M02012.csv')
+parser.add_argument('-p', '--paramfile', type=str, default=None, required=False,
+                    help='path to paramfits.csv')
+parser.add_argument('--log-note-selection', type=str, default=None, required=False,
+                    help="required keywords in LOG_NOTE selection, seperated by '&', like ''arc calibration & use_desimeter=True'")
+parser.add_argument('--print-angles', action='store_true')
+parser.add_argument('--print-log-notes', action='store_true')
+parser.add_argument('--fit-circle', action='store_true')
+parser.add_argument('--no-db-calib', action='store_true',help='do not show expected positions using the calibration in the positioner file')
+
+
+args = parser.parse_args()
+
+filename=args.infile
+t=Table.read(filename)
+print(t.dtype.names)
+
+#plt.figure()
+#plt.hist(t['DELTAT'],bins=100)
+
+t=posmove_selection(t,args.log_note_selection)
+
+npts=len(t)
+print("Number of selected entries: {}".format(npts))
+if npts==0 : sys.exit(0)
+
+if not args.no_db_calib and 'LENGTH_R1'  in t.dtype.names :
+   x_ptl = np.zeros(npts)
+   y_ptl = np.zeros(npts)
+   for i in range(npts) :
+      x_ptl[i], y_ptl[i] = int2ptl(t["POS_T"][i],t["POS_P"][i], t['LENGTH_R1'][i], t['LENGTH_R2'][i] , t['OFFSET_T'][i] , t['OFFSET_P'][i], t['OFFSET_X'][i] , t['OFFSET_Y'][i])
+else :
+   x_ptl = None
+   y_ptl = None
+
+posid=t['POS_ID'][0]
+name=posid
+
+x_fp=t["X_FP"]
+y_fp=t["Y_FP"]
+
+pos_t=t["POS_T"]
+pos_p=t["POS_P"]
+log_note=t["LOG_NOTE"]
+
+if args.paramfile is not None :
+   param=Table.read(args.paramfile)
+   jj=np.where(param["POS_ID"]==posid)[0]
+   if len(jj)==0 :
+      print("error, no calibration params for POS_ID={}".format(posid))
+      sys.exit(12)
+   j=jj[0]
+   r1 = param["LENGTH_R1_STATIC"][j]
+   r2 = param["LENGTH_R2_STATIC"][j]
+   offset_t = param["OFFSET_T_STATIC"][j]
+   offset_p = param["OFFSET_P_STATIC"][j]
+   offset_x = param["OFFSET_X_STATIC"][j]
+   offset_y = param["OFFSET_Y_STATIC"][j]
+   x_ptl_b, y_ptl_b = int2ptl(t["POS_T"],t["POS_P"],r1,r2,offset_t,offset_p,offset_x,offset_y)
+else :
+   x_ptl_b = None
+   y_ptl_b = None
+
+if 0 :
+   plt.figure(name+"-1")
+   plt.subplot(211,title=name)
+   plt.plot(x_flat,x_fp,"o")
+   plt.xlabel("expected X(THETA,PHI) (mm)")
+   plt.ylabel("desimeter measured X (mm)")
+   plt.subplot(212)
+   plt.plot(y_flat,y_fp,"o")
+   plt.xlabel("expected Y(THETA,PHI) (mm)")
+   plt.ylabel("desimeter measured Y (mm)")
+
+plt.figure(name)
+a=plt.subplot(111,title=name)
+plt.plot(x_fp,y_fp,"o",label="measured")
+
+#for i in range(x_fp.size) :
+#   print("{} pos_t={:4.3f} pos_p={:4.3f} x={:4.3f} y={:4.3f} note='{}'".format(posid,pos_t[i],pos_p[i],x_fp[i],y_fp[i],log_note[i]))
+
+if args.print_angles :
+   for i in range(x_fp.size) :
+      plt.text(x_fp[i],y_fp[i],"T={:3.0f} P={:3.0f}".format(pos_t[i],pos_p[i]))
+if args.print_log_notes :
+   for i in range(x_fp.size) :
+      plt.text(x_fp[i],y_fp[i],str(log_note[i]).split(";")[0])
+
+
+if x_ptl is not None :
+   plt.plot(x_ptl,y_ptl,"x",label="expected")
+if x_ptl_b is not None :
+   plt.plot(x_ptl_b,y_ptl_b,"+",color="red",label="expected")
+
+if args.fit_circle :
+   xc,yc,r = fit_circle(x_fp,y_fp)
+   a=np.linspace(0,2*np.pi,200)
+   plt.plot(xc+r*np.cos(a),yc+r*np.sin(a),"--",color="gray")
+   print(xc,yc,r)
+
+
+
+plt.xlabel("X (mm)")
+plt.ylabel("Y (mm)")
+plt.legend()
+
+plt.show()
