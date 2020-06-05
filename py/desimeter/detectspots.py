@@ -6,6 +6,7 @@ from desimeter.log import get_logger
 from astropy.table import Table
 from scipy.signal import fftconvolve
 from scipy.special import erf
+from scipy.spatial import cKDTree as KDTree
 
 def gaussian_convolve(image,sigma=1.):
     """FFT convolution of an image with a gaussian 2d kernel
@@ -214,7 +215,26 @@ def detectspots(fvcimage,threshold=500,nsig=7,psf_sigma=1.):
 
         log.debug("{} x={} y={} counts={}".format(j,xpix[j],ypix[j],counts[j]))
 
-    #log.warning("Would need some cleaning here for multiple detections of same spot")
+    for _ in range(100) :
+        # iterate, removing duplicates
+        xy=np.array([xpix,ypix]).T
+        tree = KDTree(xy)
+        distances,indices = tree.query(xy,k=2) # go up to 4 bad detections
+        distances=distances[:,1] # discard same
+        indices=indices[:,1] # discard same
+        bad=np.where(distances<psf_sigma)[0] # at least 1 duplicate
+        if bad.size>0 :
+            bad=bad[0]
+            index_to_remove = indices[bad]
+            log.warning("remove one duplicated detection of spot at x,y={:5.3f},{:5.3f} and {:5.3f},{:5.3f} at distance={}".format(xpix[bad],ypix[bad],xpix[index_to_remove],ypix[index_to_remove],distances[bad]))
+            if counts[bad]<counts[index_to_remove] : index_to_remove=bad # remove the faintest
+            xpix = np.delete(xpix,index_to_remove)
+            ypix = np.delete(ypix,index_to_remove)
+            xerr = np.delete(xerr,index_to_remove)
+            yerr = np.delete(yerr,index_to_remove)
+            counts = np.delete(counts,index_to_remove)
+        else :
+            break #exit
 
     table = Table([xpix,ypix,xerr,yerr,counts],names=("XPIX","YPIX","XERR","YERR","COUNTS"))
     return table
