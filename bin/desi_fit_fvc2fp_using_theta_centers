@@ -140,8 +140,8 @@ if args.plot :
     nmad2d=1.20*np.median(np.sqrt((x1-x2)**2+(y1-y2)**2))
     rms2d=np.sqrt(np.mean((x1-x2)**2+(y1-y2)**2))
     x0=np.min(x1)-10
-    y0=np.max(y1)+5
-    ystep=30
+    y0=np.max(y1)-5
+    ystep=20
     plt.text(x0,y0,"rms (2D)  = {:4.0f} um".format(rms2d*1000.))
     plt.text(x0,y0-ystep,"nmad (2D) = {:4.0f} um".format(nmad2d*1000.))
 
@@ -162,7 +162,7 @@ if args.plot :
         ii=np.argsort(dist)[::-1]
         print(ii[:10],dist[ii[:10]])
         x0=np.min(x1b)-10
-        y0=np.max(y1b)+5
+        y0=np.max(y1b)
 
         plt.text(x0,y0,"ALL rms (2D)  = {:4.0f} um".format(rms2d*1000.))
         plt.text(x0,y0-ystep,"ALL nmad (2D) = {:4.0f} um".format(nmad2d*1000.))
