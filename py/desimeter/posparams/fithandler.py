@@ -8,6 +8,7 @@ and then save the results to csv report file.
 import os
 import numpy as np
 from astropy.time import Time
+import dateutil.parser
 from astropy.table import Table
 from astropy.table import join
 
@@ -100,10 +101,17 @@ def _read(posid, path, printf=print, log_note_selection=None):
     OUTPUT:  table ... astropy table or None if no valid table found
     '''
     required_keys = {'DATE', 'POS_P', 'POS_T', 'X_FP', 'Y_FP', 'CTRL_ENABLED',
-                     'TOTAL_MOVE_SEQUENCES', 'GEAR_CALIB_T', 'GEAR_CALIB_P',
+                     'TOTAL_MOVE_SEQUENCES',
                      'POS_ID', 'PETAL_LOC'}
     typecast_funcs = {'CTRL_ENABLED': _str2bool}
     table = Table.read(path)
+
+    if not 'GEAR_CALIB_T' in table.dtype.names :
+        print('WARNING: no GEAR_CALIB_T in table, set it to 1')
+        table['GEAR_CALIB_T'] = np.ones(len(table['POS_T']))
+    if not 'GEAR_CALIB_P' in table.dtype.names :
+        print('WARNING: no GEAR_CALIB_P in table, set it to 1')
+        table['GEAR_CALIB_P'] = np.ones(len(table['POS_P']))
 
 
     table = posmove_selection(table,log_note_selection)
@@ -172,7 +180,7 @@ def _make_sec_from_epoch(table, printf=print):
     '''Produces new column for seconds-since-epoch version of date. Input is
     an astropy table containing column 'DATE'. The table is altered in-place.'''
     dates = table['DATE']
-    table['DATE_SEC'] = Time(dates, format='iso').unix
+    table['DATE_SEC'] = [dateutil.parser.parse(d).timestamp() for d in dates]
     printf(f'{_get_posid(table)}: generated seconds-since-epoch column (\'DATE_SEC\')')
 
 def _define_cases(table, datum_dates, data_window, printf=print):

@@ -38,16 +38,21 @@ npts=len(t)
 print("Number of selected entries: {}".format(npts))
 if npts==0 : sys.exit(0)
 
-x_ptl = np.zeros(npts)
-y_ptl = np.zeros(npts)
-for i in range(npts) :
-   x_ptl[i], y_ptl[i] = int2ptl(t["POS_T"][i],t["POS_P"][i], t['LENGTH_R1'][i], t['LENGTH_R2'][i] , t['OFFSET_T'][i] , t['OFFSET_P'][i], t['OFFSET_X'][i] , t['OFFSET_Y'][i])
+if not args.no_db_calib and 'LENGTH_R1'  in t.dtype.names :
+   x_ptl = np.zeros(npts)
+   y_ptl = np.zeros(npts)
+   for i in range(npts) :
+      x_ptl[i], y_ptl[i] = int2ptl(t["POS_T"][i],t["POS_P"][i], t['LENGTH_R1'][i], t['LENGTH_R2'][i] , t['OFFSET_T'][i] , t['OFFSET_P'][i], t['OFFSET_X'][i] , t['OFFSET_Y'][i])
+else :
+   x_ptl = None
+   y_ptl = None
 
 posid=t['POS_ID'][0]
 name=posid
 
 x_fp=t["X_FP"]
 y_fp=t["Y_FP"]
+
 pos_t=t["POS_T"]
 pos_p=t["POS_P"]
 log_note=t["LOG_NOTE"]
@@ -70,12 +75,6 @@ else :
    x_ptl_b = None
    y_ptl_b = None
 
-
-#plt.figure('T_STAMP')
-#plt.plot(t['TSTAMP_POSMOVE'],t['TSTAMP_FVC'],"o")
-#plt.plot(t['DELTAT'],t['TSTAMP_FVC']-t['TSTAMP_POSMOVE'],"o")
-
-
 if 0 :
    plt.figure(name+"-1")
    plt.subplot(211,title=name)
@@ -89,10 +88,10 @@ if 0 :
 
 plt.figure(name)
 a=plt.subplot(111,title=name)
-plt.plot(x_fp,y_fp,"o",label="measured with desimeter")
+plt.plot(x_fp,y_fp,"o",label="measured")
 
-for i in range(x_fp.size) :
-   print("{} pos_t={:4.3f} pos_p={:4.3f} x={:4.3f} y={:4.3f} note='{}'".format(posid,pos_t[i],pos_p[i],x_fp[i],y_fp[i],log_note[i]))
+#for i in range(x_fp.size) :
+#   print("{} pos_t={:4.3f} pos_p={:4.3f} x={:4.3f} y={:4.3f} note='{}'".format(posid,pos_t[i],pos_p[i],x_fp[i],y_fp[i],log_note[i]))
 
 if args.print_angles :
    for i in range(x_fp.size) :
@@ -101,11 +100,11 @@ if args.print_log_notes :
    for i in range(x_fp.size) :
       plt.text(x_fp[i],y_fp[i],str(log_note[i]).split(";")[0])
 
-#plt.plot(x_flat,y_flat,"x",label="expected from posmove db")
-if not args.no_db_calib :
-   plt.plot(x_ptl,y_ptl,"x",label="expected from posmove db")
+
+if x_ptl is not None :
+   plt.plot(x_ptl,y_ptl,"x",label="expected")
 if x_ptl_b is not None :
-   plt.plot(x_ptl_b,y_ptl_b,"+",color="red",label="expected after desimeter calibration")
+   plt.plot(x_ptl_b,y_ptl_b,"+",color="red",label="expected")
 
 if args.fit_circle :
    xc,yc,r = fit_circle(x_fp,y_fp)
