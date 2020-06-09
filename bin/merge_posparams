@@ -42,6 +42,21 @@ for filename in args.input :
         if t["MOVE_VAL2"].dtype == "int64" : t["MOVE_VAL2"]=np.repeat("none",len(t))
     tables.append(t)
 
+
+# I am adding myself possible missing columns in some tables.
+allkeys=list()
+for table in tables :
+    for k in table.dtype.names :
+        if not k in allkeys :
+            allkeys.append(k)
+for table in tables :
+    for k in allkeys :
+        if not k in table.dtype.names :
+            #print("adding col {} to table".format(k))
+            table[k] = np.zeros(len(table),dtype=float)
+
+
+
 posparams = vstack(tables)
 if "LOCATION" not in posparams :
     if "PETAL_LOC" in posparams and "DEVICE_LOC" in posparams :
