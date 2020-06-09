@@ -153,7 +153,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     if ptlYerr is None :
         yerr_ptl = np.ones(y_ptl.shape,dtype=float)
     else :
-        yerr_ptl = np.array(ytlXerr)
+        yerr_ptl = np.array(ptlYerr)
 
     # pre-calculate any one-time coordinate transforms
     n_pts = len(posintT)
