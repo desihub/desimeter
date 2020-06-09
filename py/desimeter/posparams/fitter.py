@@ -65,6 +65,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
                keep_fixed=None,
                ptlXerr=None,
                ptlYerr=None,
+               no_circle_fit=False
                ):
     '''Best-fit function for parameters used in the transformation between
     internally-tracked (theta,phi) and externally measured (x,y).
@@ -238,7 +239,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
         x_exp, y_exp = expected_xy(params)
         return np.sum(((x_exp - x_flat)/xerr_flat)**2 + ((y_exp - y_flat)/yerr_flat)**2)
 
-    if mode=='static' :
+    if (not no_circle_fit) and (mode=='static') :
         # we initialize OFFSET_X and OFFSET_Y by fitting circles
         # for all unique values of p_int
         unique_p_int = np.unique(p_int)

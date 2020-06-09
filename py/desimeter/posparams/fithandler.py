@@ -31,7 +31,7 @@ output_keys = {'POS_ID': False,
 output_keys.update({key:True for key in fitter.all_keys})
 
 def run_best_fits(posid, path, period_days, data_window, savedir,
-                  static_quantile, printf=print, min_window=10, log_note_selection=None):
+                  static_quantile, printf=print, min_window=10, log_note_selection=None, no_circle_fit = False):
     '''Define best-fit analysis cases for one positioner.
 
     INPUTS:
@@ -44,6 +44,7 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
         printf ... print function (so you can control how this module spits any messages)
         min_window ... (optional) minimum number of data points to attempt a fit
         log_note_selection ... (optional) required keywords in LOG_NOTE selection, seperated by '&', like ''arc calibration & use_desimeter=True'
+        no_circle_fit ... (bool, optional) if true, do not initiate the fit with a fit of theta circles
 
     OUTPUTS:
         logstr ... string describing (very briefly) what was done. suitable for
@@ -65,7 +66,7 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
     # FIRST-PASS:  STATIC PARAMETERS
     static_out = _process_cases(table, cases, printf=printf, mode='static',
                                 param_nominals=fitter.default_values.copy(),
-                                )
+                                no_circle_fit=no_circle_fit)
 
     # DECIDE ON BEST STATIC PARAMS
     best_static = fitter.default_values.copy()
@@ -247,7 +248,7 @@ def _define_cases(table, datum_dates, data_window, printf=print):
     printf(f'{posid}: {len(cases):5d} analysis cases defined')
     return cases
 
-def _process_cases(table, cases, mode, param_nominals, printf=print):
+def _process_cases(table, cases, mode, param_nominals, printf=print, no_circle_fit = False):
     '''Feed analysis cases for a positioner through the best-fit function.
 
     INPUTS:
@@ -256,6 +257,7 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
         mode ... 'static' or 'dynamic'
         param_nominals ... Dict of nominal parameter values, structured like fitter.default_values
         printf ... print function
+        no_circle_fit ... (bool, optional) if true, do not initiate the fit with a fit of theta circles
 
     OUTPUT:
         output ... Astropy table of results, headers given by output_keys.
@@ -281,15 +283,16 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
         printf(f'  final idx = {n:5d}, date = {subtable["DATE"][-1]}')
         printf(f'  num points = {n-m+1:5d}')
         params, covariance_dict, rms_of_residuals = fitter.fit_params(posintT=xytp_data['posintT'],
-                                                                 posintP=xytp_data['posintP'],
-                                                                 ptlX=xytp_data['ptlX'],
-                                                                 ptlY=xytp_data['ptlY'],
-                                                                 gearT=xytp_data['gearT'],
-                                                                 gearP=xytp_data['gearP'],
-                                                                 mode=mode,
-                                                                 nominals=param_nominals,
-                                                                 bounds=fitter.default_bounds,
-                                                                 keep_fixed=[])
+                                                                      posintP=xytp_data['posintP'],
+                                                                      ptlX=xytp_data['ptlX'],
+                                                                      ptlY=xytp_data['ptlY'],
+                                                                      gearT=xytp_data['gearT'],
+                                                                      gearP=xytp_data['gearP'],
+                                                                      mode=mode,
+                                                                      nominals=param_nominals,
+                                                                      bounds=fitter.default_bounds,
+                                                                      keep_fixed=[],
+                                                                      no_circle_fit=no_circle_fit)
         output['ANALYSIS_DATE'].append(Time.now().iso)
         output['POS_ID'].append(posid)
         for suffix in {'', '_SEC'}:
