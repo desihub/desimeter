@@ -265,6 +265,13 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
     table.sort('DATE_SEC') # to ensure consistent ordering as in _define_cases
     posid = _get_posid(table)
     output = {col:[] for col in output_keys}
+    # add covariances
+    fitted_keys=list(fitter.static_keys)+list(fitter.dynamic_keys)
+    for i1,col1 in enumerate(list(fitted_keys)) :
+        for i2,col2 in enumerate(list(fitted_keys)) :
+            if i2>=i1 :
+                output["COV.{}.{}".format(col1,col2)]=list()
+
     for case in cases:
         m = case['start_idx']
         n = case['final_idx']
@@ -273,16 +280,16 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
         printf(f'  start idx = {m:5d}, date = {subtable["DATE"][0]}')
         printf(f'  final idx = {n:5d}, date = {subtable["DATE"][-1]}')
         printf(f'  num points = {n-m+1:5d}')
-        params, err = fitter.fit_params(posintT=xytp_data['posintT'],
-                                        posintP=xytp_data['posintP'],
-                                        ptlX=xytp_data['ptlX'],
-                                        ptlY=xytp_data['ptlY'],
-                                        gearT=xytp_data['gearT'],
-                                        gearP=xytp_data['gearP'],
-                                        mode=mode,
-                                        nominals=param_nominals,
-                                        bounds=fitter.default_bounds,
-                                        keep_fixed=[])
+        params, covariance_dict, rms_of_residuals = fitter.fit_params(posintT=xytp_data['posintT'],
+                                                                 posintP=xytp_data['posintP'],
+                                                                 ptlX=xytp_data['ptlX'],
+                                                                 ptlY=xytp_data['ptlY'],
+                                                                 gearT=xytp_data['gearT'],
+                                                                 gearP=xytp_data['gearP'],
+                                                                 mode=mode,
+                                                                 nominals=param_nominals,
+                                                                 bounds=fitter.default_bounds,
+                                                                 keep_fixed=[])
         output['ANALYSIS_DATE'].append(Time.now().iso)
         output['POS_ID'].append(posid)
         for suffix in {'', '_SEC'}:
@@ -290,19 +297,68 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
             output[f'DATA_START_{d}'].append(table[d][m])
             output[f'DATA_END_{d}'].append(table[d][n])
         output['NUM_POINTS'].append(n - m + 1)
-        output['FIT_ERROR'].append(err)
-        for key in fitter.static_keys:
-            output[key].append(params[key])
-        for key in fitter.dynamic_keys:
-            output[key].append(params[key])
+        output['FIT_ERROR'].append(rms_of_residuals)
+
+        print("===========================")
+        print("COVARIANCE")
+        print(covariance_dict)
+        print("===========================")
+
+
+
+
+
+        for i1,key1 in enumerate(fitted_keys):
+            output[key1].append(params[key1])
+
+            # dealing with covariances
+            for i2,key2 in enumerate(fitted_keys):
+                if i2<i1 : continue
+                ckey="COV.{}.{}".format(key1,key2)
+                ckeyt="COV.{}.{}".format(key2,key1)
+                if ckey in output.keys() :
+                    okey=ckey
+                else :
+                    okey=ckeyt
+                if ckey in covariance_dict.keys() :
+                    output[okey].append(covariance_dict[ckey])
+                elif ckeyt in covariance_dict.keys() :
+                    output[okey].append(covariance_dict[ckeyt])
+                else :
+                    output[okey].append(0)
+
         printf(f'{posid}: best params = {_dict_str(params)}')
-        printf(f'  fit error = {err:.3f}')
-    for key in list(output):
-        if not output[key]:
-            output[key] = [None]*len(cases)
-        if output_keys[key]:
-            output[key + _mode_suffix(mode)] = output.pop(key)
-    return Table(output)
+        printf(f'  fit error = {rms_of_residuals:.3f}')
+
+    table = Table(output)
+
+    if True : # drop columns with empty covariance to make the output file a bit smaller
+        for key1 in fitted_keys:
+            for key2 in fitted_keys:
+                if  key1==key2: continue # keep variance even if zero so we know it's fixed
+                ckey="COV.{}.{}".format(key1,key2)
+                if ckey in table.dtype.names :
+                    if np.all(table[ckey]==0) :
+                        #print("dropping null column {}".format(ckey))
+                        table.remove_column(ckey)
+
+    if True : # replacing diagonal terms of covariance by error
+        for key in fitted_keys:
+            ckey="COV.{}.{}".format(key,key)
+            if ckey in table.dtype.names :
+                ekey="ERR.{}".format(key)
+                table.rename_column(ckey,ekey)
+                table[ekey]=np.sqrt(table[ekey])
+
+    if True :  # adding _STATIC or _DYNAMIC to the parameters and covariance
+        for key in output_keys :
+            if output_keys[key] :
+                for key2 in table.dtype.names :
+                    if key2.find(key)>=0 :
+                        key2_xxx=key2.replace(key,key + _mode_suffix(mode))
+                        table.rename_column(key2,key2_xxx)
+
+    return table
 
 def _row_idx_for_time(presorted_table, t):
     '''Returns index of first row in table which matches the argued time t.
