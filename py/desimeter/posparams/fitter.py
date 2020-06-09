@@ -63,6 +63,8 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
                nominals=None,
                bounds=None,
                keep_fixed=None,
+               ptlXerr=None,
+               ptlYerr=None,
                ):
     '''Best-fit function for parameters used in the transformation between
     internally-tracked (theta,phi) and externally measured (x,y).
@@ -95,9 +97,17 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
         keep_fixed  ... list of any parameters you want forced to their nominal
                         values, and then never varied, when doing the best-fit.
 
+        ptlXerr     ... list of ptlX measurement errors (same size at ptlX and ptlY),
+                        if None (default), the rms of residuals will be used
+        ptlYerr     ... list of ptlY measurement errors (same size at ptlX and ptlY),
+                        if None (default), the rms of residuals will be used
+
+
+
     OUTPUTS:
         best_params ... dict of best-fit results, keys = param names
-        final_err   ... numeric error of the best-fit params
+        covariance_dict ... dict of covariances of parameters
+        rms_of_residuals   ... rms of residuals
     '''
     if nominals is None:
         nominals = default_values
@@ -113,6 +123,12 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     assert all(key in nominals for key in all_keys)
     assert all(key in bounds for key in all_keys)
     assert all(key in all_keys for key in keep_fixed)
+    if ptlXerr is not None :
+        assert len(ptlXerr) == len(ptlX)
+        assert isinstance(ptlXerr,list)
+    if ptlYerr is not None :
+        assert len(ptlYerr) == len(ptlY)
+        assert isinstance(ptlYerr,list)
 
     # selection of which parameters are variable
     if mode == 'static':
@@ -129,9 +145,29 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     x_ptl = np.array(ptlX)
     y_ptl = np.array(ptlY)
 
+    # set position errors to 1 if not given, will scale covariance later from the residuals to the best fit
+    if ptlXerr is None :
+        xerr_ptl = np.ones(x_ptl.shape,dtype=float)
+    else :
+        xerr_ptl = np.array(ptlXerr)
+    if ptlYerr is None :
+        yerr_ptl = np.ones(y_ptl.shape,dtype=float)
+    else :
+        yerr_ptl = np.array(ptlYerr)
+
     # pre-calculate any one-time coordinate transforms
     n_pts = len(posintT)
     x_flat, y_flat = pos2ptl.ptl2flat(x_ptl, y_ptl)
+
+    # compute numeric derivatives for error propagation
+    eps=1e-3 # a micron
+    x_flat2 , _ = pos2ptl.ptl2flat(x_ptl+eps, y_ptl)
+    _ , y_flat2 = pos2ptl.ptl2flat(x_ptl, y_ptl+eps)
+    d_x_flat_d_x_ptl = (x_flat2-x_flat)/eps
+    d_y_flat_d_y_ptl = (y_flat2-y_flat)/eps
+    xerr_flat = np.abs(d_x_flat_d_x_ptl) * xerr_ptl
+    yerr_flat = np.abs(d_y_flat_d_y_ptl) * yerr_ptl
+
     if mode == 'dynamic':
         n_pts -= 1 # since in dynamic mode we are using delta values
 
@@ -162,6 +198,8 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
         # now remove first point, to match up with lists of deltas
         x_flat = x_flat[1:]
         y_flat = y_flat[1:]
+        xerr_flat = xerr_flat[1:]
+        yerr_flat = yerr_flat[1:]
         measured_t_int_0 = measured_t_int_0[:-1]
         measured_p_int_0 = measured_p_int_0[:-1]
 
@@ -189,12 +227,16 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
         return x_flat_expected, y_flat_expected
 
     # define error function and run optimizer
-    def err_norm(params):
+    def compute_rms_of_residuals(params):
         x_exp, y_exp = expected_xy(params)
         err_x = x_exp - x_flat
         err_y = y_exp - y_flat
         sumsq = np.sum(err_x**2 + err_y**2)
         return (sumsq / n_pts)**0.5
+
+    def compute_chi2(params):
+        x_exp, y_exp = expected_xy(params)
+        return np.sum(((x_exp - x_flat)/xerr_flat)**2 + ((y_exp - y_flat)/yerr_flat)**2)
 
     if mode=='static' :
         # we initialize OFFSET_X and OFFSET_Y by fitting circles
@@ -221,17 +263,41 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
 
     initial_params = [nominals[key] for key in params_to_fit]
     bounds_vector = [bounds[key] for key in params_to_fit]
-    optimizer_result = scipy.optimize.minimize(fun=err_norm,
+    # with fun = chi2 , then covariance = inverse of hessian * 2
+    optimizer_result = scipy.optimize.minimize(fun=compute_chi2,
                                                x0=initial_params,
                                                bounds=bounds_vector)
-
     # organize and return results
     best_params = {key: optimizer_result.x[param_idx[key]] for key in params_to_fit}
     fixed_params = {key: nominals[key] for key in keep_fixed}
     best_params.update(fixed_params)
     best_params['OFFSET_T'] = wrap_at_180(best_params['OFFSET_T'])
-    err = err_norm(optimizer_result.x)
-    return best_params, err
+    rms_of_residuals = compute_rms_of_residuals(optimizer_result.x)
+
+    covariance       = optimizer_result.hess_inv * 2. # with fun = chi2 , then covariance = inverse of hessian * 2
+    covariance       = covariance.dot(np.eye(covariance.shape[0])) # force conversion to matrix, otherwise can be a ScaledLinearOperator
+
+    if ptlXerr is None or ptlYerr is None :
+        # the rms of residuals is in 2D
+        # so the variance in 1D = rms_of_residuals**2/2.
+        # we assumed errors in 1D = 1, so we have to scale the covariance by
+        covariance *= (rms_of_residuals**2/2.)
+
+    # now the ordering of parameters is only know in this routine so we are going to
+    # store the covariance as a dictionnary "cov.key1.key2"
+    covariance_dict = dict()
+    for key1 in params_to_fit :
+        index1 = param_idx[key1]
+        for key2 in params_to_fit :
+            index2 = param_idx[key2]
+            if index2>=index1 : # only store the terms once
+                covariance_dict["COV.{}.{}".format(key1,key2)]=covariance[index1,index2]
+
+    # add variance of fixed terms = 0, just to keep a record of which ones were fixed
+    for key in keep_fixed :
+        covariance_dict["COV.{}.{}".format(key,key)]=0.
+
+    return best_params, covariance_dict, rms_of_residuals
 
 def wrap_at_180(angle):
     angle %= 360
