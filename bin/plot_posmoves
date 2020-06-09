@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -24,7 +25,7 @@ parser.add_argument('--print-angles', action='store_true')
 parser.add_argument('--print-log-notes', action='store_true')
 parser.add_argument('--fit-circle', action='store_true')
 parser.add_argument('--no-db-calib', action='store_true',help='do not show expected positions using the calibration in the positioner file')
-
+parser.add_argument('-s', '--save', action='store_true', help='save plotted image, instead of showing on-screen. will be saved to same directory as infile.')
 
 args = parser.parse_args()
 
@@ -89,9 +90,15 @@ if 0 :
    plt.xlabel("expected Y(THETA,PHI) (mm)")
    plt.ylabel("desimeter measured Y (mm)")
 
-plt.figure(name)
-a=plt.subplot(111,title=name)
-plt.plot(x_fp,y_fp,"o",label="measured")
+if args.save:
+    plt.ioff()  # no onscreen output in save mode
+    fig = plt.figure(name, figsize=(7,5), dpi=150)
+    plt.clf()    
+else:
+    plt.figure(name)
+
+a = plt.subplot(111,title=name)
+plt.plot(x_fp, y_fp, "o", label="measured")
 
 #for i in range(x_fp.size) :
 #   print("{} pos_t={:4.3f} pos_p={:4.3f} x={:4.3f} y={:4.3f} note='{}'".format(posid,pos_t[i],pos_p[i],x_fp[i],y_fp[i],log_note[i]))
@@ -121,4 +128,11 @@ plt.xlabel("X (mm)")
 plt.ylabel("Y (mm)")
 plt.legend()
 
-plt.show()
+if args.save:
+    ext = '.png'
+    img_path = os.path.splitext(filename)[0] + ext
+    plt.savefig(img_path, bbox_inches='tight')
+    plt.close(fig)
+else:
+    plt.show()
+    
