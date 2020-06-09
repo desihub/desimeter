@@ -25,9 +25,16 @@ parser.add_argument('--print-angles', action='store_true')
 parser.add_argument('--print-log-notes', action='store_true')
 parser.add_argument('--fit-circle', action='store_true')
 parser.add_argument('--no-db-calib', action='store_true',help='do not show expected positions using the calibration in the positioner file')
-parser.add_argument('-s', '--save', action='store_true', help='save plotted image, instead of showing on-screen. will be saved to same directory as infile.')
+parser.add_argument('-s', '--save', action='store_true', help='save plotted image, instead of showing on-screen. will be saved to same directory as infile if no outdir nor outfile is set')
+parser.add_argument('--outdir', type=str, default=None, required=False, help='output directory')
+parser.add_argument('--outfile', type=str, default=None, required=False, help='output filename')
+
 
 args = parser.parse_args()
+
+if args.save and (args.outfile is not None and args.outdir is not None) :
+   print("wait, cannot have both options --outfile and --outdir")
+   sys.exit(12)
 
 filename=args.infile
 t=Table.read(filename)
@@ -98,7 +105,7 @@ if 0 :
 if args.save:
     plt.ioff()  # no onscreen output in save mode
     fig = plt.figure(name, figsize=(6,5), dpi=150)
-    plt.clf()    
+    plt.clf()
 else:
     plt.figure(name)
 
@@ -136,9 +143,18 @@ plt.axis('equal')
 
 if args.save:
     ext = '.png'
-    img_path = os.path.splitext(filename)[0] + ext
+    if args.outfile is not None :
+       img_path = args.outfile
+    elif args.outdir is not None :
+       if not os.path.isdir(args.outdir) :
+          os.makedirs(args.outdir)
+       img_path = os.path.join(args.outdir,os.path.splitext(os.path.basename(filename))[0] + ext)
+    else :
+       img_path = os.path.splitext(filename)[0] + ext
     plt.savefig(img_path, bbox_inches='tight')
     plt.close(fig)
+    print("wrote {}".format(img_path))
 else:
-    plt.show()
-    
+   if args.outfile is not None or args.outdir is not None :
+      print("(options --outfile and --outdir ignored if --save not set)")
+   plt.show()
