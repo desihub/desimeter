@@ -49,20 +49,25 @@ npts=len(t)
 print("Number of selected entries: {}".format(npts))
 if npts==0 : sys.exit(0)
 
-if not args.no_db_calib and 'LENGTH_R1'  in t.dtype.names :
-   x_ptl = np.zeros(npts)
-   y_ptl = np.zeros(npts)
+if not args.no_db_calib and 'LENGTH_R1' in t.dtype.names :
+   x_ptl_exp = np.zeros(npts)
+   y_ptl_exp = np.zeros(npts)
    for i in range(npts) :
-      x_ptl[i], y_ptl[i] = int2ptl(t["POS_T"][i],t["POS_P"][i], t['LENGTH_R1'][i], t['LENGTH_R2'][i] , t['OFFSET_T'][i] , t['OFFSET_P'][i], t['OFFSET_X'][i] , t['OFFSET_Y'][i])
+      x_ptl_exp[i], y_ptl_exp[i] = int2ptl(t["POS_T"][i],t["POS_P"][i], t['LENGTH_R1'][i], t['LENGTH_R2'][i] , t['OFFSET_T'][i] , t['OFFSET_P'][i], t['OFFSET_X'][i] , t['OFFSET_Y'][i])
 else :
-   x_ptl = None
-   y_ptl = None
+   x_ptl_exp = None
+   y_ptl_exp = None
 
 posid=t['POS_ID'][0]
 name=posid
 
-x_fp=t["X_FP"]
-y_fp=t["Y_FP"]
+# [jhs] deprecating usage of x_fp, y_fp.
+# because they cannot be compared correctly to x_ptl, y_ptl later on
+#x_fp=t["X_FP"]
+#y_fp=t["Y_FP"]
+
+x_ptl_meas = t['PTL_X']
+y_ptl_meas = t['PTL_Y']
 
 pos_t=t["POS_T"]
 pos_p=t["POS_P"]
@@ -81,10 +86,10 @@ if args.paramfile is not None :
    offset_p = param["OFFSET_P_STATIC"][j]
    offset_x = param["OFFSET_X_STATIC"][j]
    offset_y = param["OFFSET_Y_STATIC"][j]
-   x_ptl_b, y_ptl_b = int2ptl(t["POS_T"],t["POS_P"],r1,r2,offset_t,offset_p,offset_x,offset_y)
+   x_ptl_exp_fit, y_ptl_exp_fit = int2ptl(t["POS_T"], t["POS_P"], r1, r2, offset_t, offset_p, offset_x, offset_y)
 else :
-   x_ptl_b = None
-   y_ptl_b = None
+   x_ptl_exp_fit = None
+   y_ptl_exp_fit = None
 
 if 0 :
    plt.figure(name+"-1")
@@ -99,32 +104,32 @@ if 0 :
 
 if args.save:
     plt.ioff()  # no onscreen output in save mode
-    fig = plt.figure(name, figsize=(7,5), dpi=150)
+    fig = plt.figure(name, figsize=(6,5), dpi=150)
     plt.clf()
 else:
     plt.figure(name)
 
 a = plt.subplot(111,title=name)
-plt.plot(x_fp, y_fp, "o", label="measured")
+plt.plot(x_ptl_meas, y_ptl_meas, "o", label="measured")
 
 #for i in range(x_fp.size) :
 #   print("{} pos_t={:4.3f} pos_p={:4.3f} x={:4.3f} y={:4.3f} note='{}'".format(posid,pos_t[i],pos_p[i],x_fp[i],y_fp[i],log_note[i]))
 
 if args.print_angles :
-   for i in range(x_fp.size) :
-      plt.text(x_fp[i],y_fp[i],"T={:3.0f} P={:3.0f}".format(pos_t[i],pos_p[i]))
+   for i in range(x_ptl_meas.size) :
+      plt.text(x_ptl_meas[i], y_ptl_meas[i], "T={:3.0f} P={:3.0f}".format(pos_t[i],pos_p[i]))
 if args.print_log_notes :
-   for i in range(x_fp.size) :
-      plt.text(x_fp[i],y_fp[i],str(log_note[i]).split(";")[0])
+   for i in range(x_ptl_meas.size) :
+      plt.text(x_ptl_meas[i], y_ptl_meas[i], str(log_note[i]).split(";")[0])
 
 
-if x_ptl is not None :
-   plt.plot(x_ptl,y_ptl,"x",label="expected")
-if x_ptl_b is not None :
-   plt.plot(x_ptl_b,y_ptl_b,"+",color="red",label="expected")
+if x_ptl_exp is not None :
+   plt.plot(x_ptl_exp, y_ptl_exp, "x", label="expected (runtime params)")
+if x_ptl_exp_fit is not None :
+   plt.plot(x_ptl_exp_fit, y_ptl_exp_fit, "+", color="red", label="expected (fit params)")
 
 if args.fit_circle :
-   xc,yc,r = fit_circle(x_fp,y_fp)
+   xc,yc,r = fit_circle(x_ptl_meas, y_ptl_meas)
    a=np.linspace(0,2*np.pi,200)
    plt.plot(xc+r*np.cos(a),yc+r*np.sin(a),"--",color="gray")
    print(xc,yc,r)
@@ -133,7 +138,8 @@ if args.fit_circle :
 
 plt.xlabel("X (mm)")
 plt.ylabel("Y (mm)")
-plt.legend()
+plt.legend(fontsize=8, loc='upper right')
+plt.axis('equal')
 
 if args.save:
     ext = '.png'
