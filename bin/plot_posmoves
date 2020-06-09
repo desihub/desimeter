@@ -16,7 +16,10 @@ parser.add_argument('-i', '--infile', type=str, required=True,
 parser.add_argument('-p', '--paramfile', type=str, default=None, required=False,
                     help='path to paramfits.csv')
 parser.add_argument('--log-note-selection', type=str, default=None, required=False,
-                    help="required keywords in LOG_NOTE selection, seperated by '&', like ''arc calibration & use_desimeter=True'")
+                    help="Required keywords in LOG_NOTE selection." +
+                         " For AND operation, separate keywords by '&', like 'arc calibration & use_desimeter=True'." +
+                         " For OR operation, separate keywords by '|', like 'calibration | extra point'." +
+                         " The order of operations is first apply AND, then OR.")
 parser.add_argument('--print-angles', action='store_true')
 parser.add_argument('--print-log-notes', action='store_true')
 parser.add_argument('--fit-circle', action='store_true')
