@@ -252,7 +252,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
                 offset_x.append(xc)
                 offset_y.append(yc)
             except ValueError as e :
-                print("circle fit failed because '{}'".format(e))
+                print("WARNING: circle fit failed because '{}'".format(e))
 
         if len(offset_x)>0 :
             offset_x = np.median(offset_x)
@@ -264,9 +264,46 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     initial_params = [nominals[key] for key in params_to_fit]
     bounds_vector = [bounds[key] for key in params_to_fit]
     # with fun = chi2 , then covariance = inverse of hessian * 2
-    optimizer_result = scipy.optimize.minimize(fun=compute_chi2,
-                                               x0=initial_params,
-                                               bounds=bounds_vector)
+    for iteration in range(20) :
+        optimizer_result = scipy.optimize.minimize(fun=compute_chi2,
+                                                   x0=initial_params,
+                                                   bounds=bounds_vector)
+        x_exp, y_exp = expected_xy(optimizer_result.x)
+        dist = np.sqrt( (x_exp - x_flat)**2 + (y_exp - y_flat)**2 )
+        meddist = np.median(dist)
+        worst = np.argmax(dist)
+        # for Gaussian x and y,
+        # 95% of realisations have dist < 2.1*meddist
+        # 99% of realisations have dist < 2.6*meddist
+        ok = (dist[worst]<0.05) | (dist[worst] < 2.1*meddist)
+
+        if ptlXerr is not None and ptlYerr is not None :
+            # measuremnt uncertainties were given, so if the outlier is less than 3 sigma it's ok
+            err = np.sqrt( xerr_flat[worst]**2 + yerr_flat[worst]**2 )
+            ok |= dist[worst]<3*err
+
+        if ok: break
+        print("WARNING: discarding outlier point #{} at x,y={:4.1f},{:4.1f} with dist={:4.3f}mm".format(worst,x_flat[worst],y_flat[worst],dist[worst]))
+
+
+        x_flat = np.delete(x_flat,worst)
+        y_flat = np.delete(y_flat,worst)
+        xerr_flat = np.delete(xerr_flat,worst)
+        yerr_flat = np.delete(yerr_flat,worst)
+        t_int = np.delete(t_int,worst)
+        p_int = np.delete(p_int,worst)
+        if mode == 'dynamic' :
+            dt_int = np.delete(dt_int,worst)
+            dp_int = np.delete(dp_int,worst)
+            measured_t_int_0 = np.delete(measured_t_int_0,worst)
+            measured_p_int_0 = np.delete(measured_p_int_0,worst)
+        npts=x_flat.size
+        npar=len(initial_params)
+        if npts<npar :
+            message="ERROR: not enough remaining points ({} points) to fit calibration ({} params)".format(npts,npar)
+            print(message)
+            raise RuntimeError(message)
+
     # organize and return results
     best_params = {key: optimizer_result.x[param_idx[key]] for key in params_to_fit}
     fixed_params = {key: nominals[key] for key in keep_fixed}
