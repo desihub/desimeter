@@ -9,6 +9,7 @@ from astropy.table import Table
 from desimeter.transform.pos2ptl import int2ptl
 from desimeter.posparams.posmoveselection import posmove_selection
 from desimeter.circles import fit_circle
+from desimeter.transform.ptl2fp import fp2ptl
 
 import argparse
 parser = argparse.ArgumentParser(description=__doc__)
@@ -61,13 +62,27 @@ else :
 posid=t['POS_ID'][0]
 name=posid
 
-# [jhs] deprecating usage of x_fp, y_fp.
-# because they cannot be compared correctly to x_ptl, y_ptl later on
-#x_fp=t["X_FP"]
-#y_fp=t["Y_FP"]
+if 'PTL_X' in t.dtype.names :
 
-x_ptl_meas = t['PTL_X']
-y_ptl_meas = t['PTL_Y']
+   x_ptl_meas = t['PTL_X']
+   y_ptl_meas = t['PTL_Y']
+
+elif "X_FP"  in t.dtype.names :
+
+   print("warning, will convert X_FP,Y_FP to PTL coordinates")
+
+   x_ptl_meas = np.zeros(len(t),dtype=float)
+   y_ptl_meas = np.zeros(len(t),dtype=float)
+   for ploc in np.unique(t["PETAL_LOC"]) :
+      ii = (t["PETAL_LOC"]==ploc)
+      if "z_FP" in t.dtype.names :
+         z_fp = t["Z_FP"][ii]
+      else :
+         z_fp = None
+      x_ptl_meas[ii],y_ptl_meas[ii],_ = fp2ptl(ploc,t["X_FP"][ii],t["Y_FP"][ii],z_fp)
+else :
+   print("error no PTL_X,PTL_Y nor X_FP,Y_FP in table")
+   sys.exit(12)
 
 pos_t=t["POS_T"]
 pos_p=t["POS_P"]
