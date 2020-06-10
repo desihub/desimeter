@@ -264,7 +264,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     initial_params = [nominals[key] for key in params_to_fit]
     bounds_vector = [bounds[key] for key in params_to_fit]
     # with fun = chi2 , then covariance = inverse of hessian * 2
-    for iteration in range(20) :
+    for _ in range(20) :
         optimizer_result = scipy.optimize.minimize(fun=compute_chi2,
                                                    x0=initial_params,
                                                    bounds=bounds_vector)
