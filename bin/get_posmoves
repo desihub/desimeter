@@ -51,12 +51,11 @@ for petalid in petalids :
     for posid in posids :
 
         # read data from db
-        cmd = "select * from posmovedb.positioner_moves_p{} where pos_id='{}' and time_recorded BETWEEN date '{}' and date '{}'".format(petalid,posid,args.date_min,args.date_max)
+        cmd = "select * from posmovedb.positioner_moves_p{} where pos_id='{}' and time_recorded BETWEEN date '{}' and date '{}'".format(int(petalid),posid,args.date_min,args.date_max)
         if args.exposure_ids is not None :
             cmd += " and exposure_id in ({})".format(args.exposure_ids)
         if args.exposure_iters is not None :
             cmd += " and exposure_iter in ({})".format(args.exposure_iters)
-        print(cmd)
         posmoves=dbquery(comm,cmd)
 
         # add petal loc
@@ -70,7 +69,10 @@ for petalid in petalids :
         if args.with_calib :
 
             # adding calib info
-            calib=dbquery(comm,"select * from posmovedb.positioner_calibration_p{} where pos_id='{}' order by time_recorded".format(petalid,posid))
+            #calib=dbquery(comm,"select * from posmovedb.positioner_calibration_p%d where pos_id='%s' order by time_recorded",(int(petalid),posid))
+            cmd="select * from posmovedb.positioner_calibration_p{} where pos_id='{}' order by time_recorded".format(int(petalid),posid)
+            print(cmd)
+            calib=dbquery(comm,cmd)
 
             # get time stamps to match
             tstamp_calib     =  np.array([d.timestamp() for d in calib["time_recorded"]])
