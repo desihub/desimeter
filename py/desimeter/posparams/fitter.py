@@ -60,7 +60,7 @@ static_keys = ['LENGTH_R1', 'LENGTH_R2', 'OFFSET_T', 'OFFSET_P', 'OFFSET_X', 'OF
 dynamic_keys = ['SCALE_T', 'SCALE_P']
 all_keys = static_keys + dynamic_keys
 
-def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
+def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP, recent_rehome, sequence_id,
                mode='static',
                nominals=None,
                bounds=None,
@@ -84,6 +84,10 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
 
         gearT    ... list of GEAR_CALIB_T at the time the robot made the move
         gearP    ... list of GEAR_CALIB_P at the time the robot made the move
+
+        recent_rehome ... bool, if true, positioner was recently rehomed, posintT,P are accurate
+                          and we can measured OFFSET_T,P instead of DELTA_T,P
+        sequence_id ... int, one set of DELTA_T,P per sequence
 
         mode     ... 'static' or 'dynamic'
                      In static mode, all "dynamic" parameters will be held fixed,
@@ -118,8 +122,8 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     if keep_fixed is None:
         keep_fixed = []
     # arg checking
-    assert len(posintT) == len(posintP) == len(ptlX) == len(ptlY) == len(gearT) == len(gearP)
-    assert all(isinstance(arg, list) for arg in (posintT, posintP, ptlX, ptlY, gearT, gearP))
+    assert len(posintT) == len(posintP) == len(ptlX) == len(ptlY) == len(gearT) == len(gearP) == len(recent_rehome) == len(sequence_id)
+    assert all(isinstance(arg, list) for arg in (posintT, posintP, ptlX, ptlY, gearT, gearP, recent_rehome, sequence_id))
     assert all(math.isfinite(x) for x in posintT + posintP + ptlX + ptlY + gearT + gearP)
     assert mode in {'static', 'dynamic'}
     assert all(key in nominals for key in all_keys)
@@ -131,6 +135,9 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     if ptlYerr is not None :
         assert len(ptlYerr) == len(ptlY)
         assert isinstance(ptlYerr,list)
+
+    print("WARNING, need to do something with sequence_id=",sequence_id)
+    print("WARNING, need to do something with recent_rehome=",recent_rehome)
 
     # evaluate and check move flags before fitting
     flags = eval_move_flags(posintT, posintP, ptlX, ptlY)
