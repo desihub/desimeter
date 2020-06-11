@@ -37,7 +37,7 @@ def get_petal_ids(comm) :
     return petalids
 
 def get_pos_ids(comm, petal_id) :
-    res=dbquery(comm,"select distinct pos_id from posmovedb.positioner_moves_p{}".format(petal_id))
+    res=dbquery(comm,"select distinct pos_id from posmovedb.positioner_moves_p{:d}".format(int(petal_id)))
     return res["pos_id"]
 
 def get_petal_loc(petal_id) :

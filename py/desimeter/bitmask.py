@@ -80,13 +80,16 @@ class _MaskBit(int):
     comment : :class:`str`
         A comment explaining the meaning of the bit.
     """
-    def __new__(cls, name, bitnum, comment, extra=dict()):
+    def __new__(cls, name, bitnum, comment, extra=None):
         self = super(_MaskBit, cls).__new__(cls, 2**bitnum)
         self.name = name
         self.bitnum = bitnum
         self.mask = 2**bitnum
         self.comment = comment
-        self._extra = extra
+        if extra is None :
+            self._extra = dict()
+        else :
+            self._extra = extra
         for key, value in extra.items():
             if hasattr(self, key):
                 raise AttributeError(
