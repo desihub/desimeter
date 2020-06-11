@@ -10,6 +10,8 @@ import numpy as np
 # imports below require <path to desimeter>/py' to be added to system PYTHONPATH.
 import desimeter.transform.pos2ptl as pos2ptl
 from desimeter.circles import robust_fit_circle
+from desimeter.posparams.movemask import movemask
+from desimeter.posparams.flags import eval_move_flags
 
 # default parameter values and bounds
 default_values = {'LENGTH_R1': 3.0,
@@ -129,6 +131,16 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     if ptlYerr is not None :
         assert len(ptlYerr) == len(ptlY)
         assert isinstance(ptlYerr,list)
+
+    # evaluate and check move flags before fitting
+    flags = eval_move_flags(posintT, posintP, ptlX, ptlY)
+    if (flags & (movemask['THETA_STUCK'] | movemask['PHI_STUCK']))  > 0 :
+        print("WARNING: positioner not moving in one axis")
+        flags |= movemask['FAILED_FIT']
+        best_params = {"FLAGS": flags}
+        covariance_dict = dict()
+        rms_of_residuals = 0.
+        return best_params, covariance_dict, rms_of_residuals
 
     # selection of which parameters are variable
     if mode == 'static':
@@ -302,7 +314,11 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
         if npts<npar :
             message="ERROR: not enough remaining points ({} points) to fit calibration ({} params)".format(npts,npar)
             print(message)
-            raise RuntimeError(message)
+            flags |= movemask['FIT_FAILED']
+            best_params = {"FLAGS": flags}
+            covariance_dict = dict()
+            rms_of_residuals = 0.
+            return best_params, covariance_dict, rms_of_residuals
 
     # organize and return results
     best_params = {key: optimizer_result.x[param_idx[key]] for key in params_to_fit}
@@ -333,6 +349,10 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     # add variance of fixed terms = 0, just to keep a record of which ones were fixed
     for key in keep_fixed :
         covariance_dict["COV.{}.{}".format(key,key)]=0.
+
+    # add mask
+    best_params["FLAGS"] = flags
+
 
     return best_params, covariance_dict, rms_of_residuals
 

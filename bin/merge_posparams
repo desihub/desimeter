@@ -7,7 +7,7 @@ using the last entry from each of the individual fits
 
 import sys, os, argparse
 import numpy as np
-from astropy.table import Table, vstack, join
+from astropy.table import Table, Column, vstack, join
 
 import desimeter.io
 from desimeter.log import get_logger
@@ -40,20 +40,21 @@ for filename in args.input :
         if t["MOVE_VAL1"].dtype == "int64" : t["MOVE_VAL1"]=np.repeat("none",len(t))
     if "MOVE_VAL2" in t :
         if t["MOVE_VAL2"].dtype == "int64" : t["MOVE_VAL2"]=np.repeat("none",len(t))
+    if "DATA_START_DATE" in t :
+        if t["MOVE_VAL2"].dtype == "int64" : t["MOVE_VAL2"]=np.repeat("none",len(t))
     tables.append(t)
 
 
 # I am adding myself possible missing columns in some tables.
-allkeys=list()
+dtypes=dict()
 for table in tables :
     for k in table.dtype.names :
-        if not k in allkeys :
-            allkeys.append(k)
+        if not k in dtypes.keys() :
+            dtypes[k] = table.dtype[k]
 for table in tables :
-    for k in allkeys :
+    for k in dtypes.keys() :
         if not k in table.dtype.names :
-            #print("adding col {} to table".format(k))
-            table[k] = np.zeros(len(table),dtype=float)
+            table.add_column(Column(name=k,length=len(table),dtype=dtypes[k]))
 
 
 

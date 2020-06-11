@@ -16,6 +16,7 @@ from astropy.table import join
 import desimeter.posparams.fitter as fitter
 import desimeter.transform.ptl2fp as ptl2fp
 from desimeter.posparams.posmoveselection import posmove_selection
+from desimeter.posparams.movemask import movemask
 
 # column headers for processed results of best-fits
 # boolean says whether it has "STATIC"/"DYNAMIC" options
@@ -27,8 +28,19 @@ output_keys = {'POS_ID': False,
                'DATA_END_DATE_SEC': False,
                'ANALYSIS_DATE': True,
                'FIT_ERROR': True,
+               'FLAGS': False,
                }
 output_keys.update({key:True for key in fitter.all_keys})
+
+def write_failed_fit(posid,savedir,flag) :
+    filepath = os.path.join(savedir, posid + '_paramfits.csv')
+    filepath = os.path.realpath(filepath)
+    output=Table()
+    output['ANALYSIS_DATE']=[Time.now().iso]
+    output['POS_ID']=[posid]
+    output['FLAGS']=[flag]
+    print('{}: wrote {} with only FLAG'.format(posid,filepath))
+    output.write(filepath, overwrite=True)
 
 def run_best_fits(posid, path, period_days, data_window, savedir,
                   static_quantile, printf=print, min_window=10, log_note_selection=None):
@@ -51,10 +63,12 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
     '''
     table = _read(posid=posid, path=path, printf=printf, log_note_selection=log_note_selection)
     if not table:
+        write_failed_fit(posid,savedir,flag=movemask["INVALID_TABLE"])
         return f'{posid}: dropped from analysis (invalid table)'
     _make_petal_xy(table, printf=printf)
     _apply_filters(table, printf=printf)
     if not table or len(table) < min_window:
+        write_failed_fit(posid,savedir,flag=movemask["INVALID_AFTER_FILTER"])
         return f'ERROR: {posid} dropped from analysis because {len(table)}<{min_window} is insufficient data remaining after filters applied'
     _make_sec_from_epoch(table, printf=printf)
     period_sec = period_days * 24 * 60 * 60
@@ -298,18 +312,13 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
             output[f'DATA_END_{d}'].append(table[d][n])
         output['NUM_POINTS'].append(n - m + 1)
         output['FIT_ERROR'].append(rms_of_residuals)
-
-        print("===========================")
-        print("COVARIANCE")
-        print(covariance_dict)
-        print("===========================")
-
-
-
-
+        output['FLAGS'].append(params["FLAGS"])
 
         for i1,key1 in enumerate(fitted_keys):
-            output[key1].append(params[key1])
+            if key1 in params.keys() :
+                output[key1].append(params[key1])
+            else :
+                output[key1].append(0.) # happens if fit fails
 
             # dealing with covariances
             for i2,key2 in enumerate(fitted_keys):
