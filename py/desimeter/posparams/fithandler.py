@@ -28,7 +28,7 @@ output_keys = {'POS_ID': False,
                'DATA_END_DATE_SEC': False,
                'ANALYSIS_DATE': True,
                'FIT_ERROR': True,
-               'FLAGS': True,
+               'FLAGS': False,
                }
 output_keys.update({key:True for key in fitter.all_keys})
 
