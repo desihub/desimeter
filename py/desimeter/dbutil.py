@@ -1,5 +1,4 @@
 
-import datetime
 
 def dbquery(comm,query) :
 
