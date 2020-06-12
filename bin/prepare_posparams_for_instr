@@ -1,0 +1,42 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+output_suffix = '_instr'
+
+__doc__ = f'''
+Inspects paramfits csv table and prepares a version of the table which is
+ready for operational use on the focal plane.
+
+Output file will have "{output_suffix}" appended to the input filename.
+
+As of this writing (2020-06-12) the typical sequence is:
+    
+    1. get_posmoves ... get tracked (t,p) and measured (x,y) from online DB
+    2. fit_posparams ... best-fit calib params which map (t,p) to (x,y)
+    3. merge_posparams ... gather fit result files into one table
+    4. prepare_posparams_for_instr ... THIS SCRIPT, generates modified table
+    5. set_calibrations.py ... (managed in SVN) push data to the online DB
+    
+See DESI-5732 for data model and procedures.
+'''
+
+# command line argument parsing
+import argparse
+from argparse import RawTextHelpFormatter  # for making --help option respect newline characters
+parser = argparse.ArgumentParser(description=__doc__, formatter_class=RawTextHelpFormatter)
+parser.add_argument('-i', '--infile', type=str, required=True, help='path to input csv file')
+args = parser.parse_args()
+
+# import data
+from astropy.table import Table
+table = Table.read(args.infile)
+
+# interactive validations
+# to-do
+
+# export
+import os
+base, ext = os.path.splitext(args.infile)
+path = base + output_suffix + ext
+assert 'csv' in ext, f'unexpected output file extension, {ext}'
+table.write(path)
