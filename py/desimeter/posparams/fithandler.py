@@ -82,6 +82,13 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
                                 param_nominals=fitter.default_values.copy(),
                                 )
 
+    flags=static_out["FLAGS"]
+    if np.any((flags&movemask["FAILED_FIT"])>0) :
+        flag=0
+        for f in flags : flag |=f
+        write_failed_fit(posid,savedir,flag)
+        return "{}: (in run_best_fits) has FAILED_FIT {}".format(posid,flags.tolist())
+
     # DECIDE ON BEST STATIC PARAMS
     best_static = fitter.default_values.copy()
     # add EPSILONs parameters if exist
@@ -317,6 +324,7 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
                                                                       nominals=param_nominals,
                                                                       bounds=fitter.default_bounds,
                                                                       keep_fixed=[])
+
         output['ANALYSIS_DATE'].append(Time.now().iso)
         output['POS_ID'].append(posid)
         for suffix in {'', '_SEC'}:
@@ -362,8 +370,11 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
                     output[okey].append(0)
 
         printf(f'{posid}: best params = {_dict_str(params)}')
-        printf(f'  fit error = {rms_of_residuals:.3f}')
+        printf(f'{posid}: fit error = {rms_of_residuals:.3f}')
 
+    keys=list(output.keys())
+    for k in keys :
+        if len(output[k])==0 : output.pop(k)
     table = Table(output)
 
     if True : # drop columns with empty covariance to make the output file a bit smaller
