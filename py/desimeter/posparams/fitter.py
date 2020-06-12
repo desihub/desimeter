@@ -138,18 +138,20 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP, recent_rehome, sequen
 
     sequence_id=np.array(sequence_id)
     recent_rehome=np.array(recent_rehome)
-    if not np.any(recent_rehome) :
-        print("ERROR: Need at least one measurement with recent_rehome to fit OFFSET_T,P")
+
+
+    # evaluate and check move flags before fitting
+    flags = eval_move_flags(posintT, posintP, ptlX, ptlY)
+    if (flags & (movemask['THETA_STUCK'] | movemask['PHI_STUCK']))  > 0 :
+        print("WARNING: positioner not moving in one axis")
         flags |= movemask['FAILED_FIT']
         best_params = {"FLAGS": flags}
         covariance_dict = dict()
         rms_of_residuals = 0.
         return best_params, covariance_dict, rms_of_residuals
 
-    # evaluate and check move flags before fitting
-    flags = eval_move_flags(posintT, posintP, ptlX, ptlY)
-    if (flags & (movemask['THETA_STUCK'] | movemask['PHI_STUCK']))  > 0 :
-        print("WARNING: positioner not moving in one axis")
+    if not np.any(recent_rehome) :
+        print("ERROR: Need at least one measurement with recent_rehome to fit OFFSET_T,P")
         flags |= movemask['FAILED_FIT']
         best_params = {"FLAGS": flags}
         covariance_dict = dict()
