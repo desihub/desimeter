@@ -149,6 +149,10 @@ If you want to use desimeter but don't intend to actively develop it::
 For developers, we recommend adding `desimeter/py` to `$PYTHONPATH`
 and `desimeter/bin` to `$PATH` instead of installing desimeter.
 
+To cause desimeter to use alternate metrology data (e.g., the spare petal1
+rather than the petals at KPNO), set an environment variable like
+`DESIMETER_DATA=<yourpath>/desimeter/py/desimeter/data/lbl-petal1`
+
 For developers in a Windows + Anaconda environment, add a new user variable
 `PYTHONPATH` in the Environment Variables GUI editor. Include the path (for
 your machine) ending in `desimeter\\py` in the Value field. (Note: after an
