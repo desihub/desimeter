@@ -84,6 +84,10 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
 
     # DECIDE ON BEST STATIC PARAMS
     best_static = fitter.default_values.copy()
+    # add EPSILONs parameters if exist
+    for k in static_out.keys() :
+        if k.find("EPSILON")>=0 :
+            best_static[k.replace("_STATIC","")]=0.
     errors = static_out['FIT_ERROR_STATIC']
     quantile = np.percentile(errors, static_quantile * 100)
     selection = static_out[errors <= quantile]
@@ -130,6 +134,12 @@ def _read(posid, path, printf=print, log_note_selection=None):
 
 
     table = posmove_selection(table,log_note_selection)
+
+    # add here to the table the choice of sequences of consistent posintTP
+    # so that the indices and subsequently the parameters EPSILON_T_? and EPSILON_P_?
+    # refer to same sequences whatever the choice of time windows for the fit below
+    table["SEQUENCE_ID"] = _sequences_of_consistent_posintTP(table)
+
 
     table.sort('DATE')
     key_search = [key in table.columns for key in required_keys]
@@ -317,15 +327,27 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
         output['FIT_ERROR'].append(rms_of_residuals)
         output['FLAGS'].append(params["FLAGS"])
 
+        for key in params.keys() :
+            if key not in fitted_keys and key.find("EPSILON")>=0 :
+                print("warning adding key={} which was not in fitted_keys={}".format(key,fitted_keys))
+                fitted_keys.append(key)
+                if key not in output.keys() :
+                    output[key] = list()
+                    output_keys[key]=True
+
         for i1,key1 in enumerate(fitted_keys):
             if key1 in params.keys() :
                 output[key1].append(params[key1])
             else :
                 output[key1].append(0.) # happens if fit fails
 
+            if key1.find("EPSILON")>=0 : continue # covariances of EPSILON not saved
+
             # dealing with covariances
             for i2,key2 in enumerate(fitted_keys):
                 if i2<i1 : continue
+                if key2.find("EPSILON")>=0 : continue # covariances of EPSILON not saved
+
                 ckey="COV.{}.{}".format(key1,key2)
                 ckeyt="COV.{}.{}".format(key2,key1)
                 if ckey in output.keys() :
@@ -411,7 +433,7 @@ def _select_by_index(table, start=0, final=-1):
     data['gearT'] = subtable['GEAR_CALIB_T'].tolist()
     data['gearP'] = subtable['GEAR_CALIB_P'].tolist()
     data['recent_rehome'] = subtable['RECENT_REHOME'].tolist()
-    data['sequence_id'] = _sequences_of_consistent_posintTP(subtable)
+    data['sequence_id'] = subtable['SEQUENCE_ID'].tolist() # SEQUENCE_ID column was set by  _sequences_of_consistent_posintTP(table)
     return data, subtable
 
 def _np_diff_with_prepend(array, prepend):
