@@ -121,7 +121,7 @@ for petalid in petalids :
 
             otable[k2]=np.array(posmoves[k])
 
-        otable["RECENT_REHOME"]=np.in1d(otable["EXPOSURE_ID"],recent_rehome_exposure_ids)
+        otable["RECENT_REHOME"]=np.in1d(otable["EXPOSURE_ID"],recent_rehome_exposure_ids).astype(int)
 
         if not os.path.isdir(args.outdir) :
             os.makedirs(args.outdir)
