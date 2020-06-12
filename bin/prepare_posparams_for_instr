@@ -24,15 +24,93 @@ See DESI-5732 for data model and procedures.
 import argparse
 from argparse import RawTextHelpFormatter  # for making --help option respect newline characters
 parser = argparse.ArgumentParser(description=__doc__, formatter_class=RawTextHelpFormatter)
-parser.add_argument('-i', '--infile', type=str, required=True, help='path to input csv file')
+parser.add_argument('-i', '--infile', type=str, required=True, help='path to input csv file (like "all_paramfits.csv")')
 args = parser.parse_args()
 
 # import data
 from astropy.table import Table
 table = Table.read(args.infile)
 
-# interactive validations
-# to-do
+
+def check_fit_bounds(near):
+    '''Searches for any cases of params pegged to fitter bounds. These
+    immediately indicate a bad fit.'''
+    pass
+
+def check_recent_rehome():
+    '''Search for recent rehome criterion. This indicates that OFFSET_T and
+    OFFSET_P are ok for use on instrument.'''
+    pass
+
+def check_xy_offsets(tol):
+    '''Check reasonableness of OFFSET_X and OFFSET_Y w.r.t. metrology values.'''
+    pass
+
+def check_arm_lengths(tol):
+    '''Check reasonableness of LENGTH_R1 and LENGTH_R2.'''
+    pass
+
+class Check(object):
+    '''Represents a check function plus arguments.
+        func ... function handle
+        kwargs ... keyword/args dict of inputs for that function
+    '''
+    def __init__(self, func, **kwargs):
+        self.func = func
+        self.kwargs = kwargs
+    
+    @property
+    def name(self):
+        return self.func.__name__
+    
+    def run(self):
+        '''Performs the check function.'''
+        print(f'Performing {self.name} with args {self.kwargs}')
+        output = self.func(**self.kwargs)
+        return output
+    
+    def offer_adjustment(self):
+        '''Allow user to adjust check function parameters. Returns boolean
+        saying whether user made an adjustment or not.'''
+        if not self.kwargs:
+            return False
+        yesno = input(f'Repeat {self.name} with modified args? (y/n)')
+        if yesno == '':
+            return self.offer_adjustment()
+        if yesno.lower() in {'n', 'no', 'false', 'f', 'o'}:
+            return False
+        for key, val in self.kwargs:
+            old_kwargs = self.kwargs.copy()
+            response = input(f'Enter new {key} (blank to skip) >> ')
+            if response != '':
+                self.kwargs[key] = float(response)
+            was_adjusted = self.kwargs != old_kwargs
+            return was_adjusted
+    
+    def run_and_adjust(self):
+        '''Combines run and adjust above.'''
+        retry = True
+        while retry:
+            output = self.run()
+            was_adjusted = self.offer_adjustment()
+            retry = was_adjusted 
+        return output
+
+checks = [Check(check_fit_bounds, near=0.01),
+          Check(check_recent_rehome),
+          Check(check_xy_offsets, tol=0.5),
+          Check(check_arm_lengths, tol=0.5),
+         ]
+
+for check in checks:
+    output = check.run_and_adjust()
+    
+
+# user interaction thoughts...
+# e.g. explain how many posids have good data, how many bad
+# explain how many have offset_t or p that are ok for usage
+# perhaps offer options to modify tolerance values or validation bounds
+# perhaps offers some options to adjust which positioners have data committed for which params
 
 # export
 import os
