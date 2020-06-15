@@ -94,7 +94,11 @@ def _fast_fit_circle(x,y,use_median=False) :
     # 2 equations:
     # mx1 + nx1*s1 = mx2 + nx2*s2
     # my1 + ny1*s1 = my2 + ny2*s2
-    s1 = (ny[i2]*mx[i2]-nx[i2]*my[i2]-ny[i2]*mx[i1]+nx[i2]*my[i1])/(ny[i2]*nx[i1]-nx[i2]*ny[i1])
+    num   = (ny[i2]*mx[i2]-nx[i2]*my[i2]-ny[i2]*mx[i1]+nx[i2]*my[i1])
+    denom = (ny[i2]*nx[i1]-nx[i2]*ny[i1])
+    ok = (denom!=0)
+    s1 = np.zeros(nn)
+    s1[ok] = num[ok]/denom[ok]
 
     # coordinates of intersections are estimates of center of circle
     xc=mx[i1]+nx[i1]*s1[i1]
