@@ -5,6 +5,7 @@ is equipped to ingest a data history for a given positioner, do the best fits,
 and then save the results to csv report file.
 """
 
+import sys
 import os
 import numpy as np
 from astropy.time import Time
@@ -83,6 +84,9 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
         recent_rehome = table['RECENT_REHOME'].astype(int)
         selection = np.where(recent_rehome>0)[0]
         print("{}: number of points with RECENT_REHOME=True = {}".format(posid,selection.size))
+        if selection.size < 10 :
+            write_failed_fit(posid,savedir,flag=movemask["INVALID_AFTER_FILTER"])
+            return 'ERROR: {} dropped from analysis because only {} moves with RECENT_REHOME=True'.format(posid,selection.size)
         tmp_table = table[selection]
         tmp_cases = _define_cases(tmp_table, datum_dates, data_window, printf=printf)
         static_out = _process_cases(tmp_table, tmp_cases, printf=printf, mode='static',
@@ -409,7 +413,13 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
     keys=list(output.keys())
     for k in keys :
         if len(output[k])==0 : output.pop(k)
-    table = Table(output)
+    try:
+        table = Table(output)
+    except ValueError as e :
+        print("failed to create table")
+        print(e)
+        print(output)
+        sys.exit(12)
 
     if True : # drop columns with empty covariance to make the output file a bit smaller
         for key1 in fitted_keys:
