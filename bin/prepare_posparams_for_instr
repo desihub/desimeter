@@ -1,13 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-output_suffix = '_instr'
+import time
+filename_timestamp_format = '%Y%m%dT%H%M%S%z'
+output_prefix = time.strftime(filename_timestamp_format, time.gmtime())
+output_suffix = '_posparams_for_instr.csv'
+output_name = output_prefix + output_suffix
 
 __doc__ = f'''
 Inspects paramfits csv table and prepares a version of the table which is
 ready for operational use on the focal plane.
 
-Output file will have "{output_suffix}" appended to the input filename.
+Output csv file will be named like "{output_name}", along with a similarly-
+named text log file.
 
 As of this writing (2020-06-12) the typical sequence is:
     
@@ -28,27 +33,164 @@ parser.add_argument('-i', '--infile', type=str, required=True, help='path to inp
 args = parser.parse_args()
 
 # import data
+from desimeter.posparams.movemask import movemask
 from astropy.table import Table
-table = Table.read(args.infile)
+input_table = Table.read(args.infile)
 
+# import other modules
+import numpy as np
+import os
+import logging
+import desimeter.posparams.fitter as fitter
 
-def check_fit_bounds(near):
-    '''Searches for any cases of params pegged to fitter bounds. These
-    immediately indicate a bad fit.'''
-    pass
+# detect "static" and "dynamic" suffixes in data headers
+# generate a key mapping for which of these options to push to the output table
+keys_in_to_out = {}
+for header in input_table.columns:
+    keys_in_to_out[header] = header
+    cases = {'STATIC': fitter.static_keys,
+             'DYNAMIC': fitter.dynamic_keys}
+    for case, case_keys in cases.items():
+        for key in case_keys:
+            match_found = header.find(key) == 0 and header.find(case) != -1
+            if match_found:
+                keys_in_to_out[header] = key
+keys_out_to_in = {val:key for key,val in keys_in_to_out.items()}
+new_table = input_table.copy()
+for key_in, key_out in keys_in_to_out.items():
+    new_table[key_out] = new_table[key_in]
 
-def check_recent_rehome():
-    '''Search for recent rehome criterion. This indicates that OFFSET_T and
-    OFFSET_P are ok for use on instrument.'''
-    pass
+# set up a log file
+script_name = os.path.basename(__file__)
+out_dir = os.path.dirname(args.infile)
+log_name = output_prefix + '_prepare_posparams.log'
+log_path = os.path.join(out_dir, log_name)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+[logger.removeHandler(h) for h in logger.handlers]
+fh = logging.FileHandler(filename=log_path, mode='a', encoding='utf-8')
+sh = logging.StreamHandler()
+formatter = logging.Formatter(fmt='%(asctime)s %(levelname)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S %z')
+formatter.converter = time.gmtime
+fh.setFormatter(formatter)
+sh.setFormatter(formatter)
+logger.addHandler(fh)
+logger.addHandler(sh)
+logger.info(f'Running {script_name} to prepare positioner calibration parameters for use on instrument.')
+logger.info(f'Input file is: {args.infile}')
+logger.info(f'Table contains {len(input_table)} rows')
+def input2(message):
+    '''Wrapper for input which will log the interaction.'''
+    logger.info(f'PROMPT: {message}')
+    user_input = input('>>> ')
+    if user_input == '':
+        user_input = '(no entry)'
+    logger.info(f'USER ENTERED >>> {user_input}')
+    return user_input
 
-def check_xy_offsets(tol):
-    '''Check reasonableness of OFFSET_X and OFFSET_Y w.r.t. metrology values.'''
-    pass
+# check functions
 
-def check_arm_lengths(tol):
-    '''Check reasonableness of LENGTH_R1 and LENGTH_R2.'''
-    pass
+def _eliminate_rows(table, elim, rationale):
+    '''Logs messages and returns a copy of table, with rows identified by elim
+    deleted from it.
+    
+        table ... astropy table
+        elim ... list of booleans saying whether to eliminate that row
+                 must be same length as table
+        rationale ... string message to include in log output message
+    '''
+    assert len(table) == len(elim), f'len(table)={len(table)} != len(elim)={len(elim)}'
+    if not(any(elim)):
+        return table.copy()
+    elim_bool = [bool(x) for x in elim]  # guarantee a clean boolean format
+    keep = [x == False for x in elim_bool]
+    all_posids = set(table['POS_ID'])
+    posids_remaining = set(table['POS_ID'][keep])
+    posids_eliminated = all_posids - posids_remaining
+    n_rows = len(table)
+    n_elim_rows = len(np.argwhere(elim_bool))
+    n_elim_posids = len(posids_eliminated)
+    logger.warning(f'{n_elim_rows} of {n_rows} rows have {rationale}. These' +
+                   f' rows will be excluded from the output table. This eliminates' +
+                   f' the following {n_elim_posids} positioners from the table:' +
+                   f' {sorted(posids_eliminated)}')
+    output = table.copy()
+    output.remove_rows(elim_bool)
+    return output
+
+def check_flags(table):
+    '''Inspects FLAGS field of fit results.
+    
+    Internal details: Returns a copy of table.
+    '''
+    new = table.copy()
+    for flag in movemask.names():
+        fail_list = [movemask[flag] & value for value in new['FLAGS']]
+        new = _eliminate_rows(new, fail_list, f'flag {flag}')
+    return new
+
+def check_static_fit_bounds(table, tighten_factor):
+    '''Searches for any cases of params pegged to fitter bounds. Operates only on
+    "static" parameters. Such cases immediately indicate a bad fit. Argument
+    'tighten_factor' is a float which gives you some braod control to deal
+    with numeric errors. It tightens the acceptable bounds by a fraction. E.g.,
+    for a range [0.0, 2.0], a tighten_factor of 0.1 would use range [0.2, 1.8] in
+    the filter.
+    
+    Internal details: Returns a copy of table.
+    '''
+    below_key = 'below min'
+    above_key = 'above max'
+    new = table.copy()
+    for param in fitter.static_keys:
+        minmax = fitter.default_bounds[param]
+        delta = max(minmax) - min(minmax)
+        limits = {below_key: min(minmax) + delta*tighten_factor,
+                  above_key: max(minmax) - delta*tighten_factor}
+        operators = {below_key: np.less,
+                     above_key: np.greater}
+        for key, limit in limits.items():
+            op = operators[key]
+            fail_list = op(new[param], limit)
+            new = _eliminate_rows(new, fail_list, f'{param} {key} bound = {limit}')
+    return new
+
+def check_xy_offsets(table, tol):
+    '''Checks reasonableness of OFFSET_X and OFFSET_Y w.r.t. metrology values.
+    Argument 'tol' is a value in mm. Rows outside this tolerance will be
+    eliminated from the output.
+    
+    Internal details: Returns a copy of table.
+    '''
+    return table.copy()  # not yet implemented
+
+def check_arm_lengths(table, tol):
+    '''Checks closeness of LENGTH_R1 and LENGTH_R2 to their nominal values.
+    Argument 'tol' is a value in mm. Rows outside this tolerance will be
+    eliminated from the output.
+    
+    Internal details: Returns a copy of table.
+    '''
+    return table.copy()  # not yet implemented
+
+def check_fit_error(table, tol):
+    '''Checks overall goodness of fit. Argument 'tol' is a value in rms um.
+    Rows outside this tolerance will be eliminated from the output.
+    
+    Internal details: Returns a copy of table.
+    '''
+    return table.copy()  # not yet implemented
+
+def check_recent_rehome(table):
+    '''Searches for "recent rehome" criterion. This indicates that OFFSET_T and
+    OFFSET_P are ok for use on instrument.
+    
+    Internal details: Returns a copy of table.'''
+    # As of 2020-06-15, not implemented. The assumption is that fit_posparams
+    # output file contains only good OFFSET_T, OFFSET_P, generated from an
+    # assumed RECENT_REHOME==True data set. Hopefully in the future we can
+    # develop a more direct check here.
+    return table.copy()  # not yet implemented
 
 class Check(object):
     '''Represents a check function plus arguments.
@@ -63,58 +205,73 @@ class Check(object):
     def name(self):
         return self.func.__name__
     
-    def run(self):
-        '''Performs the check function.'''
-        print(f'Performing {self.name} with args {self.kwargs}')
-        output = self.func(**self.kwargs)
+    @property
+    def doc(self):
+        return f'{self.name}:\n{self.func.__doc__}'
+    
+    def run(self, table):
+        '''Performs the check function on astropy table of parameters data.'''
+        args_note = f' with args {self.kwargs}' if self.kwargs else ''
+        logger.info(f'{self.name}: starting{args_note}')
+        output = self.func(table=table, **self.kwargs)
+        n_deleted = len(table) - len(output)
+        done_note = f'{self.name}: done. '
+        if n_deleted:
+            done_note += f'{n_deleted} rows deleted'
+        else:
+            done_note += f'All rows ok'
+        logger.info(f'{done_note}, {len(output)} remaining')
         return output
     
     def offer_adjustment(self):
         '''Allow user to adjust check function parameters. Returns boolean
         saying whether user made an adjustment or not.'''
         if not self.kwargs:
+            input2('Press enter to acknowledge')
             return False
-        yesno = input(f'Repeat {self.name} with modified args? (y/n)')
+        yesno = input2(f'Repeat {self.name} with modified args? (y/n/help)')
         if yesno == '':
+            return self.offer_adjustment()
+        if yesno.lower() in {'h', 'help', 'doc', 'man'}:
+            logger.info(self.doc)
             return self.offer_adjustment()
         if yesno.lower() in {'n', 'no', 'false', 'f', 'o'}:
             return False
-        for key, val in self.kwargs:
+        for key, val in self.kwargs.items():
             old_kwargs = self.kwargs.copy()
-            response = input(f'Enter new {key} (blank to skip) >> ')
+            response = input2(f'Enter new {key} value (currently {val}), or blank to skip:')
             if response != '':
                 self.kwargs[key] = float(response)
             was_adjusted = self.kwargs != old_kwargs
             return was_adjusted
     
-    def run_and_adjust(self):
+    def run_and_adjust(self, table):
         '''Combines run and adjust above.'''
-        retry = True
-        while retry:
-            output = self.run()
+        user_not_done = True
+        while user_not_done:
+            output = self.run(table)
             was_adjusted = self.offer_adjustment()
-            retry = was_adjusted 
+            user_not_done = was_adjusted
         return output
 
-checks = [Check(check_fit_bounds, near=0.01),
-          Check(check_recent_rehome),
-          Check(check_xy_offsets, tol=0.5),
-          Check(check_arm_lengths, tol=0.5),
-         ]
-
+checks = [Check(check_flags)]
+checks += [Check(check_static_fit_bounds, tighten_factor=0.001)]
+#checks += [Check(check_xy_offsets, tol=0.5)]
+#checks += [Check(check_arm_lengths, tol=0.5)]
+#checks += [Check(check_fit_error, tol=0.5)]
+#checks += [Check(check_recent_rehome)]
+ 
 for check in checks:
-    output = check.run_and_adjust()
+    new_table = check.run_and_adjust(new_table)
     
-
-# user interaction thoughts...
-# e.g. explain how many posids have good data, how many bad
-# explain how many have offset_t or p that are ok for usage
-# perhaps offer options to modify tolerance values or validation bounds
-# perhaps offers some options to adjust which positioners have data committed for which params
+# TO DO HERE:
+#   setting <param>_COMMIT fields
+#    - give user option to disable any field
+#    - give user option to enable SCALES (right now, this probably takes some
+#      careful human checking, positioner by positioner)
 
 # export
 import os
-base, ext = os.path.splitext(args.infile)
-path = base + output_suffix + ext
-assert 'csv' in ext, f'unexpected output file extension, {ext}'
-table.write(path)
+path = os.path.join(out_dir, output_name)
+new_table.write(path)
+logger.info(f'Saved output posparams to {path}.')
