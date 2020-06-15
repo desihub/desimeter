@@ -194,6 +194,16 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP, recent_rehome, sequen
     xerr_flat = np.abs(d_x_flat_d_x_ptl) * xerr_ptl
     yerr_flat = np.abs(d_y_flat_d_y_ptl) * yerr_ptl
 
+    # we need to set one new pair of params EPSILON_P,T for each sequence_id except
+    # for the one(s) with recent_rehome = true
+    # values are fit independently for the DYNAMIC case
+    sequences_without_recent_rehome = np.unique(sequence_id[recent_rehome==False])
+    if mode == 'static' :
+        for s in sequences_without_recent_rehome :
+            for k in ["EPSILON_T_{}".format(s) , "EPSILON_P_{}".format(s)] :
+                nominals[k]=0.
+                bounds[k]=(-200.,200)
+
     if mode == 'dynamic':
         n_pts -= 1 # since in dynamic mode we are using delta values
 
@@ -208,6 +218,13 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP, recent_rehome, sequen
             nominals['LENGTH_R1'], nominals['LENGTH_R2'],
             nominals['OFFSET_T'], nominals['OFFSET_P']
             )
+
+        # need to subtract epsilons if exist to measured_t_int_0, measured_p_int_0
+        for s in sequences_without_recent_rehome :
+            ii=(sequence_id==s)
+            measured_t_int_0[ii] -= nominals["EPSILON_T_{}".format(s)]
+            measured_p_int_0[ii] -= nominals["EPSILON_P_{}".format(s)]
+
         del unreachable
         dt_int = pos2ptl.delta_angle(u_start=t_int[:-1], u_final=t_int[1:], direction=0)
         dp_int = pos2ptl.delta_angle(u_start=p_int[:-1], u_final=p_int[1:], direction=0)
@@ -230,17 +247,18 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP, recent_rehome, sequen
         measured_p_int_0 = measured_p_int_0[:-1]
         sequence_id   = sequence_id[1:]
         recent_rehome = recent_rehome[1:]
+        # also remove first point for t_int,p_int
+        t_int = t_int[1:]
+        p_int = p_int[1:]
 
 
-    # we need to set one new pair of params EPSILON_P,T for each sequence_id except
-    # for the one(s) with recent_rehome = true
-    # values are fit independently for the DYNAMIC case
-    sequences_without_recent_rehome = np.unique(sequence_id[recent_rehome==False])
-    if mode == 'static' :
-        for s in sequences_without_recent_rehome :
-            for k in ["EPSILON_T_{}".format(s) , "EPSILON_P_{}".format(s)] :
-                nominals[k]=0.
-                bounds[k]=(-200.,200)
+
+    if mode == 'dynamic' : # keep epsilons fixed in dynamic mode
+        keep_fixed = list(keep_fixed)
+        for k in list(nominals.keys()) :
+            if k.find("EPSILON")>=0 and k not in keep_fixed :
+                keep_fixed.append(k)
+        keep_fixed = set(keep_fixed)
 
     params_to_fit = set(nominals).difference(keep_fixed)
     params_to_fit = sorted(params_to_fit) # because optimizer expects a vector with consistent ordering
@@ -260,9 +278,11 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP, recent_rehome, sequen
         return offset_and_delta_t,offset_and_delta_p
 
     def expected_xy(params):
+
+        for key, idx in param_idx.items():
+            p0[key] = params[idx]
+
         if mode =='static':
-            for key, idx in param_idx.items():
-                p0[key] = params[idx]
             t_int_expected = t_int
             p_int_expected = p_int
         else:
@@ -325,6 +345,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP, recent_rehome, sequen
         optimizer_result = scipy.optimize.minimize(fun=compute_chi2,
                                                    x0=initial_params,
                                                    bounds=bounds_vector)
+
         x_exp, y_exp = expected_xy(optimizer_result.x)
         dist = np.sqrt( (x_exp - x_flat)**2 + (y_exp - y_flat)**2 )
         meddist = np.median(dist)
@@ -357,6 +378,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP, recent_rehome, sequen
             dp_int = np.delete(dp_int,worst)
             measured_t_int_0 = np.delete(measured_t_int_0,worst)
             measured_p_int_0 = np.delete(measured_p_int_0,worst)
+
         npts=x_flat.size
         npar=len(initial_params)
         if npts<npar :
