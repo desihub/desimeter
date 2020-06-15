@@ -77,9 +77,40 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
     datum_dates = datum_dates.tolist()
     cases = _define_cases(table, datum_dates, data_window, printf=printf)
 
-    # FIRST-PASS:  STATIC PARAMETERS
+
+    if not np.all(table['RECENT_REHOME']) :
+        print("{}: has exposure(s) with RECENT_REHOME=False. Will first initiate the fit without those".format(posid))
+        recent_rehome = table['RECENT_REHOME'].astype(int)
+        selection = np.where(recent_rehome>0)[0]
+        print("{}: number of points with RECENT_REHOME=True = {}".format(posid,selection.size))
+        tmp_table = table[selection]
+        tmp_cases = _define_cases(tmp_table, datum_dates, data_window, printf=printf)
+        static_out = _process_cases(tmp_table, tmp_cases, printf=printf, mode='static',
+                                    param_nominals=fitter.default_values.copy())
+        flags=static_out["FLAGS"]
+        if np.any((flags&movemask["FAILED_FIT"])>0) :
+            flag=0
+            for f in flags : flag |=f
+            write_failed_fit(posid,savedir,flag)
+            return "{}: (in run_best_fits) has FAILED_FIT {}".format(posid,flags.tolist())
+
+        # DECIDE ON BEST STATIC PARAMS
+        best_static = fitter.default_values.copy()
+        errors = static_out['FIT_ERROR_STATIC']
+        printf('{}: rms of residuals (init static) = {}'.format(posid,list(errors)))
+        quantile = np.percentile(errors, static_quantile * 100)
+        selection = static_out[errors <= quantile]
+        these_best = {key:np.median(selection[key + _mode_suffix('static')]) for key in best_static}
+        best_static.update(these_best)
+        printf(f'{posid}: Selected best static params = {_dict_str(best_static)}')
+
+    else :
+        best_static = fitter.default_values.copy()
+
+
+    # FIRST-PASS (or second) :  STATIC PARAMETERS
     static_out = _process_cases(table, cases, printf=printf, mode='static',
-                                param_nominals=fitter.default_values.copy(),
+                                param_nominals=best_static,
                                 )
 
     flags=static_out["FLAGS"]
@@ -96,6 +127,7 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
         if k.find("EPSILON")>=0 :
             best_static[k.replace("_STATIC","")]=0.
     errors = static_out['FIT_ERROR_STATIC']
+    printf('{}: rms of residuals (static) = {}'.format(posid,list(errors)))
     quantile = np.percentile(errors, static_quantile * 100)
     selection = static_out[errors <= quantile]
     these_best = {key:np.median(selection[key + _mode_suffix('static')]) for key in best_static}
@@ -105,6 +137,8 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
     # SECOND-PASS:  DYNAMIC PARAMETERS
     dynamic_out = _process_cases(table, cases, printf=printf, mode='dynamic',
                                  param_nominals=best_static)
+
+    printf('{}: rms of residuals (dynamic) = {}'.format(posid,list(dynamic_out['FIT_ERROR_DYNAMIC'])))
 
     # MERGED STATIC + DYNAMIC
     same_keys = [key for key, is_variable in output_keys.items() if not is_variable]
@@ -337,7 +371,7 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
 
         for key in params.keys() :
             if key not in fitted_keys and key.find("EPSILON")>=0 :
-                print("warning adding key={} which was not in fitted_keys={}".format(key,fitted_keys))
+                #print("warning adding key={} which was not in fitted_keys={}".format(key,fitted_keys))
                 fitted_keys.append(key)
                 if key not in output.keys() :
                     output[key] = list()
