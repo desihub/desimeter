@@ -33,18 +33,18 @@ def eval_move_flags(posintT, posintP, ptlX, ptlY) :
 
     tested = False
     moving = False
-    print("DEBUG: unique P values = {}".format(unique_p_int))
+    #print("DEBUG: unique P values = {}".format(unique_p_int))
     for val in unique_p_int :
         selection = np.where(p_int==val)[0]
         if len(selection)<4 :
-            print("DEBUG: for p={} , {} pts: too few points to detect anything".format(val,selection.size))
+            #print("DEBUG: for p={} , {} pts: too few points to detect anything".format(val,selection.size))
             continue # too few points to detect anything
         if val>160 :
-            print("DEBUG: p={} phi arm is too much retracted to measure variations in theta".format(val))
+            #print("DEBUG: p={} phi arm is too much retracted to measure variations in theta".format(val))
             continue # phi arm is too much retracted to measure variations in theta
         t_int_range = np.max(t_int[selection])-np.min(t_int[selection])
         if t_int_range<20. :
-            print("DEBUG: range of t={}: range of theta angle is to small".format(t_int_range))
+            #print("DEBUG: range of t={}: range of theta angle is to small".format(t_int_range))
             continue # range of theta angle is to small
 
         tested = True

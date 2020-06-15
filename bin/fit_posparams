@@ -41,9 +41,9 @@ parser.add_argument('-i', '--infiles', type=str, required=True, nargs='*',
                          'Multiple file args also ok (like M0001.csv M0002.csv M01*.csv)')
 parser.add_argument('-o', '--outdir', type=str, required=True,
                     help='path to directory where to save output files')
-parser.add_argument('-dw', '--data_window', type=int, default=100,
+parser.add_argument('-dw', '--data_window', type=int, default=1000000,
                     help='minimum width (num pts) for window swept through historical data')
-parser.add_argument('-pd', '--period_days', type=int, default=1,
+parser.add_argument('-pd', '--period_days', type=int, default=1000000,
                     help='spacing of datum dates at which to run the fit')
 parser.add_argument('-np', '--n_processes_max', type=int, default=None,
                     help='max number of processors to use. Note: can argue 1 to avoid multiprocessing pool (useful for debugging)')

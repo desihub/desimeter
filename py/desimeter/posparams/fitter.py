@@ -60,7 +60,7 @@ static_keys = ['LENGTH_R1', 'LENGTH_R2', 'OFFSET_T', 'OFFSET_P', 'OFFSET_X', 'OF
 dynamic_keys = ['SCALE_T', 'SCALE_P']
 all_keys = static_keys + dynamic_keys
 
-def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
+def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP, recent_rehome, sequence_id,
                mode='static',
                nominals=None,
                bounds=None,
@@ -84,6 +84,10 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
 
         gearT    ... list of GEAR_CALIB_T at the time the robot made the move
         gearP    ... list of GEAR_CALIB_P at the time the robot made the move
+
+        recent_rehome ... bool, if true, positioner was recently rehomed, posintT,P are accurate
+                          and we can measured OFFSET_T,P instead of DELTA_T,P
+        sequence_id ... int, one set of DELTA_T,P per sequence
 
         mode     ... 'static' or 'dynamic'
                      In static mode, all "dynamic" parameters will be held fixed,
@@ -118,8 +122,8 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     if keep_fixed is None:
         keep_fixed = []
     # arg checking
-    assert len(posintT) == len(posintP) == len(ptlX) == len(ptlY) == len(gearT) == len(gearP)
-    assert all(isinstance(arg, list) for arg in (posintT, posintP, ptlX, ptlY, gearT, gearP))
+    assert len(posintT) == len(posintP) == len(ptlX) == len(ptlY) == len(gearT) == len(gearP) == len(recent_rehome) == len(sequence_id)
+    assert all(isinstance(arg, list) for arg in (posintT, posintP, ptlX, ptlY, gearT, gearP, recent_rehome, sequence_id))
     assert all(math.isfinite(x) for x in posintT + posintP + ptlX + ptlY + gearT + gearP)
     assert mode in {'static', 'dynamic'}
     assert all(key in nominals for key in all_keys)
@@ -132,10 +136,22 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
         assert len(ptlYerr) == len(ptlY)
         assert isinstance(ptlYerr,list)
 
+    sequence_id=np.array(sequence_id)
+    recent_rehome=np.array(recent_rehome)
+
+
     # evaluate and check move flags before fitting
     flags = eval_move_flags(posintT, posintP, ptlX, ptlY)
     if (flags & (movemask['THETA_STUCK'] | movemask['PHI_STUCK']))  > 0 :
         print("WARNING: positioner not moving in one axis")
+        flags |= movemask['FAILED_FIT']
+        best_params = {"FLAGS": flags}
+        covariance_dict = dict()
+        rms_of_residuals = 0.
+        return best_params, covariance_dict, rms_of_residuals
+
+    if not np.any(recent_rehome) :
+        print("ERROR: Need at least one measurement with recent_rehome to fit OFFSET_T,P")
         flags |= movemask['FAILED_FIT']
         best_params = {"FLAGS": flags}
         covariance_dict = dict()
@@ -147,9 +163,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
         keep_fixed = set(keep_fixed).union(dynamic_keys)
     else:
         keep_fixed = set(keep_fixed).union(static_keys)
-    params_to_fit = set(nominals).difference(keep_fixed)
-    params_to_fit = sorted(params_to_fit) # because optimizer expects a vector with consistent ordering
-    param_idx = {key:params_to_fit.index(key) for key in params_to_fit}
+
 
     # some re-names and pre-initializations of numpy arrays
     t_int = np.array(posintT)
@@ -180,6 +194,16 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
     xerr_flat = np.abs(d_x_flat_d_x_ptl) * xerr_ptl
     yerr_flat = np.abs(d_y_flat_d_y_ptl) * yerr_ptl
 
+    # we need to set one new pair of params EPSILON_P,T for each sequence_id except
+    # for the one(s) with recent_rehome = true
+    # values are fit independently for the DYNAMIC case
+    sequences_without_recent_rehome = np.unique(sequence_id[recent_rehome==False])
+    if mode == 'static' :
+        for s in sequences_without_recent_rehome :
+            for k in ["EPSILON_T_{}".format(s) , "EPSILON_P_{}".format(s)] :
+                nominals[k]=0.
+                bounds[k]=(-200.,200)
+
     if mode == 'dynamic':
         n_pts -= 1 # since in dynamic mode we are using delta values
 
@@ -194,6 +218,13 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
             nominals['LENGTH_R1'], nominals['LENGTH_R2'],
             nominals['OFFSET_T'], nominals['OFFSET_P']
             )
+
+        # need to subtract epsilons if exist to measured_t_int_0, measured_p_int_0
+        for s in sequences_without_recent_rehome :
+            ii=(sequence_id==s)
+            measured_t_int_0[ii] -= nominals["EPSILON_T_{}".format(s)]
+            measured_p_int_0[ii] -= nominals["EPSILON_P_{}".format(s)]
+
         del unreachable
         dt_int = pos2ptl.delta_angle(u_start=t_int[:-1], u_final=t_int[1:], direction=0)
         dp_int = pos2ptl.delta_angle(u_start=p_int[:-1], u_final=p_int[1:], direction=0)
@@ -214,13 +245,44 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
         yerr_flat = yerr_flat[1:]
         measured_t_int_0 = measured_t_int_0[:-1]
         measured_p_int_0 = measured_p_int_0[:-1]
+        sequence_id   = sequence_id[1:]
+        recent_rehome = recent_rehome[1:]
+        # also remove first point for t_int,p_int
+        t_int = t_int[1:]
+        p_int = p_int[1:]
+
+
+
+    if mode == 'dynamic' : # keep epsilons fixed in dynamic mode
+        keep_fixed = list(keep_fixed)
+        for k in list(nominals.keys()) :
+            if k.find("EPSILON")>=0 and k not in keep_fixed :
+                keep_fixed.append(k)
+        keep_fixed = set(keep_fixed)
+
+    params_to_fit = set(nominals).difference(keep_fixed)
+    params_to_fit = sorted(params_to_fit) # because optimizer expects a vector with consistent ordering
+    param_idx = {key:params_to_fit.index(key) for key in params_to_fit}
 
     # set up the consumer function for the variable parameters vector
     p0 = nominals.copy()
+
+    def compute_offset_and_delta_tp(sequence_id,p0) :
+        # the offsets are the sum of the physical OFFSET_T,P and the drifts of POS_T,P
+        offset_and_delta_t = np.repeat(p0['OFFSET_T'],len(sequence_id))
+        offset_and_delta_p = np.repeat(p0['OFFSET_P'],len(sequence_id))
+        for s in sequences_without_recent_rehome :
+            ii=(sequence_id==s)
+            offset_and_delta_t[ii] += p0["EPSILON_T_{}".format(s)]
+            offset_and_delta_p[ii] += p0["EPSILON_P_{}".format(s)]
+        return offset_and_delta_t,offset_and_delta_p
+
     def expected_xy(params):
+
+        for key, idx in param_idx.items():
+            p0[key] = params[idx]
+
         if mode =='static':
-            for key, idx in param_idx.items():
-                p0[key] = params[idx]
             t_int_expected = t_int
             p_int_expected = p_int
         else:
@@ -228,12 +290,15 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
             dp_int_scaled = dp_int * params[param_idx['SCALE_P']]
             t_int_expected = measured_t_int_0 + dt_int_scaled
             p_int_expected = measured_p_int_0 + dp_int_scaled
+
+        offset_and_delta_t,offset_and_delta_p = compute_offset_and_delta_tp(sequence_id,p0)
+
         x_loc, y_loc = pos2ptl.int2loc(t_int=t_int_expected,
                                        p_int=p_int_expected,
                                        r1=p0['LENGTH_R1'],
                                        r2=p0['LENGTH_R2'],
-                                       t_offset=p0['OFFSET_T'],
-                                       p_offset=p0['OFFSET_P'])
+                                       t_offset=offset_and_delta_t,
+                                       p_offset=offset_and_delta_p)
         x_flat_expected = pos2ptl.loc2flat(x_loc, p0['OFFSET_X'])
         y_flat_expected = pos2ptl.loc2flat(y_loc, p0['OFFSET_Y'])
         return x_flat_expected, y_flat_expected
@@ -280,6 +345,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
         optimizer_result = scipy.optimize.minimize(fun=compute_chi2,
                                                    x0=initial_params,
                                                    bounds=bounds_vector)
+
         x_exp, y_exp = expected_xy(optimizer_result.x)
         dist = np.sqrt( (x_exp - x_flat)**2 + (y_exp - y_flat)**2 )
         meddist = np.median(dist)
@@ -304,11 +370,15 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
         yerr_flat = np.delete(yerr_flat,worst)
         t_int = np.delete(t_int,worst)
         p_int = np.delete(p_int,worst)
+        sequence_id   = np.delete(sequence_id,worst)
+        recent_rehome = np.delete(recent_rehome,worst)
+
         if mode == 'dynamic' :
             dt_int = np.delete(dt_int,worst)
             dp_int = np.delete(dp_int,worst)
             measured_t_int_0 = np.delete(measured_t_int_0,worst)
             measured_p_int_0 = np.delete(measured_p_int_0,worst)
+
         npts=x_flat.size
         npar=len(initial_params)
         if npts<npar :
@@ -352,7 +422,6 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP,
 
     # add mask
     best_params["FLAGS"] = flags
-
 
     return best_params, covariance_dict, rms_of_residuals
 

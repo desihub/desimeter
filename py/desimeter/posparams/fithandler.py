@@ -62,6 +62,7 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
                    printing to stdout, etc
     '''
     table = _read(posid=posid, path=path, printf=printf, log_note_selection=log_note_selection)
+
     if not table:
         write_failed_fit(posid,savedir,flag=movemask["INVALID_TABLE"])
         return f'{posid}: dropped from analysis (invalid table)'
@@ -76,14 +77,57 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
     datum_dates = datum_dates.tolist()
     cases = _define_cases(table, datum_dates, data_window, printf=printf)
 
-    # FIRST-PASS:  STATIC PARAMETERS
+
+    if not np.all(table['RECENT_REHOME']) :
+        print("{}: has exposure(s) with RECENT_REHOME=False. Will first initiate the fit without those".format(posid))
+        recent_rehome = table['RECENT_REHOME'].astype(int)
+        selection = np.where(recent_rehome>0)[0]
+        print("{}: number of points with RECENT_REHOME=True = {}".format(posid,selection.size))
+        tmp_table = table[selection]
+        tmp_cases = _define_cases(tmp_table, datum_dates, data_window, printf=printf)
+        static_out = _process_cases(tmp_table, tmp_cases, printf=printf, mode='static',
+                                    param_nominals=fitter.default_values.copy())
+        flags=static_out["FLAGS"]
+        if np.any((flags&movemask["FAILED_FIT"])>0) :
+            flag=0
+            for f in flags : flag |=f
+            write_failed_fit(posid,savedir,flag)
+            return "{}: (in run_best_fits) has FAILED_FIT {}".format(posid,flags.tolist())
+
+        # DECIDE ON BEST STATIC PARAMS
+        best_static = fitter.default_values.copy()
+        errors = static_out['FIT_ERROR_STATIC']
+        printf('{}: rms of residuals (init static) = {}'.format(posid,list(errors)))
+        quantile = np.percentile(errors, static_quantile * 100)
+        selection = static_out[errors <= quantile]
+        these_best = {key:np.median(selection[key + _mode_suffix('static')]) for key in best_static}
+        best_static.update(these_best)
+        printf(f'{posid}: Selected best static params = {_dict_str(best_static)}')
+
+    else :
+        best_static = fitter.default_values.copy()
+
+
+    # FIRST-PASS (or second) :  STATIC PARAMETERS
     static_out = _process_cases(table, cases, printf=printf, mode='static',
-                                param_nominals=fitter.default_values.copy(),
+                                param_nominals=best_static,
                                 )
+
+    flags=static_out["FLAGS"]
+    if np.any((flags&movemask["FAILED_FIT"])>0) :
+        flag=0
+        for f in flags : flag |=f
+        write_failed_fit(posid,savedir,flag)
+        return "{}: (in run_best_fits) has FAILED_FIT {}".format(posid,flags.tolist())
 
     # DECIDE ON BEST STATIC PARAMS
     best_static = fitter.default_values.copy()
+    # add EPSILONs parameters if exist
+    for k in static_out.keys() :
+        if k.find("EPSILON")>=0 :
+            best_static[k.replace("_STATIC","")]=0.
     errors = static_out['FIT_ERROR_STATIC']
+    printf('{}: rms of residuals (static) = {}'.format(posid,list(errors)))
     quantile = np.percentile(errors, static_quantile * 100)
     selection = static_out[errors <= quantile]
     these_best = {key:np.median(selection[key + _mode_suffix('static')]) for key in best_static}
@@ -93,6 +137,8 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
     # SECOND-PASS:  DYNAMIC PARAMETERS
     dynamic_out = _process_cases(table, cases, printf=printf, mode='dynamic',
                                  param_nominals=best_static)
+
+    printf('{}: rms of residuals (dynamic) = {}'.format(posid,list(dynamic_out['FIT_ERROR_DYNAMIC'])))
 
     # MERGED STATIC + DYNAMIC
     same_keys = [key for key, is_variable in output_keys.items() if not is_variable]
@@ -129,6 +175,12 @@ def _read(posid, path, printf=print, log_note_selection=None):
 
 
     table = posmove_selection(table,log_note_selection)
+
+    # add here to the table the choice of sequences of consistent posintTP
+    # so that the indices and subsequently the parameters EPSILON_T_? and EPSILON_P_?
+    # refer to same sequences whatever the choice of time windows for the fit below
+    table["SEQUENCE_ID"] = _sequences_of_consistent_posintTP(table)
+
 
     table.sort('DATE')
     key_search = [key in table.columns for key in required_keys]
@@ -295,15 +347,18 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
         printf(f'  final idx = {n:5d}, date = {subtable["DATE"][-1]}')
         printf(f'  num points = {n-m+1:5d}')
         params, covariance_dict, rms_of_residuals = fitter.fit_params(posintT=xytp_data['posintT'],
-                                                                 posintP=xytp_data['posintP'],
-                                                                 ptlX=xytp_data['ptlX'],
-                                                                 ptlY=xytp_data['ptlY'],
-                                                                 gearT=xytp_data['gearT'],
-                                                                 gearP=xytp_data['gearP'],
-                                                                 mode=mode,
-                                                                 nominals=param_nominals,
-                                                                 bounds=fitter.default_bounds,
-                                                                 keep_fixed=[])
+                                                                      posintP=xytp_data['posintP'],
+                                                                      ptlX=xytp_data['ptlX'],
+                                                                      ptlY=xytp_data['ptlY'],
+                                                                      gearT=xytp_data['gearT'],
+                                                                      gearP=xytp_data['gearP'],
+                                                                      recent_rehome=xytp_data['recent_rehome'],
+                                                                      sequence_id=xytp_data['sequence_id'],
+                                                                      mode=mode,
+                                                                      nominals=param_nominals,
+                                                                      bounds=fitter.default_bounds,
+                                                                      keep_fixed=[])
+
         output['ANALYSIS_DATE'].append(Time.now().iso)
         output['POS_ID'].append(posid)
         for suffix in {'', '_SEC'}:
@@ -314,15 +369,27 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
         output['FIT_ERROR'].append(rms_of_residuals)
         output['FLAGS'].append(params["FLAGS"])
 
+        for key in params.keys() :
+            if key not in fitted_keys and key.find("EPSILON")>=0 :
+                #print("warning adding key={} which was not in fitted_keys={}".format(key,fitted_keys))
+                fitted_keys.append(key)
+                if key not in output.keys() :
+                    output[key] = list()
+                    output_keys[key]=True
+
         for i1,key1 in enumerate(fitted_keys):
             if key1 in params.keys() :
                 output[key1].append(params[key1])
             else :
                 output[key1].append(0.) # happens if fit fails
 
+            if key1.find("EPSILON")>=0 : continue # covariances of EPSILON not saved
+
             # dealing with covariances
             for i2,key2 in enumerate(fitted_keys):
                 if i2<i1 : continue
+                if key2.find("EPSILON")>=0 : continue # covariances of EPSILON not saved
+
                 ckey="COV.{}.{}".format(key1,key2)
                 ckeyt="COV.{}.{}".format(key2,key1)
                 if ckey in output.keys() :
@@ -337,8 +404,11 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
                     output[okey].append(0)
 
         printf(f'{posid}: best params = {_dict_str(params)}')
-        printf(f'  fit error = {rms_of_residuals:.3f}')
+        printf(f'{posid}: fit error = {rms_of_residuals:.3f}')
 
+    keys=list(output.keys())
+    for k in keys :
+        if len(output[k])==0 : output.pop(k)
     table = Table(output)
 
     if True : # drop columns with empty covariance to make the output file a bit smaller
@@ -384,6 +454,19 @@ def _row_idx_for_time(presorted_table, t):
         return len(presorted_table) - 1
     return int(np.argwhere(presorted_table['DATE_SEC'] >= t)[0])
 
+def _sequences_of_consistent_posintTP(table):
+    '''Returns indices of sequences where posintTP are not drifting
+       For example [0,0,0,0,1,1,1,2...] means that for the first 4 moves,
+       posintTP were correctly tracking T,P then an event could have
+       happen that would make posintTP to be offset from the true angles.
+       The three subsequent moves would be again consistent ... etc.
+
+       The fitter uses this to insert new offset parameters for each sequence.
+    '''
+    # for now I will simply use the exposure id as index
+    _ , sequences = np.unique(table["EXPOSURE_ID"],return_inverse=True)
+    return sequences.tolist()
+
 def _select_by_index(table, start=0, final=-1):
     '''Returns a subset of data formatted for the best-fitting function.'''
     data = {}
@@ -394,6 +477,8 @@ def _select_by_index(table, start=0, final=-1):
     data['ptlY'] = subtable['Y_PTL'].tolist()
     data['gearT'] = subtable['GEAR_CALIB_T'].tolist()
     data['gearP'] = subtable['GEAR_CALIB_P'].tolist()
+    data['recent_rehome'] = subtable['RECENT_REHOME'].tolist()
+    data['sequence_id'] = subtable['SEQUENCE_ID'].tolist() # SEQUENCE_ID column was set by  _sequences_of_consistent_posintTP(table)
     return data, subtable
 
 def _np_diff_with_prepend(array, prepend):

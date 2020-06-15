@@ -25,6 +25,7 @@ parser.add_argument('--date-max', type = str, default = "2030-01-01", required =
 parser.add_argument('--pos-ids', type= str, required=False, default=None, help="comma separated list of positioner ids (same as DEVICE_ID)")
 parser.add_argument('-o','--outdir', type = str, default = "None", required = True, help="output directory where MXXXX.csv files are saved")
 parser.add_argument('--with-calib', action = 'store_true', help="add matching calib from db")
+parser.add_argument('--recent-rehome-exposure-ids', type= str, required=False, default=None, help="comma separated list of exposure ids where the positioners have been recently rehomed")
 
 args  = parser.parse_args()
 
@@ -38,6 +39,10 @@ if args.petal_ids is not None :
     petalids = parse_fibers(args.petal_ids)
 else :
     petalids = get_petal_ids(comm)
+
+recent_rehome_exposure_ids=list()
+if args.recent_rehome_exposure_ids is not None :
+    recent_rehome_exposure_ids=[int(val) for val in args.recent_rehome_exposure_ids.split(",")]
 
 for petalid in petalids :
 
@@ -115,6 +120,8 @@ for petalid in petalids :
                 k2=k.upper()
 
             otable[k2]=np.array(posmoves[k])
+
+        otable["RECENT_REHOME"]=np.in1d(otable["EXPOSURE_ID"],recent_rehome_exposure_ids).astype(int)
 
         if not os.path.isdir(args.outdir) :
             os.makedirs(args.outdir)
