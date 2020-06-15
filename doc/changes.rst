@@ -2,7 +2,36 @@
 desimeter change Log
 ====================
 
-0.3.0 (unreleased)
+0.4.0
+------------------
+* Positioner calibration [PR `#73`_, `#77`_, `#78`_, `#79`_, `#81`_, `#82`_, `#84`_, `#85`_, `#86`_, `#87`_, `#88`_, `#89`_, `#90`_, `#91`_, `#92`_, `#93`_, `#94`_, `#95`_, `#96`_]
+* Codacy [PR `#75`_, `#76`_]
+* Support astropy 3.0.4 and matplotlib 2.1.2 [PR `#80`_]
+
+.. _`#73`: https://github.com/desihub/desimeter/pull/73
+.. _`#75`: https://github.com/desihub/desimeter/pull/75
+.. _`#76`: https://github.com/desihub/desimeter/pull/76
+.. _`#77`: https://github.com/desihub/desimeter/pull/77
+.. _`#78`: https://github.com/desihub/desimeter/pull/78
+.. _`#79`: https://github.com/desihub/desimeter/pull/79
+.. _`#80`: https://github.com/desihub/desimeter/pull/80
+.. _`#81`: https://github.com/desihub/desimeter/pull/81
+.. _`#82`: https://github.com/desihub/desimeter/pull/82
+.. _`#84`: https://github.com/desihub/desimeter/pull/84
+.. _`#85`: https://github.com/desihub/desimeter/pull/85
+.. _`#86`: https://github.com/desihub/desimeter/pull/86
+.. _`#87`: https://github.com/desihub/desimeter/pull/87
+.. _`#88`: https://github.com/desihub/desimeter/pull/88
+.. _`#89`: https://github.com/desihub/desimeter/pull/89
+.. _`#90`: https://github.com/desihub/desimeter/pull/90
+.. _`#91`: https://github.com/desihub/desimeter/pull/91
+.. _`#92`: https://github.com/desihub/desimeter/pull/92
+.. _`#93`: https://github.com/desihub/desimeter/pull/93
+.. _`#94`: https://github.com/desihub/desimeter/pull/94
+.. _`#95`: https://github.com/desihub/desimeter/pull/95
+.. _`#96`: https://github.com/desihub/desimeter/pull/96
+
+0.3.0
 ------------------
 * Connection to posmov db at LBL, documentation [PR `#70`_]
 * LBL petal 1 [PR `#69`_]
