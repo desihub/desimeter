@@ -41,8 +41,6 @@ For every move performed, numerous values get stored in the online database (pos
       
       #) ``MOVE_CMD``, ``MOVE_VAL1``, ``MOVE_VAL2``, ``LOG_NOTE``, fields that can be parsed to determine what higher level operation was being performed
 
-*(As of 2020-05-12, items (2), (3), (4) are in the process of being brought online.)*
-
 Anytime a calibration value is changed (such as ``LENGTH_R1``, ``LENGTH_R2``, etc), or indeed any other change of positioner state data, that fact will be recorded in the online database.
 
 Re-analysis of fiber positions with desimeter
@@ -53,19 +51,40 @@ Retreiving data from the online database
 ----------------------------------------
 The posmovedb for the instrument at the Mayall is hosted at KPNO, and regularly mirrored to NERSC. There is a similar posmovedb hosted at LBNL on the beyonce server, just for test petals there.
 
-As of 2020-05-12, desimeter provides the following tools:
+As of 2020-06-16, desimeter provides the following tools:
 
 * ``get_posmov_fvc_data`` ... Matches timestamps between posmovedb and fvc FITS files, saves csv combining posmovedb rows with desimeter’s analysis of the measured positions.
 
-* ``get_posmov_calib`` ... Just grabs values like ``LENGTH_*``, ``OFFSET_*`` etc from posmovedb, saves csv.
+* ``get_posmoves`` ... Retrieves measured move values values ``PTL_X_*``, ``PTL_Y_*`` etc posmovedb, saves csv.
+
+* ``get_posparams`` ... Retrieves calibration values like ``LENGTH_*``, ``OFFSET_*`` etc from posmovedb, saves csv.
 
 Analysis of positioning performance
 -----------------------------------
 
-As of 2020-05-12, desimeter provides the following tools:
+As of 2020-06-16, desimeter provides the following tools:
 
 * ``fit_posparams`` ... Fits positioner calibration parameters, by comparing measured (x,y) to internally-tracked (theta,phi).
 
 * ``plot_posparams`` ... Plots results from fit_posparams per positioner. Also plots cumulative positioner errors over time, as calculated when performing those best-fits.
+
+Preparation of calibration values for use on the instrument
+-----------------------------------------------------------
+
+As of 2020-06-16, desimeter provides the following tool:
+
+* ``prepare_posparams_for_instr`` ... Takes a csv file produced by fit_posparams and interactively guides user through validating and selecting safe values for use on instrument. Generates an output csv file which can be ingested by ``pecs/set_calibrations.py``
+
+The overall sequence for updating calibrations is:
+
+1. ``get_posmoves`` ... get tracked (t,p) and measured (x,y) from online DB
+
+2. ``fit_posparams`` ... best-fit calib params which map (t,p) to (x,y)
+
+3. ``merge_posparams`` ... gather fit result files into one table
+
+4. ``prepare_posparams_for_instr`` ... validate parameters and generate modified table
+
+5. ``pecs/set_calibrations.py`` ... (managed in DESI's svn repo, *not* desihub) push data to the online DB
 	
 
