@@ -75,7 +75,9 @@ As of 2020-06-16, desimeter provides the following tool:
 
 * ``prepare_posparams_for_instr`` ... Takes a csv file produced by fit_posparams and interactively guides user through validating and selecting safe values for use on instrument. Generates an output csv file which can be ingested by ``pecs/set_calibrations.py``
 
-The overall sequence for updating calibrations is:
+The procedure for measuring and updating calibrations is given in DESI-5732.
+
+As on overview of the role desimter plays in this process, those basic steps are:
 
 1. ``get_posmoves`` ... get tracked (t,p) and measured (x,y) from online DB
 
@@ -85,6 +87,6 @@ The overall sequence for updating calibrations is:
 
 4. ``prepare_posparams_for_instr`` ... validate parameters and generate modified table
 
-5. ``pecs/set_calibrations.py`` ... (managed in DESI's svn repo, *not* desihub) push data to the online DB
+Finally after desimeter has prepared the new calibration parameters, we use ``pecs/set_calibrations.py`` ... (managed in DESI's svn repo, *not* desihub) push data to the online DB
 	
 
