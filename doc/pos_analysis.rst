@@ -87,6 +87,6 @@ As on overview of the role desimter plays in this process, those basic steps are
 
 4. ``prepare_posparams_for_instr`` ... validate parameters and generate modified table
 
-Finally after desimeter has prepared the new calibration parameters, we use ``pecs/set_calibrations.py`` ... (managed in DESI's svn repo, *not* desihub) push data to the online DB
+Finally after desimeter has prepared the new calibration parameters, we use ``pecs/set_calibrations.py`` (managed in DESI's svn repo, *not* desihub), which pushes data to the online DB.
 	
 
