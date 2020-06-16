@@ -192,6 +192,16 @@ def check_recent_rehome(table):
     # develop a more direct check here.
     return table.copy()  # not yet implemented
 
+def check_uniqueness(table):
+    '''Searches for multiple rows with same POS_ID, and asks user to resolve
+    any conflicts.
+    
+    Internal details: Returns a copy of table.'''
+    posids = set(table['POS_ID'])
+    for posid in posids:
+        
+    return new_table
+
 class Check(object):
     '''Represents a check function plus arguments.
         func ... function handle
@@ -254,16 +264,43 @@ class Check(object):
             user_not_done = was_adjusted
         return output
 
+# set up and run checks
 checks = [Check(check_flags)]
 checks += [Check(check_static_fit_bounds, tighten_factor=0.001)]
 #checks += [Check(check_xy_offsets, tol=0.5)]
 #checks += [Check(check_arm_lengths, tol=0.5)]
 #checks += [Check(check_fit_error, tol=0.5)]
 #checks += [Check(check_recent_rehome)]
- 
+checks += [Check(check_uniqueness)]
 for check in checks:
     new_table = check.run_and_adjust(new_table)
-    
+
+# finalize which parameters to commit to DB
+#  Note 1: I keep the desimeter terminology SCALE_T and SCALE_P here, for
+#   consistency. Any conversion to GEAR_CALIB_T, GEAR_CALIB_P shall be performed
+#   by the online upload tool (i.e. pecs/set_calibrations.py).
+#  Note 2: I include PHYSICAL_RANGE_T and PHYSICAL_RANGE_P in the output table,
+#   for completeness / future proofing. However, as of this writing (2020-06-16)
+#   there is no specific intent to ever recalibrate them (would require work to
+#   demonstrate anticollision safety).
+valid_keys = ['LENGTH_R1', 'LENGTH_R2', 'OFFSET_T', 'OFFSET_P', 'OFFSET_X', 'OFFSET_Y',
+              'SCALE_T', 'SCALE_P', 'PHYSICAL_RANGE_T', 'PHYSICAL_RANGE_P']
+commit_prefix = 'COMMIT_'
+commit_keys = {key: commit_prefix + key for key in valid_keys}
+
+# currently unused params, included for completeness of interface
+always_skip = {'PHYSICAL_RANGE_T', 'PHYSICAL_RANGE_P'}
+for key in always_skip:
+    if key not in new_table.columns:
+        new_table[key] = None  # no data
+    new_table[commit_keys[key]] = False  # do not commit
+
+# give user specific decision over whether to commit each field
+# for key, commit_key in commit_keys.items():
+#     if key not in always_skip:
+        
+#         n_committable = 
+#         yesno = input2(f'Should ')
 # TO DO HERE:
 #   setting <param>_COMMIT fields
 #    - give user option to disable any field
