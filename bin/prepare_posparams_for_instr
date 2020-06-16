@@ -79,6 +79,8 @@ logger.addHandler(sh)
 logger.info(f'Running {script_name} to prepare positioner calibration parameters for use on instrument.')
 logger.info(f'Input file is: {args.infile}')
 logger.info(f'Table contains {len(input_table)} rows')
+
+# user interaction wrappers
 def input2(message):
     '''Wrapper for input which will log the interaction.'''
     logger.info(f'PROMPT: {message}')
@@ -88,8 +90,29 @@ def input2(message):
     logger.info(f'USER ENTERED >>> {user_input}')
     return user_input
 
-# check functions
+def yesnohelp(message):
+    '''Wrapper for user input which cleans up human-entered values and returns
+    a string of exactly 'yes', 'no', or 'help'.
+    '''
+    answer =  input2(f'{message} (y/n/help)')
+    if answer.lower() in {'h', 'help', 'doc', 'man'}:
+        return 'help'
+    if answer.lower() in {'n', 'no', 'false'}:
+        return 'no'
+    if answer.lower() in {'y', 'yes', 'true'}:
+        return 'yes'
+    return yesnohelp(message)
 
+def str2float(s):
+    '''Returns float, or None if string s can not be converted to float.'''
+    try:
+        x = float(s)
+        assert np.isfinite(x)
+        return x
+    except:
+        return None
+
+# check functions
 def _eliminate_rows(table, elim, rationale):
     '''Logs messages and returns a copy of table, with rows identified by elim
     deleted from it.
@@ -108,7 +131,7 @@ def _eliminate_rows(table, elim, rationale):
     posids_remaining = set(table['POS_ID'][keep])
     posids_eliminated = all_posids - posids_remaining
     n_rows = len(table)
-    n_elim_rows = len(np.argwhere(elim_bool))
+    n_elim_rows = len(np.flatnonzero(elim_bool))  # flatnonzero is like argwhere but better
     n_elim_posids = len(posids_eliminated)
     logger.warning(f'{n_elim_rows} of {n_rows} rows have {rationale}. These' +
                    f' rows will be excluded from the output table. This eliminates' +
@@ -197,9 +220,43 @@ def check_uniqueness(table):
     any conflicts.
     
     Internal details: Returns a copy of table.'''
-    posids = set(table['POS_ID'])
-    for posid in posids:
-        
+    unique_posids = set(table['POS_ID'])
+    new_table = table.copy()
+    def get_row_idxs(table, posid):
+        '''Because I have a mental block remembering that flatnonzero is like
+        argwhere except better.'''
+        return np.flatnonzero(table['POS_ID'] == posid)
+    for posid in unique_posids:
+        row_idxs = get_row_idxs(new_table, posid)
+        if len(row_idxs) == 1:
+            continue
+        options = {}
+        for i in range(len(row_idxs)):
+            info_keys = ['NUM_POINTS', 'DATA_END_DATE', 'FIT_ERROR_STATIC',
+                         'FIT_ERROR_DYNAMIC'] + list(fitter.all_keys)
+            options[i] = {key: new_table[key][row_idxs[i]] for key in info_keys}
+        msg = f'{posid} has multiple rows:\n'
+        for i, vals in options.items():
+            msg += f'\n{posid} option {i}:\n{vals}\n'
+        logger.warning(msg)
+        retry = True
+        while retry:
+            user_input = input2('Please select number for WHICH OPTION TO KEEP, ' +
+                                'or IF ANY DOUBT, enter "skip".')
+            if user_input.lower() in {'skip', 's'}:
+                new_table.remove_rows(row_idxs)
+                logger.info(f'All {len(row_idxs)} rows for {posid} skipped (removed from table)')
+                retry = False
+            elif user_input in {str(i) for i in options.keys()}:
+                delete_idxs = row_idxs[row_idxs != int(user_input)]
+                new_table.remove_rows(delete_idxs)
+                logger.info(f'{len(delete_idxs)} rows for {posid} removed')
+                n_remaining = len(get_row_idxs(new_table, posid))
+                assert n_remaining == 1, f'unknown error with {posid} during check_uniqueness, {n_remaining} rows for it in table'
+                retry = False
+    new_unique_posids = set(new_table['POS_ID'])
+    new_listed_posids = list(new_table['POS_ID'])
+    assert len(new_unique_posids) == len(new_listed_posids), f'error, not all conflicts resolved by check_uniqueness'
     return new_table
 
 class Check(object):
@@ -239,19 +296,23 @@ class Check(object):
         if not self.kwargs:
             input2('Press enter to acknowledge')
             return False
-        yesno = input2(f'Repeat {self.name} with modified args? (y/n/help)')
-        if yesno == '':
-            return self.offer_adjustment()
-        if yesno.lower() in {'h', 'help', 'doc', 'man'}:
+        answer = yesnohelp(f'Repeat {self.name} with modified args?')
+        if answer == 'help':
             logger.info(self.doc)
             return self.offer_adjustment()
-        if yesno.lower() in {'n', 'no', 'false', 'f', 'o'}:
+        if answer == 'no':
             return False
+        assert answer == 'yes', f'error, unknown user answer {answer}'
         for key, val in self.kwargs.items():
             old_kwargs = self.kwargs.copy()
-            response = input2(f'Enter new {key} value (currently {val}), or blank to skip:')
-            if response != '':
-                self.kwargs[key] = float(response)
+            while True:
+                response = input2(f'Enter new {key} value (currently {val}), or blank to skip:')
+                if response == '':
+                    break
+                number = str2float(response)
+                if number != None:
+                    self.kwargs[key] = float(response)
+                    break
             was_adjusted = self.kwargs != old_kwargs
             return was_adjusted
     
@@ -274,6 +335,7 @@ checks += [Check(check_static_fit_bounds, tighten_factor=0.001)]
 checks += [Check(check_uniqueness)]
 for check in checks:
     new_table = check.run_and_adjust(new_table)
+logger.info('All checks complete')
 
 # finalize which parameters to commit to DB
 #  Note 1: I keep the desimeter terminology SCALE_T and SCALE_P here, for
@@ -288,24 +350,43 @@ valid_keys = ['LENGTH_R1', 'LENGTH_R2', 'OFFSET_T', 'OFFSET_P', 'OFFSET_X', 'OFF
 commit_prefix = 'COMMIT_'
 commit_keys = {key: commit_prefix + key for key in valid_keys}
 
-# currently unused params, included for completeness of interface
-always_skip = {'PHYSICAL_RANGE_T', 'PHYSICAL_RANGE_P'}
-for key in always_skip:
-    if key not in new_table.columns:
-        new_table[key] = None  # no data
-    new_table[commit_keys[key]] = False  # do not commit
+# currently unused params (as of 2020-06-16), included for completeness of interface
+skip = {'SCALE_T', 'SCALE_P', 'PHYSICAL_RANGE_T', 'PHYSICAL_RANGE_P'}
 
 # give user specific decision over whether to commit each field
-# for key, commit_key in commit_keys.items():
-#     if key not in always_skip:
-        
-#         n_committable = 
-#         yesno = input2(f'Should ')
-# TO DO HERE:
-#   setting <param>_COMMIT fields
-#    - give user option to disable any field
-#    - give user option to enable SCALES (right now, this probably takes some
-#      careful human checking, positioner by positioner)
+delayed_log_notes = []  # delaying printout of these confirmation msgs makes interaction clearer
+for key, commit_key in commit_keys.items():
+    if key not in new_table.columns:
+        new_table[key] = None  # no data
+        skip.add(key)
+    if key in skip:
+        set_val = False
+        method = 'automatically set'
+    else:
+        while True:
+            answer = yesnohelp(f'Shall we commit {key} to online database?')
+            if answer == 'help':
+                logger.info(f'This will set the field {commit_key} to True or False, for' +
+                            ' all remaining positioners in the parameters table (after the' +
+                            ' checks which were just completed). It does not send anything' +
+                            ' to the database at this time. We are just constructing an' +
+                            ' input file right now. Later on, when we feed the input file' +
+                            f' to pecs/set_calibrations.py, *then* the {commit_key} field will' +
+                            ' tell that script whether or not to actually store the associated' +
+                            ' value to the online DB. If you have any doubts about validity of' +
+                            ' the data, reply "no" and discuss with the focal plane team.' +
+                            ' Devs J.Silber, K.Fanning, or J.Guy should be able to assist.')
+            elif answer == 'no':
+                set_val = False
+                break
+            elif answer == 'yes':
+                set_val = True
+                break
+        method = 'set by user'
+    new_table[commit_key] = set_val
+    delayed_log_notes += [f'{commit_key} {method} to {set_val} for all positioners']
+for note in delayed_log_notes:
+    logger.info(note)
 
 # export
 import os
