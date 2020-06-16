@@ -44,7 +44,7 @@ parser = argparse.ArgumentParser(description=__doc__, formatter_class=RawTextHel
 parser.add_argument('-i', '--infile', type=str, required=True, help='path to input csv file (like "all_paramfits.csv")')
 parser.add_argument('--allow-scale', action='store_true', help='whether to allow updating of SCALE_T and SCALE_P, defaults to False')
 args = parser.parse_args()
-if force_no_scale:
+if force_no_scale and args.allow_scale:
     args.allow_scale = False
     print(force_scale_explanation)
 
@@ -58,6 +58,7 @@ import numpy as np
 import os
 import logging
 import desimeter.posparams.fitter as fitter
+import desimeter.io
 
 # detect "static" and "dynamic" suffixes in data headers
 # generate a key mapping for which of these options to push to the output table
@@ -200,7 +201,32 @@ def check_xy_offsets(table, tol):
     
     Internal details: Returns a copy of table.
     '''
-    return table.copy()  # not yet implemented
+    new = table.copy()
+    expected_centers = desimeter.io.load_metrology()
+    delete_idxs = set()
+    for i in range(len(new)):
+        device_selection = expected_centers['DEVICE_LOC'] == new['DEVICE_LOC'][i]
+        petal_id = new['PETAL_ID'][i]
+        petal_selection = expected_centers['PETAL_ID'] == petal_id
+        err_msg = f'No xy offset check values loaded for PETAL_ID={petal_id}, please check that' \
+                  f' the DESIMETER_DATA environment variable (currently set to directory' \
+                  f' "{desimeter.io.desimeter_data_dir()}" is correct on your machine. Hint, for' \
+                  ' test petals in the lab, we sometimes use a subdirectory, with an alternative' \
+                  ' fp-metrology.csv file.'
+        assert any(petal_selection), err_msg
+        selection = device_selection & petal_selection
+        assert len(np.flatnonzero(selection)) == 1, 'error, didn\'t select down to 1 positioner'
+        xy_exp = {u: float(expected_centers[selection][u + '_PTL']) for u in ['X', 'Y']}
+        for u, exp in xy_exp.items():
+            offset_key = 'OFFSET_' + u
+            offset = new[offset_key][i]
+            err = offset - exp
+            if abs(err) > tol:
+                delete_idxs.add(i)
+                logger.warning(f'Row for {new["POS_ID"][i]} removed due to {offset_key}=' +
+                               f'{offset} outside tol={tol} of nominal {u + "_PTL"}={exp}')
+    new.remove_rows(list(delete_idxs))        
+    return new
 
 def check_arm_lengths(table, tol):
     '''Checks closeness of LENGTH_R1 and LENGTH_R2 to their nominal values.
@@ -209,7 +235,19 @@ def check_arm_lengths(table, tol):
     
     Internal details: Returns a copy of table.
     '''
-    return table.copy()  # not yet implemented
+    new = table.copy()
+    expected_lengths = {key: fitter.default_values[key] for key in ['LENGTH_R1', 'LENGTH_R2']}
+    delete_idxs = set()
+    for i in range(len(new)):
+        for key, exp in expected_lengths.items():
+            length = new[key][i]
+            err = length - exp
+            if abs(err) > tol:
+                delete_idxs.add(i)
+                logger.warning(f'Row for {new["POS_ID"][i]} removed due to {key}=' +
+                               f'{length} outside tol={tol} of nominal={exp}')
+    new.remove_rows(list(delete_idxs))        
+    return new
 
 def check_static_fit_error(table, tol):
     '''Checks overall goodness of fit for STATIC parameters. Argument 'tol' is
@@ -219,8 +257,13 @@ def check_static_fit_error(table, tol):
     Internal details: Returns a copy of table.
     '''
     new = table.copy()
-    row_idxs = new['FIT_ERROR_STATIC'] > tol
-    new.remove_rows(row_idxs)
+    fit_err_key = 'FIT_ERROR_STATIC'
+    fit_errs = new[fit_err_key]
+    delete_idxs = fit_errs > tol
+    for i in np.flatnonzero(delete_idxs):
+        logger.warning(f'Row for {new["POS_ID"][i]} removed due to {fit_err_key}=' +
+                       f'{fit_errs[i]} > tol={tol}')
+    new.remove_rows(delete_idxs)
     return new
 
 def check_dynamic_fit_error(table, tol):
@@ -359,8 +402,8 @@ class Check(object):
 # set up and run checks
 checks = [Check(check_flags)]
 checks += [Check(check_static_fit_bounds, tighten_factor=0.001)]
-#checks += [Check(check_xy_offsets, tol=0.5)]
-#checks += [Check(check_arm_lengths, tol=0.4)]
+checks += [Check(check_xy_offsets, tol=0.5)]
+checks += [Check(check_arm_lengths, tol=0.4)]
 checks += [Check(check_static_fit_error, tol=0.03)]
 if args.allow_scale:
     checks += [Check(check_dynamic_fit_error, tol=0.03)]
