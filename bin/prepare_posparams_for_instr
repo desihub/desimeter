@@ -26,12 +26,27 @@ As of this writing (2020-06-12) the typical sequence is:
 See DESI-5732 for data model and procedures.
 '''
 
+force_no_scale = True
+force_scale_explanation = '''
+Note: As of 2020-06-16, we are not allowing SCALE_T and SCALE_P to be changed
+in the online DB. The 'allow-scale' option will be ignored.
+
+Implementation details: In the future, especially if we determine that some failed
+positioners can be recovered this way, then the line force_no_scale would be
+the first thing to change in the code. Then search for the args.allow_scale
+property to find all the places you need to think about the SCALE issues.
+'''
+
 # command line argument parsing
 import argparse
 from argparse import RawTextHelpFormatter  # for making --help option respect newline characters
 parser = argparse.ArgumentParser(description=__doc__, formatter_class=RawTextHelpFormatter)
 parser.add_argument('-i', '--infile', type=str, required=True, help='path to input csv file (like "all_paramfits.csv")')
+parser.add_argument('--allow-scale', action='store_true', help='whether to allow updating of SCALE_T and SCALE_P, defaults to False')
 args = parser.parse_args()
+if force_no_scale:
+    args.allow_scale = False
+    print(force_scale_explanation)
 
 # import data
 from desimeter.posparams.movemask import movemask
@@ -196,12 +211,28 @@ def check_arm_lengths(table, tol):
     '''
     return table.copy()  # not yet implemented
 
-def check_fit_error(table, tol):
-    '''Checks overall goodness of fit. Argument 'tol' is a value in rms um.
-    Rows outside this tolerance will be eliminated from the output.
+def check_static_fit_error(table, tol):
+    '''Checks overall goodness of fit for STATIC parameters. Argument 'tol' is
+    a value in rms mm. Rows outside this tolerance will be eliminated from the
+    output.
     
     Internal details: Returns a copy of table.
     '''
+    new = table.copy()
+    row_idxs = new['FIT_ERROR_STATIC'] > tol
+    new.remove_rows(row_idxs)
+    return new
+
+def check_dynamic_fit_error(table, tol):
+    '''Checks overall goodness of fit for DYNAMIC parameters. Argument 'tol' is
+    a value in rms mm. Rows outside this tolerance will be eliminated from the
+    output.
+    
+    Internal details: Returns a copy of table.
+    '''
+    # As of 2020-06-16, not implemented. The purpose of this check would be
+    # if we want to start using the SCALE_T and SCALE_P parameters. Then this
+    # check would become important.
     return table.copy()  # not yet implemented
 
 def check_recent_rehome(table):
@@ -221,20 +252,20 @@ def check_uniqueness(table):
     
     Internal details: Returns a copy of table.'''
     unique_posids = set(table['POS_ID'])
-    new_table = table.copy()
+    new = table.copy()
     def get_row_idxs(table, posid):
         '''Because I have a mental block remembering that flatnonzero is like
         argwhere except better.'''
         return np.flatnonzero(table['POS_ID'] == posid)
     for posid in unique_posids:
-        row_idxs = get_row_idxs(new_table, posid)
+        row_idxs = get_row_idxs(new, posid)
         if len(row_idxs) == 1:
             continue
         options = {}
         for i in range(len(row_idxs)):
             info_keys = ['NUM_POINTS', 'DATA_END_DATE', 'FIT_ERROR_STATIC',
                          'FIT_ERROR_DYNAMIC'] + list(fitter.all_keys)
-            options[i] = {key: new_table[key][row_idxs[i]] for key in info_keys}
+            options[i] = {key: new[key][row_idxs[i]] for key in info_keys}
         msg = f'{posid} has multiple rows:\n'
         for i, vals in options.items():
             msg += f'\n{posid} option {i}:\n{vals}\n'
@@ -244,20 +275,20 @@ def check_uniqueness(table):
             user_input = input2('Please select number for WHICH OPTION TO KEEP, ' +
                                 'or IF ANY DOUBT, enter "skip".')
             if user_input.lower() in {'skip', 's'}:
-                new_table.remove_rows(row_idxs)
+                new.remove_rows(row_idxs)
                 logger.info(f'All {len(row_idxs)} rows for {posid} skipped (removed from table)')
                 retry = False
             elif user_input in {str(i) for i in options.keys()}:
                 delete_idxs = row_idxs[row_idxs != int(user_input)]
-                new_table.remove_rows(delete_idxs)
+                new.remove_rows(delete_idxs)
                 logger.info(f'{len(delete_idxs)} rows for {posid} removed')
-                n_remaining = len(get_row_idxs(new_table, posid))
+                n_remaining = len(get_row_idxs(new, posid))
                 assert n_remaining == 1, f'unknown error with {posid} during check_uniqueness, {n_remaining} rows for it in table'
                 retry = False
-    new_unique_posids = set(new_table['POS_ID'])
-    new_listed_posids = list(new_table['POS_ID'])
+    new_unique_posids = set(new['POS_ID'])
+    new_listed_posids = list(new['POS_ID'])
     assert len(new_unique_posids) == len(new_listed_posids), f'error, not all conflicts resolved by check_uniqueness'
-    return new_table
+    return new
 
 class Check(object):
     '''Represents a check function plus arguments.
@@ -329,8 +360,10 @@ class Check(object):
 checks = [Check(check_flags)]
 checks += [Check(check_static_fit_bounds, tighten_factor=0.001)]
 #checks += [Check(check_xy_offsets, tol=0.5)]
-#checks += [Check(check_arm_lengths, tol=0.5)]
-#checks += [Check(check_fit_error, tol=0.5)]
+#checks += [Check(check_arm_lengths, tol=0.4)]
+checks += [Check(check_static_fit_error, tol=0.03)]
+if args.allow_scale:
+    checks += [Check(check_dynamic_fit_error, tol=0.03)]
 #checks += [Check(check_recent_rehome)]
 checks += [Check(check_uniqueness)]
 for check in checks:
@@ -351,7 +384,9 @@ commit_prefix = 'COMMIT_'
 commit_keys = {key: commit_prefix + key for key in valid_keys}
 
 # currently unused params (as of 2020-06-16), included for completeness of interface
-skip = {'SCALE_T', 'SCALE_P', 'PHYSICAL_RANGE_T', 'PHYSICAL_RANGE_P'}
+skip = {'PHYSICAL_RANGE_T', 'PHYSICAL_RANGE_P'}
+if not args.allow_scale:
+    skip |= {'SCALE_T', 'SCALE_P'}
 
 # give user specific decision over whether to commit each field
 delayed_log_notes = []  # delaying printout of these confirmation msgs makes interaction clearer
