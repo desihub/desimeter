@@ -4,8 +4,9 @@
 import time
 filename_timestamp_format = '%Y%m%dT%H%M%S%z'
 output_prefix = time.strftime(filename_timestamp_format, time.gmtime())
-output_suffix = '_posparams_for_instr.csv'
-output_name = output_prefix + output_suffix
+output_suffix = '_posparams_for_instr'
+output_name = output_prefix + output_suffix + '.csv'
+log_name = output_prefix + output_suffix + '.log'
 
 __doc__ = f'''
 Inspects paramfits csv table and prepares a version of the table which is
@@ -63,7 +64,6 @@ for key_in, key_out in keys_in_to_out.items():
 # set up a log file
 script_name = os.path.basename(__file__)
 out_dir = os.path.dirname(args.infile)
-log_name = output_prefix + '_prepare_posparams.log'
 log_path = os.path.join(out_dir, log_name)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -357,7 +357,7 @@ skip = {'SCALE_T', 'SCALE_P', 'PHYSICAL_RANGE_T', 'PHYSICAL_RANGE_P'}
 delayed_log_notes = []  # delaying printout of these confirmation msgs makes interaction clearer
 for key, commit_key in commit_keys.items():
     if key not in new_table.columns:
-        new_table[key] = None  # no data
+        new_table[key] = np.nan  # no data
         skip.add(key)
     if key in skip:
         set_val = False
