@@ -9,12 +9,13 @@ from desimeter.log import get_logger
 from pkg_resources import resource_filename
 from astropy.table import Table
 from desimeter.transform.ptl2fp import apply_ptl2fp
+from desimeter.io import desimeter_data_dir
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Combine petal metrology and petal alignment data into a single CSV file""")
 
 parser.add_argument('-o','--outfile', type = str, default = None, required = True, help = 'output csv file')
-
+parser.add_argument('--no-replacement',action='store_true')
 
 if "DESIMETER_DATA" not in os.environ :
     print("error: you need to set first the env. variable DESIMETER_DATA to point to the petal1 data")
@@ -69,10 +70,12 @@ spots=spots[:][r>1.] # exclude bad data??
 spots = apply_ptl2fp(spots)
 spots["LOCATION"] = spots["PETAL_LOC"]*1000+spots["DEVICE_LOC"]
 
+
 # add positioner id and bus id
 
 filename=resource_filename('desimeter',"data/lbl-petal1/lbnl_positioner_indexes_20200324.csv")
 if os.path.isfile(filename) :
+    print("reading",filename)
     ids=Table.read(filename)
     loc2ind={loc:i for i,loc in enumerate(ids["DEVICE_LOC"])}
     for k in ["DEVICE_ID","DEVICE_TYPE","BUS_ID"] :
@@ -83,6 +86,21 @@ for loc in [461,501] :
     log.warning("SPECIAL CASE FOR DEVICE_LOC={} (DEVICE_ID={}): Force DEVICE_TYPE=ETC".format(loc,spots["DEVICE_ID"][i]))
     spots["DEVICE_TYPE"][i]="ETC"
 
+log.info("applying patch")
+filename=os.path.join(desimeter_data_dir(),"fp-metrology-patch.csv")
+log.info(" from {}".format(filename))
+patch = Table.read(filename,format="csv")
+for i in range(patch["X_FP"].size) :
+    selection=(spots["LOCATION"]==patch["LOCATION"][i])&(spots["PINHOLE_ID"]==patch["PINHOLE_ID"][i])
+    jj=np.where(selection)[0]
+    if jj.size == 0 :
+        log.info("Adding LOCATION={} PINHOLE_ID={}".format(patch["LOCATION"][i],patch["PINHOLE_ID"][i]))
+        spots.add_row(patch[:][i])
+    else :
+        if not args.no_replacement :
+            j=jj
+            log.info("Replacing LOCATION={} PINHOLE_ID={}".format(patch["LOCATION"][i],patch["PINHOLE_ID"][i]))
+            spots[:][j] = patch[:][i]
 
 
 spots.write(args.outfile,format='csv',overwrite=True)
