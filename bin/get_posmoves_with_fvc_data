@@ -1,0 +1,228 @@
+#!/usr/bin/env python
+
+import os,sys
+import psycopg2
+import numpy as np
+import matplotlib.pyplot as plt
+from astropy.table import Table, vstack
+import datetime
+import argparse
+import fitsio
+from desimeter.util import parse_fibers
+from desimeter.io import load_metrology
+from desimeter.dbutil import dbquery,get_petal_ids,get_pos_ids,get_petal_loc
+from desimeter.transform.ptl2fp import fp2ptl
+import subprocess
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="""Get posmoves from the DB and add or replace X_FP,Y_FP,PTL_X,PTL_Y,PTL_Z
+                                     from a desimeter fit of FVC fits images. The input is a list of FVC images fits files.
+In a first pass, the keywords OBSNUM and OBSFRM are read in the headers of the images, and the images are down selected based on the arguments --exposure-ids and/or exposure-iters if given. Then, matching fvc.xxx.csv files are searched in the directory given by the option --fvc-data-dir. If not found, the script desi_fvc_proc is run.
+                                     After all FVC images have been processed, the coordinates tables are merged, and the posmove DB table is read and the matching selected rows joined to produce the final output files (one per positioner as for get_posmoves).
+Example at NERSC:
+get_posmoves_with_fvc_data --host beyonce.lbl.gov --port 5432 --password xxx --petal-id 1 --fvc-images /global/cfs/cdirs/desi/engineering/focalplane/archive/desisti/data/images/fvc/fvc.0000217*.fits --exposure-ids 2171 --recent-rehome 2171 --fvc-proc-options ' --no-zbfit'
+""")
+
+
+parser.add_argument('--fvc-images', type = str, nargs="*", default = None, required = True, help="fvc images fvc*.fits")
+parser.add_argument('--fvc-data-dir', type = str, default = ".", required = False, help="directory with processed csv files")
+parser.add_argument('--outdir', type = str, default = ".", required = False, help="output directory where MXXXX.csv files are saved")
+parser.add_argument('--host', type= str, required=False, default='db.replicator.dev-cattle.stable.spin.nersc.org', help="db.replicator.dev-cattle.stable.spin.nersc.org for kpno or beyonce.lbl.gov for petaltest")
+parser.add_argument('--port', type= int, required=False, default=60042, help="60042 for kpno or 5432 for petaltest")
+parser.add_argument('--password', type= str, required=False, default=None, help="nothing for kpno")
+parser.add_argument('--petal-ids', type= str, required=False, default=None, help="select petal ids")
+parser.add_argument('--pos-ids', type= str, required=False, default=None, help="comma separated list of positioner ids (same as DEVICE_ID)")
+parser.add_argument('--exposure-ids', type= str, required=False, default=None, help="comma separated list of exposure ids")
+parser.add_argument('--exposure-iters', type= str, required=False, default=None, help="comma separated list of exposure iters")
+parser.add_argument('--recent-rehome-exposure-ids', type= str, required=False, default=None, help="comma separated list of exposure ids where the positioners have been recently rehomed")
+parser.add_argument('--fvc-proc-options',type=str,required=False,default=None,help="desi_fvc_proc options")
+parser.add_argument('--date-min', type = str, default = "2019-01-01", required = False, help="date min with format YYYY-MM-DD")
+parser.add_argument('--date-max', type = str, default = "2030-01-01", required = False, help="date max with format YYYY-MM-DD")
+
+args  = parser.parse_args()
+
+comm = psycopg2.connect(host=args.host,port=args.port, database='desi_dev', user='desi_reader',password=args.password)
+
+if args.petal_ids is not None :
+    petalids=parse_fibers(args.petal_ids)
+else :
+    petalids = get_petal_ids(comm)
+
+recent_rehome_exposure_ids=list()
+if args.recent_rehome_exposure_ids is not None :
+    recent_rehome_exposure_ids=[int(val) for val in args.recent_rehome_exposure_ids.split(",")]
+
+fvc_images_filenames = []
+fvc_images_exposure_ids = []
+fvc_images_exposure_iters = []
+for filename in args.fvc_images :
+    print("reading header in",filename)
+    if not os.path.isfile(filename) :
+        print("WARNING: missing",filename)
+        continue
+    head=fitsio.read_header(filename)
+    if not "OBSNUM" in head :
+        print("WARNING: missing keyword OBSNUM in header of ",filename)
+        continue
+    if not "OBSFRM" in head :
+        print("WARNING: missing keyword OBSFRM in header of ",filename)
+        continue
+    fvc_images_filenames.append(filename)
+    fvc_images_exposure_ids.append(head["OBSNUM"])
+    fvc_images_exposure_iters.append(head["OBSFRM"])
+
+fvc_images_table = Table()
+fvc_images_table["FITS_FILE"]=np.array(fvc_images_filenames)
+fvc_images_table["EXPOSURE_ID"]=np.array(fvc_images_exposure_ids).astype(int)
+fvc_images_table["EXPOSURE_ITER"]=np.array(fvc_images_exposure_iters).astype(int)
+
+print("FVC images table")
+print(fvc_images_table)
+
+if args.exposure_ids is not None :
+    exposure_ids = parse_fibers(args.exposure_ids)
+    selection = np.in1d(fvc_images_table["EXPOSURE_ID"],exposure_ids)
+    fvc_images_table = fvc_images_table[selection]
+if args.exposure_iters is not None :
+    exposure_iters = parse_fibers(args.exposure_iters)
+    selection = np.in1d(fvc_images_table["EXPOSURE_ITER"],exposure_iters)
+    fvc_images_table = fvc_images_table[selection]
+print("after selection:")
+print(fvc_images_table)
+
+print("loop over fits images and read or run and read csv file in directory '{}'".format(args.fvc_data_dir))
+fvc_data_filenames = []
+for num,fits_filename in enumerate(fvc_images_table["FITS_FILE"]):
+    data_filename = os.path.join(args.fvc_data_dir,os.path.basename(fits_filename).replace(".fits",".csv"))
+    if os.path.isfile(data_filename) :
+        print("adding existing",data_filename)
+        fvc_data_filenames.append(data_filename)
+        continue
+    #print("need to process ",data_filename)
+    cmd="desi_fvc_proc -i {} -o {}".format(fits_filename,data_filename)
+    if args.fvc_proc_options is not None :
+       cmd+=" "+args.fvc_proc_options
+    print(cmd)
+    err=subprocess.call(cmd.split())
+    if err!=0 :
+        print("error")
+        fvc_data_filenames.append("none")
+        continue
+    else :
+        fvc_data_filenames.append(data_filename)
+fvc_images_table["DATA_FILE"]=fvc_data_filenames
+selection=(fvc_images_table["DATA_FILE"]!="none")
+fvc_images_table=fvc_images_table[selection]
+
+print(fvc_images_table)
+
+print("load fvc data tables")
+tables = list()
+tmp_expid   = []
+tmp_expiter = []
+for filename,expid,expiter in zip(fvc_images_table["DATA_FILE"],fvc_images_table["EXPOSURE_ID"],fvc_images_table["EXPOSURE_ITER"]) :
+    table=Table.read(filename)
+    tables.append(table)
+    tmp_expid.append(expid*np.ones(len(table)))
+    tmp_expiter.append(expiter*np.ones(len(table)))
+
+fvc_data_table = vstack(tables)
+# add exposure id and exposure iter
+fvc_data_table["EXPOSURE_ID"] = np.hstack(tmp_expid).astype(int)
+fvc_data_table["EXPOSURE_ITER"] = np.hstack(tmp_expiter).astype(int)
+
+# rm unmatched data
+selection=(fvc_data_table["LOCATION"]>=0)
+fvc_data_table=fvc_data_table[selection]
+
+if not "DEVICE_ID" in fvc_data_table.dtype.names :
+    m = load_metrology()
+    l2id = {l:i for i,l in zip(m["DEVICE_ID"],m["LOCATION"])}
+    ids = [l2id[l] for l in fvc_data_table["LOCATION"]]
+    fvc_data_table["DEVICE_ID"]=ids
+print(fvc_data_table["DEVICE_ID"])
+
+
+print("now look at the posmoves in the DB")
+
+for petalid in petalids :
+
+    if args.pos_ids is not None :
+        posids = args.pos_ids.split(",")
+    else :
+        posids = get_pos_ids(comm, petalid)
+
+    petal_loc = get_petal_loc(petalid)
+
+    for posid in posids :
+
+        # read data from db
+        cmd = "select * from posmovedb.positioner_moves_p{} where pos_id='{}' and time_recorded BETWEEN date '{}' and date '{}'".format(int(petalid),posid,args.date_min,args.date_max)
+        if args.exposure_ids is not None :
+            cmd += " and exposure_id in ({})".format(args.exposure_ids)
+        if args.exposure_iters is not None :
+            cmd += " and exposure_iter in ({})".format(args.exposure_iters)
+        posmoves=dbquery(comm,cmd)
+
+        # add petal loc
+        posmoves["PETAL_LOC"] = np.repeat(petal_loc,len(posmoves["petal_id"]))
+
+        # make sure there is no comma in log_note
+        for i in range(len(posmoves["log_note"])) :
+            if posmoves["log_note"][i] is not None:
+                posmoves["log_note"][i]=str(posmoves["log_note"][i]).replace(",",";")
+
+        # by default convert keys to upper case,
+        # but with special cases (of course),
+        rename_keys={
+            'obs_x':'X_FP',
+            'obs_y':'Y_FP',
+            'time_recorded':'DATE',
+            'calib_time_recorded':'CALIB_DATE',
+        }
+
+        otable = Table()
+        for k in posmoves.keys() :
+            if k in rename_keys.keys() :
+                k2=rename_keys[k]
+            else :
+                k2=k.upper()
+            otable[k2]=np.array(posmoves[k])
+
+        otable["RECENT_REHOME"]=np.in1d(otable["EXPOSURE_ID"],recent_rehome_exposure_ids).astype(int)
+
+        # add or replace X_FP,Y_FP,PTL_X,PTL_Y,PTL_Z
+        tmp_fvc_table = fvc_data_table[:][fvc_data_table["DEVICE_ID"]==posid]
+        fvc_exposure_index = np.array(tmp_fvc_table["EXPOSURE_ID"]).astype(int)*1000+np.array(tmp_fvc_table["EXPOSURE_ITER"]).astype(int)
+        fvc_exposure_index_2_row = {ei:ri for ri,ei in enumerate(fvc_exposure_index)}
+
+        posmoves_exposure_index = np.array(otable["EXPOSURE_ID"]).astype(int)*1000+np.array(otable["EXPOSURE_ITER"]).astype(int)
+        nmoves = len(otable)
+        x_fp  = np.zeros(nmoves)
+        y_fp  = np.zeros(nmoves)
+        x_ptl = np.zeros(nmoves)
+        y_ptl = np.zeros(nmoves)
+        z_ptl = np.zeros(nmoves)
+        for i,ei in enumerate(posmoves_exposure_index) :
+            if ei not in fvc_exposure_index_2_row :
+                print("oops, move {}.{} for posid={} is not in FVC data(?)".format(otable["EXPOSURE_ID"][i],otable["EXPOSURE_ITER"][i],posid))
+                continue
+            j=fvc_exposure_index_2_row[ei]
+            x_fp[i] = tmp_fvc_table["X_FP"][j]
+            y_fp[i] = tmp_fvc_table["Y_FP"][j]
+        x_ptl,y_ptl,z_ptl = fp2ptl(petal_loc,x_fp,y_fp)
+
+        otable["PTL_X"] = x_ptl
+        otable["PTL_Y"] = y_ptl
+        otable["PTL_Z"] = z_ptl
+        otable["X_FP"]  = x_fp
+        otable["Y_FP"]  = y_fp
+        good = (x_fp!=0)
+        otable = otable[good]
+
+
+        if not os.path.isdir(args.outdir) :
+            os.makedirs(args.outdir)
+        ofilename="{}/{}.csv".format(args.outdir,posid)
+        otable.write(ofilename,overwrite=True)
+        print("wrote",ofilename)
