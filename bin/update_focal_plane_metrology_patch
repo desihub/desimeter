@@ -8,7 +8,7 @@ import yaml
 from desimeter.log import get_logger
 from pkg_resources import resource_filename
 from astropy.table import Table
-
+from desimeter.io import desimeter_data_dir
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Use one or several fitted metrology to update the coordinates of pinholes in the metrology patch data file""")
 
@@ -21,7 +21,7 @@ args  = parser.parse_args()
 log = get_logger()
 
 log.info("reading patch")
-filename = resource_filename('desimeter',"data/fp-metrology-patch.csv")
+filename = os.path.join(desimeter_data_dir(),"fp-metrology-patch.csv")
 log.info(" in {}".format(filename))
 patch = Table.read(filename,format="csv")
 ploc=(np.array(patch["PETAL_LOC"])*10000+np.array(patch["DEVICE_LOC"])*10+np.array(patch["PINHOLE_ID"])).astype(int)
@@ -43,7 +43,7 @@ for filename in args.infile :
         sloc=(spots["PETAL_LOC"]*10000+spots["DEVICE_LOC"]*10+spots["PINHOLE_ID"]).astype(int)
     selection=(spots["PINHOLE_ID"]>0)
     print("spots LOC={}".format(sloc[selection]))
-    
+
     for loc in ploc :
         ii = np.where(sloc==loc)[0]
         if ii.size == 1 :
@@ -58,7 +58,5 @@ for loc in ploc :
         print("{} y= {:4.3f} -> {:4.3f} ({})".format(loc,patch["Y_FP"][ploc==loc][0],my,len(yfp[loc])))
         patch["X_FP"][ploc==loc] = mx
         patch["Y_FP"][ploc==loc] = my
-patch.write(args.outfile,format="csv")
+patch.write(args.outfile,format="csv",overwrite=True)
 print("wrote",args.outfile)
-
-        

@@ -1,0 +1,204 @@
+#!/usr/bin/env python
+
+import os
+import numpy as np
+import sys
+from desimeter.util import parse_fibers
+from desimeter.io import load_metrology,desimeter_data_dir
+from desimeter.transform.pos2ptl import flat2ptl
+from desimeter.transform.ptl2fp import ptl2fp
+import matplotlib.pyplot as plt
+from astropy.table import Table
+
+import argparse
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="""FVC image processing""")
+parser.add_argument('-i','--infile', type = str, default = None, required = True, nargs="*",
+                    help = 'path to input POSPARAMS CVS file with OFFSET_X,Y)')
+parser.add_argument('-o','--outfile', type = str, default = None, required = True,
+                    help = 'path to output transformation json file')
+parser.add_argument('--zbpolids', type=str, default="0,1,2,3,4,5,6,9,20,27,28,29,30", required = False,
+                    help = 'list of ZB coefficients to fit. 0,1,2,27 are mandatory (2xtranslation,magnification,rotation)')
+parser.add_argument('--other-metrology', type=str, default=None, required = False,
+                    help = 'use other metrology table')
+parser.add_argument('--plot',action='store_true',help="plot")
+parser.add_argument('--output-metrology-patch',type=str, default=None, required = False,
+                    help = 'save new metrology patch using this transform')
+
+args  = parser.parse_args()
+zbpolids = parse_fibers(args.zbpolids)
+if not np.all(np.in1d([0,1,2,27],zbpolids)) :
+    print("error, need at least 0,1,2,27 in zppolids")
+    sys.exit(12)
+
+if args.other_metrology is not None :
+    print("Using other metrogy table {}".format(args.other_metrology))
+    metrology = Table.read(args.other_metrology)
+else :
+    metrology = load_metrology()
+
+posid2index = {p:i for i,p in enumerate(metrology["DEVICE_ID"])}
+
+pinholeid=[]
+deviceloc=[]
+x1=[]
+y1=[]
+x2=[]
+y2=[]
+for filename in args.infile :
+    print(filename)
+    if not os.path.isfile(filename) : continue
+    t=Table.read(filename)
+
+    t=t[t["FLAGS"]==0] # select good ones
+
+    if "OFFSET_X" in t.dtype.names :
+        xkey="OFFSET_X"
+        ykey="OFFSET_Y"
+    elif "OFFSET_X_STATIC"  in t.dtype.names :
+        xkey="OFFSET_X_STATIC"
+        ykey="OFFSET_Y_STATIC"
+    else :
+        print("no OFFSET_X or OFFSET_X_STATIC in table")
+        continue
+
+    print("convert {},{} to X_PTL,Y_PTL".format(xkey,ykey))
+    x_ptl,y_ptl = flat2ptl(t[xkey],t[ykey])
+
+    print("convert X_PTL,Y_PTL to X_FP,Y_FP")
+    metrology_indices = [posid2index[p] for p in t["POS_ID"]]
+    petal_loc = metrology["PETAL_LOC"][metrology_indices]
+    x_fp = np.zeros(x_ptl.shape)
+    y_fp = np.zeros(y_ptl.shape)
+    for pet in np.unique(petal_loc) :
+        ii=(petal_loc==pet)
+        x_fp[ii],y_fp[ii],_ = ptl2fp(pet,x_ptl[ii],y_ptl[ii])
+    x1.append(x_fp)
+    y1.append(y_fp)
+
+    x2.append(np.array(metrology["X_FP"][metrology_indices]))
+    y2.append(np.array(metrology["Y_FP"][metrology_indices]))
+
+
+x1 = np.hstack(x1)
+y1 = np.hstack(y1)
+x2 = np.hstack(x2)
+y2 = np.hstack(y2)
+
+
+#plt.plot(x1,y1,"o")
+#plt.plot(x2,y2,"o")
+#plt.quiver(x1,y1,x2-x1,y2-y1)
+#plt.show()
+
+
+from desimeter.transform.fvc2fp import FVC2FP #,read_jsonfile
+from desimeter.io import fvc2fp_filename
+from desimeter.transform.zhaoburge import fit_scale_rotation_offset
+transfo=FVC2FP.read_jsonfile(fvc2fp_filename())
+# apply transfo back to pixels
+xpix,ypix = transfo.fp2fvc(x1,y1)
+
+if args.output_metrology_patch is not None :
+    filename = os.path.join(desimeter_data_dir(),"fp-metrology-patch.csv")
+    print("read",filename)
+    patch=Table.read(filename)
+    xfp_patch_init=patch["X_FP"]
+    yfp_patch_init=patch["Y_FP"]
+    xpix_patch,ypix_patch = transfo.fp2fvc(xfp_patch_init,yfp_patch_init)
+else :
+    patch = None
+
+# add more polynomials
+transfo.zbpolids = zbpolids
+# and redo the fit, now globally
+rxpix, rypix = transfo._reduce_xyfvc(xpix,ypix)
+rxfp, ryfp = transfo._reduce_xyfp(x2,y2)
+scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = fit_scale_rotation_offset(rxpix, rypix, rxfp, ryfp, fitzb=True, zbpolids=transfo.zbpolids, zbcoeffs=transfo.zbcoeffs)
+transfo.scale = scale
+transfo.rotation = rotation
+transfo.offset_x = offset_x
+transfo.offset_y = offset_y
+transfo.zbpolids = zbpolids
+transfo.zbcoeffs = zbcoeffs
+# and apply it now
+x1b,y1b = transfo.fvc2fp(xpix,ypix)
+
+dist=np.sqrt((x1b-x2)**2+(y1b-y2)**2)
+
+ok=(dist<0.08)
+
+scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = fit_scale_rotation_offset(rxpix[ok], rypix[ok], rxfp[ok], ryfp[ok], fitzb=True, zbpolids=transfo.zbpolids, zbcoeffs=transfo.zbcoeffs)
+transfo.scale = scale
+transfo.rotation = rotation
+transfo.offset_x = offset_x
+transfo.offset_y = offset_y
+transfo.zbpolids = zbpolids
+transfo.zbcoeffs = zbcoeffs
+# and apply it now
+x1b,y1b = transfo.fvc2fp(xpix,ypix)
+
+transfo.write_jsonfile(args.outfile)
+print("wrote {}".format(args.outfile))
+
+if args.output_metrology_patch is not None :
+    xfp_patch,yfp_patch = transfo.fvc2fp(xpix_patch,ypix_patch)
+    patch["X_FP"]=xfp_patch
+    patch["Y_FP"]=yfp_patch
+    patch.write(args.output_metrology_patch)
+
+if args.plot :
+
+    refit=True
+
+    plt.figure("theta-centers")
+    if refit :
+        plt.subplot(211,title="before adjustment")
+    plt.quiver(x1,y1,x1-x2,y1-y2)
+    nmad2d=1.20*np.median(np.sqrt((x1-x2)**2+(y1-y2)**2))
+    rms2d=np.sqrt(np.mean((x1-x2)**2+(y1-y2)**2))
+    x0=np.min(x1)-10
+    y0=np.max(y1)-5
+    ystep=20
+    plt.text(x0,y0,"rms (2D)  = {:4.0f} um".format(rms2d*1000.))
+    plt.text(x0,y0-ystep,"nmad (2D) = {:4.0f} um".format(nmad2d*1000.))
+
+    if refit :
+        plt.subplot(212,title="after adjustment")
+        plt.quiver(x1b,y1b,x1b-x2,y1b-y2)
+        dist=np.sqrt((x1b-x2)**2+(y1b-y2)**2)
+        ok=(dist<0.08)
+        nmad2d=1.20*np.median(dist)
+        rms2d=np.sqrt(np.mean(dist**2))
+        print("nmad2d(all)=",nmad2d)
+        print("rms2d(all)=",rms2d)
+        #nmad2d=1.20*np.median(dist[ok])
+        #rms2d=np.sqrt(np.mean(dist[ok]**2))
+        #print("nmad2d(selected)=",nmad2d)
+        #print("rms2d(selected)=",rms2d)
+
+        ii=np.argsort(dist)[::-1]
+        print(ii[:10],dist[ii[:10]])
+        x0=np.min(x1b)-10
+        y0=np.max(y1b)
+
+        plt.text(x0,y0,"ALL rms (2D)  = {:4.0f} um".format(rms2d*1000.))
+        plt.text(x0,y0-ystep,"ALL nmad (2D) = {:4.0f} um".format(nmad2d*1000.))
+
+        """
+        # only the fiducials:
+        if pinholeid is not None :
+            fid=(pinholeid>0)
+            plt.plot(x1b[fid],y1b[fid],".",c='red')
+            fid_rms2d=np.sqrt(np.mean(dist[fid]**2))
+            fid_nmad2d=1.20*np.median(dist[fid])
+            print("nmad2d(FID)=",fid_nmad2d)
+            print("rms2d(FID)=",fid_rms2d)
+            plt.text(x0,y0-2*ystep,"FID rms (2D)  = {:4.0f} um".format(fid_rms2d*1000.),color="red")
+            plt.text(x0,y0-3*ystep,"FID nmad (2D) = {:4.0f} um".format(fid_nmad2d*1000.),color="red")
+        """
+    if args.output_metrology_patch is not None :
+        plt.figure("metrology patch")
+        plt.quiver(xfp_patch,yfp_patch,xfp_patch-xfp_patch_init,yfp_patch-yfp_patch_init)
+    plt.show()
