@@ -4,7 +4,7 @@ import os
 import numpy as np
 import sys
 from desimeter.util import parse_fibers
-from desimeter.io import load_metrology
+from desimeter.io import load_metrology,desimeter_data_dir
 from desimeter.transform.pos2ptl import flat2ptl
 from desimeter.transform.ptl2fp import ptl2fp
 import matplotlib.pyplot as plt
@@ -23,8 +23,8 @@ parser.add_argument('--zbpolids', type=str, default="0,1,2,3,4,5,6,9,20,27,28,29
 parser.add_argument('--other-metrology', type=str, default=None, required = False,
                     help = 'use other metrology table')
 parser.add_argument('--plot',action='store_true',help="plot")
-
-
+parser.add_argument('--output-metrology-patch',type=str, default=None, required = False,
+                    help = 'save new metrology patch using this transform')
 
 args  = parser.parse_args()
 zbpolids = parse_fibers(args.zbpolids)
@@ -100,6 +100,16 @@ transfo=FVC2FP.read_jsonfile(fvc2fp_filename())
 # apply transfo back to pixels
 xpix,ypix = transfo.fp2fvc(x1,y1)
 
+if args.output_metrology_patch is not None :
+    filename = os.path.join(desimeter_data_dir(),"fp-metrology-patch.csv")
+    print("read",filename)
+    patch=Table.read(filename)
+    xfp_patch_init=patch["X_FP"]
+    yfp_patch_init=patch["Y_FP"]
+    xpix_patch,ypix_patch = transfo.fp2fvc(xfp_patch_init,yfp_patch_init)
+else :
+    patch = None
+
 # add more polynomials
 transfo.zbpolids = zbpolids
 # and redo the fit, now globally
@@ -131,6 +141,12 @@ x1b,y1b = transfo.fvc2fp(xpix,ypix)
 
 transfo.write_jsonfile(args.outfile)
 print("wrote {}".format(args.outfile))
+
+if args.output_metrology_patch is not None :
+    xfp_patch,yfp_patch = transfo.fvc2fp(xpix_patch,ypix_patch)
+    patch["X_FP"]=xfp_patch
+    patch["Y_FP"]=yfp_patch
+    patch.write(args.output_metrology_patch)
 
 if args.plot :
 
@@ -182,5 +198,7 @@ if args.plot :
             plt.text(x0,y0-2*ystep,"FID rms (2D)  = {:4.0f} um".format(fid_rms2d*1000.),color="red")
             plt.text(x0,y0-3*ystep,"FID nmad (2D) = {:4.0f} um".format(fid_nmad2d*1000.),color="red")
         """
-
+    if args.output_metrology_patch is not None :
+        plt.figure("metrology patch")
+        plt.quiver(xfp_patch,yfp_patch,xfp_patch-xfp_patch_init,yfp_patch-yfp_patch_init)
     plt.show()
