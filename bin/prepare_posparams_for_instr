@@ -59,6 +59,7 @@ import os
 import logging
 import desimeter.posparams.fitter as fitter
 import desimeter.io
+import desimeter.transform.pos2ptl as pos2ptl
 
 # detect "static" and "dynamic" suffixes in data headers
 # generate a key mapping for which of these options to push to the output table
@@ -216,15 +217,20 @@ def check_xy_offsets(table, tol):
         assert any(petal_selection), err_msg
         selection = device_selection & petal_selection
         assert len(np.flatnonzero(selection)) == 1, 'error, didn\'t select down to 1 positioner'
-        xy_exp = {u: float(expected_centers[selection][u + '_PTL']) for u in ['X', 'Y']}
+        x_ptl = float(expected_centers[selection]['X_PTL'])
+        y_ptl = float(expected_centers[selection]['Y_PTL'])
+        x_flat, y_flat = pos2ptl.ptl2flat(x_ptl, y_ptl)
+        xy_exp = {'X': x_flat, 'Y': y_flat}
         for u, exp in xy_exp.items():
             offset_key = 'OFFSET_' + u
             offset = new[offset_key][i]
             err = offset - exp
             if abs(err) > tol:
                 delete_idxs.add(i)
+                u_ptl = x_ptl if u == 'X' else y_ptl
                 logger.warning(f'Row for {new["POS_ID"][i]} removed due to {offset_key}=' +
-                               f'{offset} outside tol={tol} of nominal {u + "_PTL"}={exp}')
+                               f'{offset:.4f} outside tol={tol} of nominal ptl2flat(' +
+                               f'{u + "_PTL"}={u_ptl:.4f})={exp:.4f} by {offset-exp:.4f}')
     new.remove_rows(list(delete_idxs))        
     return new
 
@@ -245,7 +251,8 @@ def check_arm_lengths(table, tol):
             if abs(err) > tol:
                 delete_idxs.add(i)
                 logger.warning(f'Row for {new["POS_ID"][i]} removed due to {key}=' +
-                               f'{length} outside tol={tol} of nominal={exp}')
+                               f'{length:.4f} outside tol={tol} of nominal={exp:.4f}' +
+                               f' by {length-exp:.4f}')
     new.remove_rows(list(delete_idxs))        
     return new
 
@@ -433,6 +440,7 @@ if not args.allow_scale:
 
 # give user specific decision over whether to commit each field
 delayed_log_notes = []  # delaying printout of these confirmation msgs makes interaction clearer
+posids_to_commit = set()
 for key, commit_key in commit_keys.items():
     if key not in new_table.columns:
         new_table[key] = np.nan  # no data
@@ -463,8 +471,12 @@ for key, commit_key in commit_keys.items():
         method = 'set by user'
     new_table[commit_key] = set_val
     delayed_log_notes += [f'{commit_key} {method} to {set_val} for all positioners']
+    will_commit = new_table[commit_key]
+    posids_to_commit |= set(new_table['POS_ID'][will_commit])
 for note in delayed_log_notes:
     logger.info(note)
+logger.info(f'Final list of the {len(posids_to_commit)} positioner(s) with any calibration' +
+            f' values to be committed:\n{sorted(posids_to_commit)}')
 
 # export
 import os
