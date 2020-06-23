@@ -1,0 +1,68 @@
+#!/usr/bin/env python
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from desimeter.io import load_metrology
+from astropy.table import Table
+from scipy.spatial import cKDTree as KDTree
+
+
+spots = load_metrology()
+indices=np.where(spots['DEVICE_TYPE']=="POS")[0]
+spots=spots[indices]
+x=spots["X_FP"]
+y=spots["Y_FP"]
+xy=np.array([x,y]).T
+tree = KDTree(xy)
+distances,neighbors = tree.query(xy,k=7)
+
+npos=len(spots)
+groups=[]
+allgroups=[]
+for groupid in range(4) :
+
+    group=[]
+    running_list_of_neighbors=[]
+    for i in range(npos) :
+        if i in running_list_of_neighbors :
+            continue
+        if i in allgroups :
+            continue
+        group.append(i)
+        neighbors_of_this_positioner=neighbors[i,(distances[i]>0)&(distances[i]<12)]
+        for n in neighbors_of_this_positioner :
+            running_list_of_neighbors.append(n)
+
+    groups.append(group)
+    allgroups=np.hstack(groups)
+
+
+for groupid,group in enumerate(groups) :
+    t=Table()
+    t["DEVICE_ID"]=spots["DEVICE_ID"][group]
+    ofilename="group-{}.csv".format(groupid)
+    t.write(ofilename,overwrite=True)
+    print("wrote",ofilename)
+    line="["
+    first=True
+    for did in spots["DEVICE_ID"][group] :
+        if not first : line+=","
+        first=False
+        line+="'{}'".format(did)
+    line += "]"
+    ofilename="group-{}.list".format(groupid)
+    ofile=open(ofilename,"w")
+    ofile.write(line+"\n")
+    ofile.close()
+    print("wrote",ofilename)
+
+
+# validate
+plt.plot(x,y,".",c="gray")
+for groupid in range(4) :
+    filename="group-{}.csv".format(groupid)
+    t=Table().read(filename)
+    selection = np.in1d(spots["DEVICE_ID"],t["DEVICE_ID"])
+    plt.plot(x[selection],y[selection],"o",label="group {}".format(groupid))
+plt.show()
