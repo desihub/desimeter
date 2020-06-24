@@ -16,31 +16,14 @@ from desimeter.transform.fvc2fp import FVC2FP
 from desimeter.transform.ptl2fp import fp2ptl
 from desimeter.transform.xy2qs import xy2qs
 from desimeter.averagecoord import average_coordinates
+from desimeter.processfvc import process_fvc
 
-def drawcircle(x,y,r=6.,color='green') :
+def drawcircle(x,y,radius=6.,color='green',alpha=1) :
     a=np.linspace(0,2*np.pi,50)
     ca=np.cos(a)
     sa=np.sin(a)
-    plt.plot(x+r*ca,y+r*sa,"-",color=color)
+    plt.plot(x+radius*ca,y+radius*sa,"-",color=color,alpha=1)
 
-def measure(filename) :
-    if filename.find(".csv")>0 :
-        # already a coordinates table
-        return Table.read(filename)
-    if filename.find(".fits")<0 :
-        print("don't know what to do with",filename)
-        sys.exit(12)
-    outfilename=filename.replace(".fits",".csv")
-    if os.path.isfile(outfilename) :
-        print("using previously processed {}".format(outfilename))
-    else :
-        cmd="desi_fvc_proc -i {} -o {}".format(filename,outfilename)
-        print("running '{}'".format(cmd))
-        errcode=subprocess.call(cmd.split())
-        if errcode != 0 :
-            print("we got an error code = {}".errcode)
-            sys.exit(errcode)
-    return Table.read(outfilename)
 
 parser = argparse.ArgumentParser(description="match positioners by first detecting the moving ones.")
 parser.add_argument('--before-moves', type=str, required=True, nargs="*",
@@ -58,18 +41,20 @@ parser.add_argument('--min-move-mm', type=float, required=False,default=0.05,
                     help='minimum move in mm')
 parser.add_argument('--max-move-mm', type=float, required=False,default=0.5,
                     help='maximum move in mm')
+parser.add_argument('--min-dist-from-center-mm', type=float, required=False,default=3.,
+                    help='minimum distance of fiber from positioner center in mm')
 
 args = parser.parse_args()
 
 moved_positioners = args.positioners.split(",")
 
 
-tables=[ measure(filename) for filename in args.before_moves ]
+tables=[ process_fvc(filename) for filename in args.before_moves ]
 t2 = average_coordinates(tables,"XPIX","YPIX")
 
 # using t1 as reference for output coordinates
 print("INFO: TAKE AS REFERENCE FOR COORDINATES THE IMAGES TAKEN AFTER THE MOVES")
-tables=[ measure(filename) for filename in args.after_moves ]
+tables=[ process_fvc(filename) for filename in args.after_moves ]
 t1 = average_coordinates(tables,"XPIX","YPIX")
 
 xpix1=np.array(t1["XPIX"])
@@ -201,8 +186,14 @@ for k in ["PINHOLE_ID","PTL_SOURCE","PROJ_DISTANCE","PROVENANCE","NOTES","Z_FP",
     if k in spots.dtype.names :
         spots.remove_column(k)
 
-spots.write(args.outfile,overwrite=True)
-print("wrote {} positioners in {}".format(len(spots),args.outfile))
+
+dist_from_center = np.sqrt((spots["X_FP"]-spots["X_FP_METRO"])**2+(spots["Y_FP"]-spots["Y_FP_METRO"])**2)
+n_final = np.sum(dist_from_center>args.min_dist_from_center_mm)
+print("number of detected/matched positioner that are more than {} mm from their center = {}".format(args.min_dist_from_center_mm,n_final))
+if n_final > 0 :
+    selected_spots = spots[(dist_from_center>args.min_dist_from_center_mm)]
+    selected_spots.write(args.outfile,overwrite=True)
+    print("wrote {} positioners in {}".format(len(selected_spots),args.outfile))
 
 if args.plot :
     name="xy-{}".format(os.path.basename(args.outfile).split(".")[0])
@@ -214,10 +205,12 @@ if args.plot :
     dxfp=xfp2-xfp1
     dyfp=yfp2-yfp1
     distfp=np.sqrt(dxfp**2+dyfp**2)
-
+    
     plt.plot(spots["X_FP_METRO"],spots["Y_FP_METRO"],"x",color="green",label="metrology")
     for p in range(len(spots)):
-        drawcircle(spots["X_FP_METRO"][p],spots["Y_FP_METRO"][p])
+        drawcircle(spots["X_FP_METRO"][p],spots["Y_FP_METRO"][p],radius=args.min_dist_from_center_mm,alpha=1)
+        drawcircle(spots["X_FP_METRO"][p],spots["Y_FP_METRO"][p],radius=6,alpha=0.5)
+        
 
     plt.xlabel("xfp")
     plt.ylabel("yfp")
