@@ -2,21 +2,51 @@
 
 import sys,os
 import numpy as np
+import subprocess
+import argparse
+from scipy.spatial import cKDTree as KDTree
 import matplotlib.pyplot as plt
-from desimeter.io import load_metrology
 from astropy.table import Table
+
+from desimeter.io import load_metrology
 from desimeter.match import match_same_system
 from desimeter.simplecorr import SimpleCorr
 from desimeter.io import load_metrology,fvc2fp_filename
 from desimeter.transform.fvc2fp import FVC2FP
 from desimeter.transform.ptl2fp import fp2ptl
 from desimeter.transform.xy2qs import xy2qs
-from scipy.spatial import cKDTree as KDTree
-import argparse
+from desimeter.averagecoord import average_coordinates
+
+def drawcircle(x,y,r=6.,color='green') :
+    a=np.linspace(0,2*np.pi,50)
+    ca=np.cos(a)
+    sa=np.sin(a)
+    plt.plot(x+r*ca,y+r*sa,"-",color=color)
+
+def measure(filename) :
+    if filename.find(".csv")>0 :
+        # already a coordinates table
+        return Table.read(filename)
+    if filename.find(".fits")<0 :
+        print("don't know what to do with",filename)
+        sys.exit(12)
+    outfilename=filename.replace(".fits",".csv")
+    if os.path.isfile(outfilename) :
+        print("using previously processed {}".format(outfilename))
+    else :
+        cmd="desi_fvc_proc -i {} -o {}".format(filename,outfilename)
+        print("running '{}'".format(cmd))
+        errcode=subprocess.call(cmd.split())
+        if errcode != 0 :
+            print("we got an error code = {}".errcode)
+            sys.exit(errcode)
+    return Table.read(outfilename)
 
 parser = argparse.ArgumentParser(description="match positioners by first detecting the moving ones.")
-parser.add_argument('-i', '--infiles', type=str, required=True, nargs=2,
-                    help='path to two input csv file(s) with XPIX YPIX coordinates of spots in two FVC images')
+parser.add_argument('--before-moves', type=str, required=True, nargs="*",
+                    help='path to one or several FVC image csv file(s) taken before the move')
+parser.add_argument('--after-moves', type=str, required=True, nargs="*",
+                    help='path to one or several FVC image csv file(s) taken after the move')
 parser.add_argument('-p', '--positioners', type=str, required=True,
                     help='comma separated list of positioners that were moved. for instance M08063,M05893')
 parser.add_argument('-o', '--outfile', type=str, required=True,
@@ -33,19 +63,15 @@ args = parser.parse_args()
 
 moved_positioners = args.positioners.split(",")
 
-def drawcircle(x,y,r=6.,color='green') :
-    a=np.linspace(0,2*np.pi,50)
-    ca=np.cos(a)
-    sa=np.sin(a)
-    plt.plot(x+r*ca,y+r*sa,"-",color=color)
 
-filename1=args.infiles[0]
-filename2=args.infiles[1]
-print("INFO TAKE AS REFERENCE FOR COORDINATE THE FIRST FILE IN THE ARGS  = ",filename1) 
+tables=[ measure(filename) for filename in args.before_moves ]
+t2 = average_coordinates(tables,"XPIX","YPIX")
 
+# using t1 as reference for output coordinates
+print("INFO: TAKE AS REFERENCE FOR COORDINATES THE IMAGES TAKEN AFTER THE MOVES")
+tables=[ measure(filename) for filename in args.after_moves ]
+t1 = average_coordinates(tables,"XPIX","YPIX")
 
-t1=Table.read(filename1)
-t2=Table.read(filename2)
 xpix1=np.array(t1["XPIX"])
 ypix1=np.array(t1["YPIX"])
 xpix2=np.array(t2["XPIX"])
@@ -179,10 +205,10 @@ spots.write(args.outfile,overwrite=True)
 print("wrote {} positioners in {}".format(len(spots),args.outfile))
 
 if args.plot :
-    name="xy-{}-{}".format(os.path.basename(filename1).split(".")[0],os.path.basename(filename2).split(".")[0])
+    name="xy-{}".format(os.path.basename(args.outfile).split(".")[0])
     plt.figure(name)
-    plt.plot(xfp1,yfp1,"o",alpha=0.5,label=filename1)
-    plt.plot(xfp2,yfp2,"o",alpha=0.5,label=filename2)
+    plt.plot(xfp1,yfp1,"o",alpha=0.5,label="after the moves")
+    plt.plot(xfp2,yfp2,"o",alpha=0.5,label="before the moves")
     plt.plot(xfp1[detected],yfp1[detected],"+",color="k",label="detected move")
 
     dxfp=xfp2-xfp1
@@ -197,7 +223,8 @@ if args.plot :
     plt.ylabel("yfp")
     plt.legend()
 
-    name="histo-{}-{}".format(os.path.basename(filename1).split(".")[0],os.path.basename(filename2).split(".")[0])
+    name="histo-{}".format(os.path.basename(args.outfile).split(".")[0])
+
     plt.figure(name)
     plt.hist(distfp,bins=100)
     plt.xlabel("dist (mm)")
