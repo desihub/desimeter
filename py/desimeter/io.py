@@ -32,3 +32,6 @@ def load_petal_alignement():
 
 def fvc2fp_filename():
     return os.path.join(desimeter_data_dir(),'init-fvc2fp.json')
+
+def fvc_bias_filename():
+    return os.path.join(desimeter_data_dir(),'bias.fits')
