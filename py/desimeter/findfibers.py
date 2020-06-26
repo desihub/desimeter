@@ -1,4 +1,4 @@
-""" 
+"""
 Code to find fibers and rotations of fiber arms
 """
 
@@ -9,25 +9,23 @@ import matplotlib.pyplot as plt
 import astropy.table as atpy
 from skimage.feature import canny
 from skimage.transform import rotate
-import time
-import math
 
 
 def norm(x):
-    """ Normalize the image by median and MAD""" 
+    """ Normalize the image by median and MAD"""
     med = np.median(x)
     std = np.median(np.abs(x - med))
     return (x - med) / std
 
 
 def find_angle(ima, ref, ang_step=1):
-    """ Find the best orientation by matching the rotated image to 
+    """ Find the best orientation by matching the rotated image to
     a template
-    Parameters: 
-    ima: ndarray Input image 
+    Parameters:
+    ima: ndarray Input image
     ref: ndarray Reference image
     ang_step: float in degrees, step of the search; The smaller the step the slower the code.
-    TODO: I should redo this by computing once the rotated reference image 
+    TODO: I should redo this by computing once the rotated reference image
     for all angles instead of rotating actual images all the time
     """
     angles = np.arange(0, 360, ang_step)
@@ -55,13 +53,13 @@ def find_fibers(fname_front,
                 doplot=False):
     """ Process the front/back iluminated images
     ang_step step in degrees; The smaller the step the slower the code.
-    Returns: the tuple with 
-    1) table of detections with x,y,angle columns 
+    Returns: the tuple with
+    1) table of detections with x,y,angle columns
     2) the extracted rotated canny images of all detected fibers
     """
     thresh = 120  # threshold for detecting fibers
     peakv = 10000  # minimum value of the peak corresponding to illuminated fiber
-    pad = 40  # padding around the fiber to analyze 
+    pad = 40  # padding around the fiber to analyze
     # changing padding would require regenerating the template image
     minccf = 0.2  # minimum cross-correlation between the template and data to remove non-fibers/fiducials
     
@@ -98,7 +96,7 @@ def find_fibers(fname_front,
             plt.imshow(curD, vmax=perc(curD, .95))
             plt.plot(pad + np.cos(angle) * Rs,
                      pad + np.sin(angle) * Rs,
-                     color='red')
+1;5202;0c                     color='red')
             plt.subplot(132)
             plt.imshow(curd, vmax=perc(curd, .99))
             plt.subplot(133)
@@ -106,3 +104,4 @@ def find_fibers(fname_front,
     det = det[np.isfinite(det['angle']) & (det['ccf'] > minccf)]
     cans = np.array(cans)
     return det, cans
+A
