@@ -1,3 +1,7 @@
+""" 
+Code to find fibers and rotations of fiber arms
+"""
+
 import astropy.io.fits as pyfits
 import numpy as np
 import sep
@@ -10,15 +14,22 @@ import math
 
 
 def norm(x):
+    """ Normalize the image by median and MAD""" 
     med = np.median(x)
     std = np.median(np.abs(x - med))
     return (x - med) / std
 
 
 def find_angle(ima, ref, ang_step=1):
-    # find the best orientation
-    # ang_step in degrees; The smaller the step the slower the code.
-    # I should redo this by computing once the rotated reference image for all angles
+    """ Find the best orientation by matching the rotated image to 
+    a template
+    Parameters: 
+    ima: ndarray Input image 
+    ref: ndarray Reference image
+    ang_step: float in degrees, step of the search; The smaller the step the slower the code.
+    TODO: I should redo this by computing once the rotated reference image 
+    for all angles instead of rotating actual images all the time
+    """
     angles = np.arange(0, 360, ang_step)
     ima1 = ima * 1.
     imas = np.zeros((len(angles), ) + ima1.shape, dtype=ima1.dtype)
@@ -33,6 +44,7 @@ def find_angle(ima, ref, ang_step=1):
 
 
 def perc(X, per):
+    """ Percentile (for plotting)"""
     return scipy.stats.scoreatpercentile(X, per)
 
 
@@ -41,22 +53,23 @@ def find_fibers(fname_front,
                 ref_fname='data/fiber_arm_outline.fits',
                 ang_step=1,
                 doplot=False):
-    """ process the front/back iluminated images
+    """ Process the front/back iluminated images
     ang_step step in degrees; The smaller the step the slower the code.
     Returns: the tuple with 
     1) table of detections with x,y,angle columns 
-    2) the extracted rotated canny images of all detections
+    2) the extracted rotated canny images of all detected fibers
     """
+    thresh = 120  # threshold for detecting fibers
+    peakv = 10000  # minimum value of the peak corresponding to illuminated fiber
+    pad = 40  # padding around the fiber to analyze 
+    # changing padding would require regenerating the template image
+    minccf = 0.2  # minimum cross-correlation between the template and data to remove non-fibers/fiducials
     
     D = pyfits.getdata(fname_front)
     dat = pyfits.getdata(fname_back)
     dat = dat - np.median(dat)
-    thresh = 120  # threshold for detecting fibers
     det = sep.extract(dat, thresh)
     cans = []
-    peakv = 10000  # minimum value of the peak corresponding to illuminated fiber
-    pad = 40  # padding around the fiber to analyze
-    minccf = 0.2  # minimum cross-correlation between the template and data to remove non-fibers/fiducials
     ref = pyfits.getdata(ref_fname)
     det = atpy.Table(det)
     det['angle'] = np.nan
