@@ -17,6 +17,6 @@ def process_fvc(filename) :
         print("running '{}'".format(cmd))
         errcode=subprocess.call(cmd.split())
         if errcode != 0 :
-            print("we got an error code = {}".errcode)
+            print("we got an error code = {}".format(errcode))
             sys.exit(errcode)
     return Table.read(outfilename)
