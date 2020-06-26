@@ -91,8 +91,6 @@ ypix1=ypix1[indices_1]
 xpix2=xpix2[indices_2]
 ypix2=ypix2[indices_2]
 
-
-
 # adjust a possible transfo between the two FVC images
 corr=SimpleCorr()
 corr.fit(xpix2,ypix2,xpix1,ypix1)
@@ -105,7 +103,7 @@ xfp2,yfp2=fvc2fp.fvc2fp(xpix2,ypix2)
 dxfp=xfp2-xfp1
 dyfp=yfp2-yfp1
 distfp=np.sqrt(dxfp**2+dyfp**2)
-
+    
 # selection of moving positioners
 detected=(distfp>args.min_move_mm)&(distfp<args.max_move_mm)
 
@@ -219,7 +217,7 @@ if args.plot :
     name="histo-{}".format(os.path.basename(args.outfile).split(".")[0])
 
     plt.figure(name)
-    plt.hist(distfp,bins=100)
+    plt.hist(distfp[distfp<1.],bins=100)
     plt.xlabel("dist (mm)")
     plt.axvline(args.min_move_mm)
     plt.axvline(args.max_move_mm)
