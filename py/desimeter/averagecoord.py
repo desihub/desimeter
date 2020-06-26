@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.spatial import cKDTree as KDTree
 from desimeter.match import match_same_system
 from desimeter.simplecorr import SimpleCorr
 
@@ -59,7 +58,7 @@ def average_coordinates(tables,xkey,ykey) :
     my=np.mean(yy,axis=0)
     table1[xkey][indices]=mx
     table1[ykey][indices]=my
-    
+
     print("number of entries found in all tables= {}".format(indices.size))
     print("rms({})= {:4.3f}".format(xkey,np.median(xrms)))
     print("rms({})= {:4.3f}".format(ykey,np.median(yrms)))
