@@ -38,7 +38,7 @@ def perc(X, per):
 
 def find_fibers(fname_front,
                 fname_back,
-                ref_fname='temp2.fits',
+                ref_fname='data/fiber_arm_outline.fits',
                 ang_step=1,
                 doplot=False):
     """ process the front/back iluminated images
