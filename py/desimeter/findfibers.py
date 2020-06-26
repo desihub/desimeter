@@ -96,7 +96,7 @@ def find_fibers(fname_front,
             plt.imshow(curD, vmax=perc(curD, .95))
             plt.plot(pad + np.cos(angle) * Rs,
                      pad + np.sin(angle) * Rs,
-1;5202;0c                     color='red')
+                     color='red')
             plt.subplot(132)
             plt.imshow(curd, vmax=perc(curd, .99))
             plt.subplot(133)
