@@ -39,7 +39,8 @@ def average_coordinates(tables,xkey,ykey) :
             indices=indices[indices_1]
             x2=x2[indices_2]
             y2=y2[indices_2]
-            for i in range(len(xx)) :
+            n=len(xx)
+            for i in range(n) :
                 xx[i]=xx[i][indices_1]
                 yy[i]=yy[i][indices_1]
             # adjust a possible transfo between the two FVC images
