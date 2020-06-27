@@ -92,7 +92,7 @@ def match_positioners(fvc, metr, calib, countthresh=80000,
     fvcpos = np.flatnonzero((fvc['PINHOLE_ID'] == 0) &
                             (fvc['COUNTS'] > countthresh))
     # need to apply a count threshhold to get rid of some bogus 'centroids'
-    
+
     metrpos = np.flatnonzero(metr['PINHOLE_ID'] == 0)
     fvclen = len(fvc)
     fvc = fvc[fvcpos]
@@ -178,8 +178,8 @@ def match_positioners(fvc, metr, calib, countthresh=80000,
 
     if return_alternatives:
         ret = np.full((len(alternatives), fvclen), -1)
-        for i in range(len(alternatives)):
-            ret[i, alternatives[i][1]] = alternatives[i][0]
+        for i, alt in enumerate(alternatives):
+            ret[i, alt[1]] = alt[0]
         ret = res + (ret,)
 
     return ret
@@ -198,11 +198,11 @@ def plot_match(fvc, metr, assignment, alternatives=None):
     else:
         allassignments = assignment[None, ...]
     for a in allassignments:
-        for i in range(len(fvc)):
-            if a[i] == -1:
+        for fvcind, metrind in enumerate(a):
+            if metrind == -1:
                 continue
-            possible_assignments[i] = (
-                possible_assignments.get(i, set()) | set([a[i]]))
+            possible_assignments[fvcind] = (
+                possible_assignments.get(fvcind, set()) | set([metrind]))
     from matplotlib import pyplot as p
     p.plot(fvc['X_FP'], fvc['Y_FP'], '+', label='centroids')
     p.plot(metr['X_FP'], metr['Y_FP'], 'x', label='positioner centers')
