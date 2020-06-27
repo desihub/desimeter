@@ -1,6 +1,4 @@
 import numpy as np
-import scipy.spatial
-import scipy.optimize
 import desimeter.log
 
 log = desimeter.log.get_logger()
@@ -27,7 +25,6 @@ def match(a, b):
     """Find indices ma, mb such that a[ma] == b[mb].  a must have no duplicates.
     """
     sa = np.argsort(a)
-    sb = np.argsort(b)
     if len(np.unique(a)) != len(a):
         raise ValueError('All keys in a must be unique.')
     ind = np.searchsorted(a[sa], b)
@@ -69,7 +66,7 @@ def match_positioners(fvc, metr, calib, countthresh=80000,
     score : the score of this assignment.
     alternatives : if alternatives is set, an array [n_alternatives, n_fvc]
       of alternatives that are equally good assignments.
-    
+
 
     Notes
     -----
@@ -79,8 +76,8 @@ def match_positioners(fvc, metr, calib, countthresh=80000,
     things outside of their arm lengths.  Future improvements to optimality
     could think harder about the actual shapes of the positioners (presumably
     some assignments this code makes are impossible because the positioners
-    would need to collide to achieve them), and better incoporate the 
-    uncertainties in R1+R2.  Another good feature would be to add expected 
+    would need to collide to achieve them), and better incoporate the
+    uncertainties in R1+R2.  Another good feature would be to add expected
     positioner/fiber locations, and increase the score of an assignment if
     - there is a centroid in the expected location
     - the correct positioner is assigned to that location
@@ -109,7 +106,7 @@ def match_positioners(fvc, metr, calib, countthresh=80000,
     # uncertainties in R1+R2.  Could be replaced by actual propagation of the
     # uncertainties in R1+R2 multiplied by something like 5.
     # Though I started with 0.06 here, and found cases where that was clearly
-    # not enough, even where R1 and R2 had uncertainties of ~0.01.  
+    # not enough, even where R1 and R2 had uncertainties of ~0.01.
 
     # some positioners don't have arm lengths.  I inspected petal the test
     # petal and it looked to me like these were all close to homed.  So I'm
@@ -143,6 +140,7 @@ def match_positioners(fvc, metr, calib, countthresh=80000,
         score_matrix[i, j] = 1
 
     assignment = solve_assignment(score_matrix)
+    nassign = len(assignment[0])
 
     # we now have the best assignment and score.  Are there other equally
     # good ones?
@@ -157,9 +155,9 @@ def match_positioners(fvc, metr, calib, countthresh=80000,
     if return_alternatives:
         alternatives = list()
         new_score_matrix = score_matrix.copy()
-        for i in range(len(assignment[0])):
+        for i in range(nassign):
             if (i % 50) == 0:
-                print(f'checking alternative {i} of {len(assignment[0])}')
+                print(f'checking alternative {i} of {nassign}')
             old = new_score_matrix[assignment[0][i], assignment[1][i]]
             new_score_matrix[assignment[0][i], assignment[1][i]] = 0
             alternative = solve_assignment(new_score_matrix)
