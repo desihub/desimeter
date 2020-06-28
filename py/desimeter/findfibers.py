@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 import astropy.table as atpy
 from skimage.feature import canny
 from skimage.transform import rotate
-
+import scipy.stats
+import scipy.signal
 
 def norm(x):
     """ Normalize the image by median and MAD"""
@@ -62,7 +63,7 @@ def find_fibers(fname_front,
     pad = 40  # padding around the fiber to analyze
     # changing padding would require regenerating the template image
     minccf = 0.2  # minimum cross-correlation between the template and data to remove non-fibers/fiducials
-    
+
     D = pyfits.getdata(fname_front)
     dat = pyfits.getdata(fname_back)
     dat = dat - np.median(dat)
@@ -104,4 +105,50 @@ def find_fibers(fname_front,
     det = det[np.isfinite(det['angle']) & (det['ccf'] > minccf)]
     cans = np.array(cans)
     return det, cans
-A
+
+
+def find_fibers_front(fname_front,
+                      ref_fname='data/fiber_arm_outline.fits',
+                      ang_step=1,
+                      doplot=False):
+    """ (experimental) 
+    Process the front iluminated images. return the matched filtered image
+    ang_step step in degrees; The smaller the step the slower the code.
+    """
+
+    pad = 40  # padding around the fiber to analyze
+    # changing padding would require regenerating the template image
+    minccf = 0.2  # minimum cross-correlation between the template and data to remove non-fibers/fiducials
+
+    D = pyfits.getdata(fname_front)
+    nx, ny = D.shape
+    block = 300
+    D1 = D * 0.
+    sigma = 2
+    xgrid, ygrid = np.mgrid[-pad:pad + 1, -pad:pad + 1]
+    mask = (np.sqrt(xgrid**2 + ygrid**2) < pad).astype(int)
+    #mask = mask/(mask**2).sum()**.5
+    for i in np.arange(0, nx, block):
+        for j in np.arange(0, ny, block):
+            curd = D[i:i+block, j :j + block]
+            curd = norm(curd)
+            D1[i:i + block,
+               j:j + block] = canny(curd, sigma=sigma)
+    ref = pyfits.getdata(ref_fname).astype('<f8')
+    refs = []
+    for angle in np.arange(0, 360, ang_step):
+        curr = rotate(ref, angle)
+        curr = curr/(curr**2).sum()**.5
+        refs.append(curr)
+
+    dats=[]
+    allconv = None
+    im0 = scipy.signal.fftconvolve(D1**2, mask, mode='same')
+    for r in refs:
+        curt = scipy.signal.convolve(D1, r, mode='same')
+        if allconv is None:
+            allconv = curt
+        else:
+            allconv = np.maximum(allconv, curt)
+    
+    return allconv/im0**.5
