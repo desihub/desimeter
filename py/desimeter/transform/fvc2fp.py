@@ -30,9 +30,22 @@ class FVC2FP(object):
             s = fx.read()
         return cls.fromjson(s)
 
+    @classmethod
+    def read(cls,filename):
+        if filename.find(".json")>=0 :
+            return cls.read_jsonfile(filename)
+        else :
+            raise RuntimeError("don't know how to read {}".format(filename))
+
     def write_jsonfile(self, filename):
         with open(filename, 'w') as fx:
             fx.write(self.tojson())
+
+    def write(self,filename):
+        if filename.find(".json")>=0 :
+            return self.write_jsonfile(filename)
+        else :
+            raise RuntimeError("don't know how to write {}".format(filename))
 
     #- Utility transforms to/from reduced [-1,1] coordinates
     def _reduce_xyfp(self, x, y):
