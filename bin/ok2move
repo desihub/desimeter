@@ -69,7 +69,7 @@ def ok2move(spots, tooclose=3.5, maxangle=90):
 def plot_positioner(fvcimage, spots, ispot, ok, outfile, dx=150, dy=150):
     """
     Make QA plot of positioners
-    
+
     Args:
         fvcimage : FVC image (preferably front-illuminated)
         spots : table of spots
@@ -153,10 +153,11 @@ def main():
     else:
         outfile = sys.stdout
 
-    for i in range(len(okids)//args.groupsize):
+    for i in range(len(okids)//args.groupsize+1):
         ids = okids[i*args.groupsize:(i+1)*args.groupsize]
-        msg = "group{} = ['{}']\n".format(i, "','".join(ids))
-        outfile.write(msg)
+        if len(ids)>0 :
+            msg = "group{} = ['{}']\n".format(i, "','".join(ids))
+            outfile.write(msg)
 
     if args.output is not None:
         outfile.close()
@@ -180,8 +181,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-
-
-
