@@ -1,0 +1,142 @@
+#!/usr/bin/env python
+
+import argparse
+import sys,os
+import numpy as np
+import multiprocessing
+import matplotlib.pyplot as plt
+import fitsio
+
+
+from astropy.table import Table
+from desimeter.processfvc import process_fvc
+from desimeter.io import desimeter_data_dir,load_metrology,fvc2fp_filename
+from desimeter.brightimage import detect_phi_arms
+from desimeter.transform.fvc2fp import FVC2FP
+from desimeter.transform.ptl2fp import fp2ptl
+from desimeter.transform.xy2qs import xy2qs
+from desimeter.transform.zhaoburge import fit_scale_rotation_offset
+from desimeter.match import match_same_system
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="""FVC image processing""")
+parser.add_argument('--front-illuminated', type = str, default = None, required = True,
+                    help = 'path to a front illuminated FVC image fits file or CSV file with spots positions')
+parser.add_argument('--back-illuminated', type = str, default = None, required = True,
+                    help = 'path to a back-illuminated FVC image fits file (fiducials+fibers ON) or a CSV file with spots positions')
+parser.add_argument('-o','--outfile', type = str, default = None, required = True,
+                    help = 'path to output table')
+parser.add_argument('--minccf', type = float, default = 0.2, required = False,
+                    help = 'minimum cross-correlation between the template and data to remove non-fibers/fiducials')
+parser.add_argument('--pad', type = int, default = 40, required = False,
+                    help = 'padding around the fiber to analyze')
+parser.add_argument('--ang-step', type = float, default = 1., required = False,
+                    help = 'step in degrees?? in phi angle scan')
+parser.add_argument('--nproc', type = int, default = 1, required = False,
+                    help = 'number of processes for multiprocessing')
+parser.add_argument('--phi-arm-angle-table', type = str, default = None, required = False,
+                    help = 'for debugging: skip the phi arm detection and use directly this table')
+parser.add_argument('--plot', action = 'store_true', help = 'plot')
+args  = parser.parse_args()
+
+if args.phi_arm_angle_table is not None :
+    print("Directly use {}".format(args.phi_arm_angle_table))
+    spots = Table.read(args.phi_arm_angle_table)
+else :
+    print("Process standard back illuminated FVC image {}".format(args.back_illuminated))
+    spots = process_fvc(args.back_illuminated)
+    template_filename = os.path.join(desimeter_data_dir(),"fiber_arm_outline.fits")
+    detect_phi_arms(spots,args.front_illuminated,template_filename,args.pad,args.ang_step,args.nproc)
+
+good=np.where((spots["ANGLE"]>-360)&(spots["CCF"]>0.2))[0]
+spots = spots[good]
+
+# refit transfo using fiber tips
+transfo = FVC2FP.read_jsonfile(fvc2fp_filename())
+rxpix, rypix = transfo._reduce_xyfvc(spots['XPIX'], spots['YPIX'])
+rxfp, ryfp   = transfo._reduce_xyfp(spots['X_FP'], spots['Y_FP'])
+res = fit_scale_rotation_offset(rxpix, rypix, rxfp, ryfp, fitzb=True, zbpolids=transfo.zbpolids, zbcoeffs=transfo.zbcoeffs)
+transfo.scale = res[0]
+transfo.rotation = res[1]
+transfo.offset_x = res[2]
+transfo.offset_y = res[3]
+transfo.zbpolids = res[4]
+transfo.zbcoeffs = res[5]
+print(transfo.tojson())
+
+# apply transform to knee
+x1,y1 = transfo.fvc2fp(spots["XPIX"],spots["YPIX"])
+x2,y2 = transfo.fvc2fp(spots["XPIX"]+1,spots["YPIX"])
+xpix_to_mm = np.abs(np.median(x2-x1))
+x2,y2 = transfo.fvc2fp(spots["XPIX"],spots["YPIX"]+1)
+ypix_to_mm = np.abs(np.median(y2-y1))
+pix_to_mm = np.sqrt(xpix_to_mm*ypix_to_mm)
+print("one pixel = {:4.3f} mm".format(pix_to_mm))
+radius=3./pix_to_mm # can do better
+# knees = center of phi axis, in pixel coordinates
+xpixknee = spots["XPIX"]+radius*np.cos(spots["ANGLE"])
+ypixknee = spots["YPIX"]+radius*np.sin(spots["ANGLE"])
+xfpknee,yfpknee = transfo.fvc2fp(xpixknee,ypixknee)
+spots["XPIX_KNEE"] = xpixknee
+spots["YPIX_KNEE"] = ypixknee
+spots["X_FP_KNEE"] = xfpknee
+spots["Y_FP_KNEE"] = yfpknee
+
+metrology = load_metrology()
+selection = (metrology["DEVICE_TYPE"]=="POS")|(metrology["DEVICE_TYPE"]=="ETC")
+metrology = metrology[selection]
+
+indices2,distances = match_same_system(xfpknee,yfpknee,metrology["X_FP"],metrology["Y_FP"],remove_duplicates=True)
+valid2=(indices2>=0)&(distances<4.)
+
+spots=spots[valid2]
+spots["X_FP_METRO"]=metrology["X_FP"][indices2[valid2]]
+spots["Y_FP_METRO"]=metrology["Y_FP"][indices2[valid2]]
+spots["XPIX_METRO"],spots["YPIX_METRO"] = transfo.fp2fvc(spots["X_FP_METRO"],spots["Y_FP_METRO"])
+
+# PETAL_ID,PETAL_LOC,DEVICE_LOC,DEVICE_TYPE,X_FP,Y_FP,LOCATION,DEVICE_ID,BUS_ID,X_FP_METRO,Y_FP_METRO,XPIX,YPIX,PTL_X, PTL_Y,Q,S,FLAGS
+
+for k in ["PETAL_ID","PETAL_LOC","DEVICE_LOC","DEVICE_TYPE","LOCATION","DEVICE_ID","BUS_ID"] :
+    spots[k] = metrology[k][indices2[valid2]]
+xptl = np.zeros(len(spots))
+yptl = np.zeros(len(spots))
+zptl = np.zeros(len(spots))
+for ploc in np.unique(spots["PETAL_LOC"]) :
+    ii=(spots["PETAL_LOC"]==ploc)
+    xptl[ii],yptl[ii],zptl[ii] = fp2ptl(ploc, spots["X_FP"][ii],spots["Y_FP"][ii])
+spots["PTL_X"] = xptl
+spots["PTL_Y"] = yptl
+
+# add Q and S
+q,s = xy2qs(spots["PTL_X"],spots["PTL_Y"])
+spots["Q"] = q
+spots["S"] = s
+
+# add flags
+spots["FLAGS"] = 4*np.ones(len(spots),dtype=int)
+
+print("number of matches = {}".format(len(spots)))
+
+
+spots.write(args.outfile,overwrite=True)
+
+print("wrote {}".format(args.outfile))
+
+if args.plot :
+    img = fitsio.read(args.front_illuminated).astype(float)
+    img -= 2000.
+    img[img<0]=0.
+    satur=1500.
+    img[img>satur]=satur
+    plt.imshow(img,origin=0,cmap='gray')
+    a=np.linspace(0,2*np.pi,40)
+    rad=6./0.066
+    xcircle=rad*np.cos(a)
+    ycircle=rad*np.sin(a)
+
+    for i in range(len(spots)) :
+        color="C{}".format(i%10)
+        plt.plot([spots["XPIX"][i],spots["XPIX_KNEE"][i],spots["XPIX_METRO"][i]],[spots["YPIX"][i],spots["YPIX_KNEE"][i],spots["YPIX_METRO"][i]],"-",color=color,lw=2)
+        plt.plot(xcircle+spots["XPIX_METRO"][i],ycircle+spots["YPIX_METRO"][i],"-",color=color,lw=2)
+
+    plt.show()
