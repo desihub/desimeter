@@ -22,7 +22,7 @@ xpix=dict()
 ypix=dict()
 
 filename = args.infile
-    
+
 table=Table.read(filename,format="csv")
 
 if args.expected :
@@ -34,6 +34,7 @@ if args.expected :
     y = table["Y_FP"][ii]
     xm = table["X_FP_EXP"][ii]
     ym = table["Y_FP_EXP"][ii]
+    pid = table["PINHOLE_ID"][ii]
 else :
     ii = np.where((table["LOCATION"]>0)&(table["X_FP_METRO"]!=0))[0]
     if ii.size == 0 :
@@ -43,6 +44,7 @@ else :
     y = table["Y_FP"][ii]
     xm = table["X_FP_METRO"][ii]
     ym = table["Y_FP_METRO"][ii]
+    pid = table["PINHOLE_ID"][ii]
 
 selection = (table["LOCATION"]>0)&(table["X_FP_EXP"]!=0)&(table["PINHOLE_ID"]>0)
 number_of_fiducials = np.unique(table["LOCATION"][selection]).size
@@ -57,7 +59,7 @@ a.set_title(os.path.basename(filename))
 
 a.plot(table["X_FP"],table["Y_FP"],".",alpha=0.5,label="all spots")
 
-if not args.expected : # plotting match to fiducials 
+if not args.expected : # plotting match to fiducials
     # plotting all of FIF and GIF
     metrology = load_metrology()
     selection=(metrology["DEVICE_TYPE"]=="FIF")|(metrology["DEVICE_TYPE"]=="GIF")
@@ -73,7 +75,27 @@ else :
     label = "matched metrology"
     marker = "o"
 a.scatter(xm,ym,marker=marker,edgecolors="orange",facecolors="none",label=label)
-    
+if args.expected :
+    from desimeter.transform.fvc2fp import FVC2FP
+    from desimeter.io import fvc2fp_filename,load_metrology
+    metrology = load_metrology()
+    input_tx = FVC2FP.read_jsonfile(fvc2fp_filename())
+    xpix=np.array([2000.,]) ; ypix=np.array([0.,])
+    xfp1,yfp1 = input_tx.fvc2fp(xpix,ypix)
+    xfp2,yfp2 = input_tx.fvc2fp(xpix+1,ypix)
+    pixel2fp  = np.hypot(xfp2-xfp1, yfp2-yfp1)[0] # mm
+
+    match_radius_pixels = 70
+    match_radius_mm = pixel2fp*match_radius_pixels
+    print("draw match radius = {} pixels = {} mm".format(match_radius_pixels,match_radius_mm))
+    angle=np.linspace(0,2*np.pi,50)
+    ca=match_radius_mm*np.cos(angle)
+    sa=match_radius_mm*np.sin(angle)
+    for xxm,yym,xx,yy,ppid in zip(xm,ym,x,y,pid) :
+        if ppid==0 : # a positioner
+            a.plot(xxm+ca,yym+sa,"-",color="orange")
+            a.plot([xxm,xx],[yym,yy],"-",color="orange")
+
 dx=xm-x
 dy=ym-y
 
@@ -94,7 +116,8 @@ elif jj.size > 0 : # sadly
         if j==jj[0]: label="large residual"
         a.plot(x[j],y[j],"+",color="red",markersize=12,label=label)
 
-a.quiver(x,y,dx,dy)
+if not args.expected :
+    a.quiver(x,y,dx,dy)
 a.set_xlabel("X_FP (mm)")
 a.set_ylabel("Y_FP (mm)")
 
@@ -108,6 +131,11 @@ a.legend(loc="upper left",title=blabla)
 a2=fig.add_subplot(666)
 a2.hist(dist[dist<0.1]*1000.)
 a2.set_xlabel("dist. (um)")
+if args.expected :
+    plt.figure("dist")
+    plt.hist(dist)
+    plt.xlabel("dist. (mm)")
+    print("max(dist)=",np.max(dist))
 
 if False :
     print("Write coordinates of missing or incorrect fiducials")
@@ -122,7 +150,7 @@ if False :
     device_loc=999 # made up
     location=1000*petal_loc+device_loc
     print(table.dtype.names)
-    
+
     # find nearests
     ii=np.where((x-xc)**2+(y-yc)**2<5**2)[0]
     j=np.argmin((x-xc)**2+(y-yc)**2)
@@ -135,7 +163,7 @@ if False :
             dot=c
             c+=1
             if c==4 : c+= 1
-            
+
         print(x[i],y[i])
         print("{line},{petal_id},{petal_loc},{device_loc},{device_type},{dot},0,0,0,0,0,0,'interpolated',0,'none','none',{x},{y},0,{location}".format(line=line,petal_id=petal_id,petal_loc=petal_loc,device_loc=device_loc,device_type=device_type,dot=dot,x=x[i],y=y[i],location=location))
         line += 1
@@ -146,7 +174,7 @@ if False :
     ii=np.where((x-xc)**2+(y-yc)**2<2**2)[0]
     for i in ii :
         print(table[:][i])
-    
+
     device_type="FIF"
     petal_id=8
     petal_loc=4
@@ -161,7 +189,7 @@ if False :
 
     # replacements
     for (xc,yc) in [ (-47.4,41.7) , ( 367.6,176.7) ] :
-        
+
         ii=np.where((x-xc)**2+(y-yc)**2<2**2)[0]
 
         for i in ii :
@@ -181,9 +209,7 @@ if False :
                 for k in metrology.dtype.names :
                     line += ",{}".format(metrology[k][j])
             print(line)
-    
-    
+
+
 
 plt.show()
-
-

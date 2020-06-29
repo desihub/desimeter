@@ -1,0 +1,73 @@
+#!/usr/bin/env python
+
+import sys
+import numpy as np
+import matplotlib.pyplot as plt
+from desimeter.io import load_metrology
+from astropy.table import Table
+from desimeter.match import match_same_system
+from desimeter.simplecorr import SimpleCorr
+from desimeter.io import load_metrology,fvc2fp_filename
+from desimeter.transform.fvc2fp import FVC2FP
+from desimeter.transform.ptl2fp import fp2ptl
+from desimeter.transform.xy2qs import xy2qs
+from desimeter.processfvc import process_fvc
+
+from scipy.spatial import cKDTree as KDTree
+import argparse
+
+parser = argparse.ArgumentParser(description="match positioners by first detecting the moving ones.")
+parser.add_argument('-i', '--infile', type=str, required=True, default=None,
+                    help='path to input fits or csv FVC file')
+parser.add_argument('-p', '--pos-ids', type=str, required=False, default=None,
+                    help='comma separated list of positioners')
+parser.add_argument('--other-table-with-device-ids', type=str, required=False, default=None,
+                    help='show results for positioners given by DEVICE_ID column in this filename')
+
+args=parser.parse_args()
+
+t=process_fvc(args.infile)
+
+if args.pos_ids is not None :
+    posids = args.pos_ids.split(",")
+elif args.other_table_with_device_ids is not None :
+    tmp=Table.read(args.other_table_with_device_ids)
+    posids = list(tmp["DEVICE_ID"])
+else :
+    posids = None
+
+m=load_metrology()
+
+if posids is not None :
+    dist = {p:-1 for p in posids}
+else :
+    dist = dict()
+
+for i,loc in enumerate(t["LOCATION"]):
+    if loc<0 : continue # not a match
+    
+    jj=np.where(m["LOCATION"]==loc)[0]
+    if jj.size<1 :
+        print("LOCATION={} not in metrology???".format(loc))
+        continue
+    j=jj[0]
+    posid=str(m["DEVICE_ID"][j])
+    if posids is not None :
+        if  posid not in posids :
+            continue
+    dx=float(t["X_FP"][i]-m["X_FP"][j])
+    dy=float(t["Y_FP"][i]-m["Y_FP"][j])
+    dist[posid] = np.sqrt(dx**2+dy**2)
+
+for posid in dist.keys() :
+    print("{} dist= {:4.3f} mm".format(posid,dist[posid]))
+distances=np.array([d for d in dist.values()])
+print(distances)
+
+print("number of matched    = {}".format(np.sum(distances>0)))
+print("number with dist<3mm = {}".format(np.sum((distances>0)&(distances<3))))
+print("number with dist<4mm = {}".format(np.sum((distances>0)&(distances<4))))
+print("number with dist<5mm = {}".format(np.sum((distances>0)&(distances<5))))
+print("number with dist<6mm = {}".format(np.sum((distances>0)&(distances<6))))
+print("number of unmatched  = {}".format(np.sum(distances<0)))
+
