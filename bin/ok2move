@@ -1,0 +1,185 @@
+#!/usr/bin/env python
+
+"""
+Identify which positioners are ok to move (i.e. not wedged between others)
+"""
+
+import sys, os, argparse
+import numpy as np
+import matplotlib.pyplot as plt
+from astropy.table import Table
+from astropy.io import fits
+from astropy.visualization import ZScaleInterval
+
+def find_neighbors(spots):
+    """
+    Identify 2 nearest neighbors
+
+    Args:
+        spots: table of spots with X_FP and Y_FP columns
+
+    Returns (indices[nspot,2], dist[nspot,2], angle[nspot])
+
+    `indices` is indices in `spots` table of closest 2 neighbors
+    `dist` is distance in mm to closest 2 neighbors;
+    `angle` is opening angle made by neighbors in degrees
+    """
+    nspot = len(spots)
+    indices = np.zeros((nspot, 2), dtype=int)
+    dist = np.zeros((nspot, 2), dtype=float)
+    angle = np.zeros(nspot, dtype=float)
+
+    for i in range(nspot):
+        dx = spots['X_FP'] - spots['X_FP'][i]
+        dy = spots['Y_FP'] - spots['Y_FP'][i]
+        d = np.hypot(dx, dy)
+        j,k = np.argsort(d)[1:3]
+        indices[i] = j,k
+        dist[i] = d[j], d[k]
+
+        v1 = np.array([dx[j], dy[j]])
+        v2 = np.array([dx[k], dy[k]])
+        cosangle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+        angle[i] = np.rad2deg( np.arccos(cosangle) )
+
+    return indices, dist, angle
+
+def ok2move(spots, tooclose=3.5, maxangle=90):
+    """
+    Finds which spots are ok to move based on geometry with neighbors
+
+    Args:
+        spots: table of spots with columns X_FP and Y_FP
+
+    Optional:
+        tooclose: distance in mm to neighbors that is too close to move
+        maxangle: if opening angle is less than this, then ok to move
+
+    Returns boolean array `ok`
+
+    Not ok to move if both neighbors are within `tooclose` and
+    opening angle is > `maxangle`
+    """
+    indices, dist, angle = find_neighbors(spots)
+    ok = (np.sum(dist<tooclose, axis=1)<2) | (angle<maxangle)
+    return ok
+
+def plot_positioner(fvcimage, spots, ispot, ok, outfile, dx=150, dy=150):
+    """
+    Make QA plot of positioners
+    
+    Args:
+        fvcimage : FVC image (preferably front-illuminated)
+        spots : table of spots
+        ispot : index of spot to plot
+        ok : boolean array of ok to move or not per positioner
+        output : output file to write
+
+    Options:
+        dx, dy: image size 2*dx by 2*dy centered on ispot
+    """
+    zscale = ZScaleInterval()
+    x = spots['XPIX'][ispot]
+    y = spots['YPIX'][ispot]
+
+    #- spot near edge of image
+    if int(x)<dx:
+        dx = int(x)
+    if int(y)<dy:
+        dy = int(y)
+
+    fig = plt.figure(figsize=(3,3))
+    plt.subplots_adjust(left=0.02, right=0.98, top=0.92, bottom=0.02)
+    subimg = fvcimage[int(y)-dy:int(y)+dy, int(x)-dx:int(x)+dx]
+    vmin, vmax = zscale.get_limits(subimg)
+    extent = [int(x)-dx, int(x)+dx, int(y)-dy, int(y)+dy]
+    plt.imshow(subimg, vmin=vmin, vmax=vmax, cmap='gray', extent=extent)
+
+    close = (np.abs(spots['XPIX'] - x) < dx) & (np.abs(spots['YPIX'] - y) < dy)
+    xx = spots['XPIX']
+    yy = spots['YPIX']
+
+    plt.plot(xx[close & ok], yy[ok & close], 'go', ms=12)
+    plt.plot(xx[close & ~ok], yy[~ok & close], 'rx', ms=15, mew=4)
+    plt.title(spots['DEVICE_ID'][ispot])
+    plt.axis('off')
+
+    plt.savefig(outfile)
+    plt.close(fig)
+
+def write_group_html(htmlfile, ids):
+    with open(htmlfile, 'w') as fx:
+        fx.write('<HTML><BODY>\n')
+        for device_id in ids:
+            fx.write(f'<IMG SRC="{device_id}.png"/>\n')
+        fx.write('</BODY></HTML>\n')
+
+def main():
+    parser = argparse.ArgumentParser(usage = "{prog} [options]")
+    parser.add_argument("-i", "--input", type=str, required=True,
+         help="input table of spots matched to positioners")
+    parser.add_argument("-o", "--output", type=str,
+        help="output file of positioners ok to move")
+    parser.add_argument("-g", "--groupsize", type=int, default=50,
+         help="Size of groups of positioners for output [default %(default)s]")
+    parser.add_argument("--plotdir", type=str,
+        help="base directory for QA plots (requires --fvcimage too)")
+    parser.add_argument("--fvcimage", type=str,
+        help="input FVC image (required if --plotdir ...)")
+    parser.add_argument("--extname",
+        help="extname of FVC file to use")
+    # parser.add_argument("-v", "--verbose", action="store_true", help="some flag")
+
+    args = parser.parse_args()
+
+    spots = Table.read(args.input)
+
+    #- Remove any fiducial spots in the file
+    keep = spots['PINHOLE_ID'] == 0
+    spots = spots[keep]
+
+    if args.plotdir is not None and args.fvcimage is None:
+        print('ERROR: --plotdir also requires --fvcimage input')
+        sys.exit(1)
+
+    ok = ok2move(spots)
+    okids = spots['DEVICE_ID'][ok]
+
+    if args.output is not None:
+        print(f'Writing groups to {args.output}')
+        outfile = open(args.output, 'w')
+    else:
+        outfile = sys.stdout
+
+    for i in range(len(okids)//args.groupsize):
+        ids = okids[i*args.groupsize:(i+1)*args.groupsize]
+        msg = "group{} = ['{}']\n".format(i, "','".join(ids))
+        outfile.write(msg)
+
+    if args.output is not None:
+        outfile.close()
+
+    if args.plotdir and args.fvcimage:
+        print(f'Writing QA plots to {args.plotdir}')
+        fvcimage = fits.getdata(args.fvcimage, args.extname)
+        if not os.path.isdir(args.plotdir):
+            os.makedirs(args.plotdir)
+        for i in range(len(spots)):
+            outfile = '{}/{}.png'.format(args.plotdir, spots['DEVICE_ID'][i])
+            plot_positioner(fvcimage, spots, i, ok, outfile)
+
+        for i in range(len(okids)//args.groupsize):
+            ids = okids[i*args.groupsize:(i+1)*args.groupsize]
+            htmlfile = f'{args.plotdir}/group{i}.html'
+            write_group_html(htmlfile, ids)
+
+        htmlfile = f'{args.plotdir}/dontmove.html'
+        write_group_html(htmlfile, spots['DEVICE_ID'][~ok])
+
+if __name__ == '__main__':
+    main()
+
+
+
+
+
