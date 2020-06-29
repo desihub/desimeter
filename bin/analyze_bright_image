@@ -19,9 +19,9 @@ from desimeter.transform.zhaoburge import fit_scale_rotation_offset
 from desimeter.match import match_same_system
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                     description="""FVC image processing""")
+                                     description="""Front illuminated FVC image processing""")
 parser.add_argument('--front-illuminated', type = str, default = None, required = True,
-                    help = 'path to a front illuminated FVC image fits file or CSV file with spots positions')
+                    help = 'path to a front illuminated FVC image fits file')
 parser.add_argument('--back-illuminated', type = str, default = None, required = True,
                     help = 'path to a back-illuminated FVC image fits file (fiducials+fibers ON) or a CSV file with spots positions')
 parser.add_argument('-o','--outfile', type = str, default = None, required = True,
