@@ -6,6 +6,8 @@ Identify which positioners are ok to move (i.e. not wedged between others)
 
 import sys, os, argparse
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from astropy.table import Table
 from astropy.io import fits
@@ -115,7 +117,7 @@ def write_group_html(htmlfile, ids):
         fx.write('</BODY></HTML>\n')
 
 def main():
-    parser = argparse.ArgumentParser(usage = "{prog} [options]")
+    parser = argparse.ArgumentParser(usage = "%(prog)s [options]")
     parser.add_argument("-i", "--input", type=str, required=True,
          help="input table of spots matched to positioners")
     parser.add_argument("-o", "--output", type=str,
