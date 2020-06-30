@@ -15,7 +15,7 @@ from desimeter.transform.fvc2fp import FVC2FP
 from desimeter.match import match_same_system
 from desimeter.transform.xy2qs import qs2xy
 from desimeter.fieldmodel import FieldModel
-from desimeter.io import load_metrology,fvc2fp_filename
+from desimeter.io import load_metrology,fvc2fp_filename,fvc_bias_filename
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""FVC image processing""")
@@ -52,13 +52,17 @@ parser.add_argument('--min-spots', type = int , default = None, required = False
 parser.add_argument('--max-spots', type = int , default = None, required = False,
                     help = 'max number of detected spots to run')
 parser.add_argument('--no-zbfit', action = 'store_true',
-                    help = 'do not refit the high degree ZB polynomial coefficients, just shift,rotation,magnification')
+                    help = '(deprecated)')
+parser.add_argument('--zbfit', action = 'store_true',
+                    help = 'refit the high degree ZB polynomial coefficients')
 parser.add_argument('--fixed-scale', action = 'store_true',
                     help = 'do not refit the scale')
 parser.add_argument('--fixed-rotation', action = 'store_true',
                     help = 'do not refit the rotation')
 parser.add_argument('--bias', type = str, default = None, required = False,
-                    help = 'use this master bias fits file')
+                    help = 'use this master bias fits file instead of $DESIMETER_DATA/bias.fits if exist')
+parser.add_argument('--no-bias', action = 'store_true',
+                    help = 'do not apply a bias correction (by default, use $DESIMETER_DATA/bias.fits if exist')
 
 args  = parser.parse_args()
 log   = get_logger()
@@ -69,10 +73,18 @@ if not args.outfile.endswith(".csv") :
 
 spots_list=[]
 
-if args.bias :
-    bias = fitsio.read(args.bias).astype(float)
-else :
+if args.no_bias :
     bias = None
+else :
+    if args.bias :
+        bias_filename = args.bias
+    else :
+        bias_filename = fvc_bias_filename()
+    if os.path.isfile(bias_filename) :
+        print("Will subtract bias. Reading {}".format(bias_filename))
+        bias = fitsio.read(bias_filename).astype(float)
+    else :
+        bias = None
 
 filename = args.infile
 if filename.find(".fits")>0 :
@@ -146,7 +158,7 @@ for seqid,spots in enumerate(spots_list) :
 
     tx = FVC2FP.read_jsonfile(fvc2fp_filename())
 
-    tx.fit(spots, update_spots=True, zbfit=(not args.no_zbfit), fixed_scale=args.fixed_scale, fixed_rotation=args.fixed_rotation)
+    tx.fit(spots, update_spots=True, zbfit=(args.zbfit), fixed_scale=args.fixed_scale, fixed_rotation=args.fixed_rotation)
 
     if args.expected_positions is not None :
         log.info("reading expected positions in {}".format(args.expected_positions))

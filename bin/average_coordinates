@@ -1,0 +1,23 @@
+#!/usr/bin/env python
+
+import argparse
+from astropy.table import Table
+from desimeter.averagecoord import average_coordinates
+
+parser = argparse.ArgumentParser(description="average coordinates in tables.")
+parser.add_argument('-i', '--infiles', type=str, required=True, nargs="*",
+                    help='path to several input csv table file(s)')
+parser.add_argument('--xkey', type=str, required=False, default="XPIX")
+parser.add_argument('--ykey', type=str, required=False, default="YPIX")
+parser.add_argument('-o', '--outfile', type=str, required=True,
+                    help='output csv file with averaged coordinates')
+
+args = parser.parse_args()
+tables = list()
+for filename in args.infiles :
+    tables.append(Table.read(filename))
+table = average_coordinates(tables,args.xkey,args.ykey)
+table.write(args.outfile,overwrite=True)
+print("wrote",args.outfile)
+
+

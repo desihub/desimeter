@@ -1,0 +1,228 @@
+#!/usr/bin/env python
+
+import sys,os
+import numpy as np
+import subprocess
+import argparse
+from scipy.spatial import cKDTree as KDTree
+import matplotlib.pyplot as plt
+from astropy.table import Table
+
+from desimeter.io import load_metrology
+from desimeter.match import match_same_system
+from desimeter.simplecorr import SimpleCorr
+from desimeter.io import load_metrology,fvc2fp_filename
+from desimeter.transform.fvc2fp import FVC2FP
+from desimeter.transform.ptl2fp import fp2ptl
+from desimeter.transform.xy2qs import xy2qs
+from desimeter.averagecoord import average_coordinates
+from desimeter.processfvc import process_fvc
+
+def drawcircle(x,y,radius=6.,color='green',alpha=1) :
+    a=np.linspace(0,2*np.pi,50)
+    ca=np.cos(a)
+    sa=np.sin(a)
+    plt.plot(x+radius*ca,y+radius*sa,"-",color=color,alpha=1)
+
+
+parser = argparse.ArgumentParser(description="match positioners by first detecting the moving ones.")
+parser.add_argument('--before-moves', type=str, required=True, nargs="*",
+                    help='path to one or several FVC image csv file(s) taken before the move')
+parser.add_argument('--after-moves', type=str, required=True, nargs="*",
+                    help='path to one or several FVC image csv file(s) taken after the move')
+parser.add_argument('-p', '--positioners', type=str, required=True,
+                    help='comma separated list of positioners that were moved. for instance M08063,M05893')
+parser.add_argument('-o', '--outfile', type=str, required=True,
+                    help='output csv file with matched positioners coordinates and ids')
+parser.add_argument('--plot', action="store_true", help="plot result")
+parser.add_argument('--max-match-radius-mm', type=float, required=False,default=7,
+                    help='maximum metrology match radius in mm')
+parser.add_argument('--min-move-mm', type=float, required=False,default=0.05,
+                    help='minimum move in mm')
+parser.add_argument('--max-move-mm', type=float, required=False,default=0.5,
+                    help='maximum move in mm')
+parser.add_argument('--min-dist-from-center-mm', type=float, required=False,default=3.,
+                    help='minimum distance of fiber from positioner center in mm')
+
+args = parser.parse_args()
+
+moved_positioners = args.positioners.split(",")
+
+
+tables=[ process_fvc(filename) for filename in args.before_moves ]
+t2 = average_coordinates(tables,"XPIX","YPIX")
+
+# using t1 as reference for output coordinates
+print("INFO: TAKE AS REFERENCE FOR COORDINATES THE IMAGES TAKEN AFTER THE MOVES")
+tables=[ process_fvc(filename) for filename in args.after_moves ]
+t1 = average_coordinates(tables,"XPIX","YPIX")
+
+xpix1=np.array(t1["XPIX"])
+ypix1=np.array(t1["YPIX"])
+xpix2=np.array(t2["XPIX"])
+ypix2=np.array(t2["YPIX"])
+
+"""
+ok=(ypix1>(5000-0.7*xpix1))
+xpix1=xpix1[ok]
+ypix1=ypix1[ok]
+ok=(ypix2>(5000-0.7*xpix2))
+xpix2=xpix2[ok]
+ypix2=ypix2[ok]
+"""
+"""
+if args.plot :
+    plt.figure()
+    plt.plot(xpix1,ypix1,"o")
+    plt.plot(xpix2,ypix2,"o")
+    plt.show()
+"""
+
+# match the two sets of spots
+indices_2, distances = match_same_system(xpix1,ypix1,xpix2,ypix2)
+indices_1 = np.arange(len(t1),dtype=int)
+ok=np.where((indices_2>=0)&(distances<50.))[0]
+ok=np.where((indices_2>=0))[0]
+indices_1 = indices_1[ok]
+indices_2 = indices_2[ok]
+distances = distances[ok]
+xpix1=xpix1[indices_1]
+ypix1=ypix1[indices_1]
+xpix2=xpix2[indices_2]
+ypix2=ypix2[indices_2]
+
+# adjust a possible transfo between the two FVC images
+corr=SimpleCorr()
+corr.fit(xpix2,ypix2,xpix1,ypix1)
+xpix2,ypix2=corr.apply(xpix2,ypix2)
+
+# transform from FVC to FP coordinates
+fvc2fp=FVC2FP.read_jsonfile(fvc2fp_filename())
+xfp1,yfp1=fvc2fp.fvc2fp(xpix1,ypix1)
+xfp2,yfp2=fvc2fp.fvc2fp(xpix2,ypix2)
+dxfp=xfp2-xfp1
+dyfp=yfp2-yfp1
+distfp=np.sqrt(dxfp**2+dyfp**2)
+    
+# selection of moving positioners
+detected=(distfp>args.min_move_mm)&(distfp<args.max_move_mm)
+
+print("median distance between matches= {} mm".format(np.median(distfp)))
+print("detected moves at xfp = {} yfp = {}".format(xfp1[detected],yfp1[detected]))
+
+# match to positioner centers from metrology
+metrology=load_metrology()
+selection = np.in1d(metrology["DEVICE_ID"],moved_positioners)
+spots=metrology[:][selection]
+xy=np.array([spots["X_FP"],spots["Y_FP"]]).T
+tree = KDTree(xy)
+xy   = np.array([xfp1[detected],yfp1[detected]]).T
+distances,indices = tree.query(xy,k=1)
+
+unique_indices = np.unique(indices)
+n_duplicates = np.sum(indices>=0)-np.sum(unique_indices>=0)
+if n_duplicates > 0 :
+    for i2 in unique_indices :
+        jj=np.where(indices==i2)[0]
+        if jj.size>1 :
+            kk=np.argsort(distances[jj])
+            indices[jj[kk[1:]]] = -1
+
+good=(indices>=0)&(distances<args.max_match_radius_mm)
+bad=np.logical_not(good)
+xfp_detected = xfp1[detected]
+yfp_detected = yfp1[detected]
+xpix_detected = xpix1[detected]
+ypix_detected = ypix1[detected]
+
+ngood=np.sum(good)
+nbad=np.sum(bad)
+
+if nbad>0 :
+    print("WARNING: could not match {} spots".format(nbad))
+
+indices=indices[good]
+distances=distances[good]
+xfp_detected  = xfp_detected[good]
+yfp_detected  = yfp_detected[good]
+xpix_detected = xpix_detected[good]
+ypix_detected = ypix_detected[good]
+
+
+# create output list
+
+spots=spots[indices]
+print("matched to {} at distances of {} mm from centers".format(list(spots["DEVICE_ID"]),distances))
+
+spots["X_FP_METRO"]=spots["X_FP"]+0.
+spots["Y_FP_METRO"]=spots["Y_FP"]+0.
+spots["X_FP"] = xfp_detected
+spots["Y_FP"] = yfp_detected
+spots["XPIX"] = xpix_detected
+spots["YPIX"] = ypix_detected
+xptl = np.zeros(len(spots))
+yptl = np.zeros(len(spots))
+zptl = np.zeros(len(spots))
+for ploc in np.unique(spots["PETAL_LOC"]) :
+    ii=(spots["PETAL_LOC"]==ploc)
+    xptl[ii],yptl[ii],zptl[ii] = fp2ptl(ploc, spots["X_FP"][ii],spots["Y_FP"][ii])
+spots["PTL_X"] = xptl
+spots["PTL_Y"] = yptl
+
+# add Q and S
+q,s = xy2qs(spots["PTL_X"],spots["PTL_Y"])
+spots["Q"] = q
+spots["S"] = s
+
+# add flags
+spots["FLAGS"] = 4*np.ones(len(spots),dtype=int)
+
+#spots.rename_column("DEVICE_ID","POS_ID")
+
+# remove useless columns
+for k in ["PINHOLE_ID","PTL_SOURCE","PROJ_DISTANCE","PROVENANCE","NOTES","Z_FP","X_MNT","Y_MNT","Z_MNT","X_PTL","Y_PTL","Z_PTL"] :
+    if k in spots.dtype.names :
+        spots.remove_column(k)
+
+
+dist_from_center = np.sqrt((spots["X_FP"]-spots["X_FP_METRO"])**2+(spots["Y_FP"]-spots["Y_FP_METRO"])**2)
+n_final = np.sum(dist_from_center>args.min_dist_from_center_mm)
+print("number of detected/matched positioner that are more than {} mm from their center = {}".format(args.min_dist_from_center_mm,n_final))
+if n_final > 0 :
+    selected_spots = spots[(dist_from_center>args.min_dist_from_center_mm)]
+    selected_spots.write(args.outfile,overwrite=True)
+    print("wrote {} positioners in {}".format(len(selected_spots),args.outfile))
+
+if args.plot :
+    name="xy-{}".format(os.path.basename(args.outfile).split(".")[0])
+    plt.figure(name)
+    plt.plot(xfp1,yfp1,"o",alpha=0.5,label="after the moves")
+    plt.plot(xfp2,yfp2,"o",alpha=0.5,label="before the moves")
+    plt.plot(xfp1[detected],yfp1[detected],"+",color="k",label="detected move")
+
+    dxfp=xfp2-xfp1
+    dyfp=yfp2-yfp1
+    distfp=np.sqrt(dxfp**2+dyfp**2)
+    
+    plt.plot(spots["X_FP_METRO"],spots["Y_FP_METRO"],"x",color="green",label="metrology")
+    for p in range(len(spots)):
+        drawcircle(spots["X_FP_METRO"][p],spots["Y_FP_METRO"][p],radius=args.min_dist_from_center_mm,alpha=1)
+        drawcircle(spots["X_FP_METRO"][p],spots["Y_FP_METRO"][p],radius=6,alpha=0.5)
+        
+
+    plt.xlabel("xfp")
+    plt.ylabel("yfp")
+    plt.legend()
+
+    name="histo-{}".format(os.path.basename(args.outfile).split(".")[0])
+
+    plt.figure(name)
+    plt.hist(distfp[distfp<1.],bins=100)
+    plt.xlabel("dist (mm)")
+    plt.axvline(args.min_move_mm)
+    plt.axvline(args.max_move_mm)
+    expected_move_mm = 3.*5*np.pi/180.
+    plt.axvline(expected_move_mm,linestyle="--")
+    
+
+    plt.show()
