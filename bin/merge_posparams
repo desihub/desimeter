@@ -34,17 +34,19 @@ tables=list()
 for filename in args.input :
     t=Table.read(filename)
     if len(t)==0 : continue
-    if "MOVE_CMD" in t :
+
+
+    if "MOVE_CMD" in t.dtype.names :
         if t["MOVE_CMD"].dtype == "int64"  : t["MOVE_CMD"]=np.repeat("none",len(t))
-    if "MOVE_VAL1" in t :
+        #t.remove_column("MOVE_CMD")
+    if "MOVE_VAL1" in t.dtype.names :
         if t["MOVE_VAL1"].dtype == "int64" : t["MOVE_VAL1"]=np.repeat("none",len(t))
-    if "MOVE_VAL2" in t :
+    if "MOVE_VAL2" in t.dtype.names :
         if t["MOVE_VAL2"].dtype == "int64" : t["MOVE_VAL2"]=np.repeat("none",len(t))
-    if "DATA_START_DATE" in t :
-        if t["MOVE_VAL2"].dtype == "int64" : t["MOVE_VAL2"]=np.repeat("none",len(t))
+
     tables.append(t)
 
-
+"""
 # I am adding myself possible missing columns in some tables.
 dtypes=dict()
 for table in tables :
@@ -55,12 +57,12 @@ for table in tables :
     for k in dtypes.keys() :
         if not k in table.dtype.names :
             table.add_column(Column(name=k,length=len(table),dtype=dtypes[k]))
-
+"""
 
 
 posparams = vstack(tables)
-if "LOCATION" not in posparams :
-    if "PETAL_LOC" in posparams and "DEVICE_LOC" in posparams :
+if "LOCATION" not in posparams.dtype.names :
+    if "PETAL_LOC" in posparams.dtype.names and "DEVICE_LOC" in posparams.dtype.names :
         posparams["LOCATION"]=1000*np.array(list(posparams["PETAL_LOC"])).astype(int)+np.array(list(posparams["DEVICE_LOC"])).astype(int)
 
 device_id_key="DEVICE_ID"
@@ -71,7 +73,7 @@ if not device_id_key in posparams.dtype.names : # add device id because that's h
     sys.exit(12)
 
 
-if "DEVICE_LOC" not in posparams and (not args.no_metrology) :
+if "DEVICE_LOC" not in posparams.dtype.names and (not args.no_metrology) :
     # merge metrology info
 
     metrology = desimeter.io.load_metrology()
