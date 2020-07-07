@@ -121,14 +121,14 @@ def fitcentroid(stamp,noise=10.):
     #return fitcentroid_barycenter(stamp)
 
 
-def detectspots(fvcimage,threshold=500,nsig=7,psf_sigma=1.):
+def detectspots(fvcimage,min_counts_per_pixel=500,min_counts_per_spot=5000,nsig=7,psf_sigma=1.):
     """
     Detect spots in a fiber view image and measure their centroids and flux
     Args:
         fvcimage : 2D numpy array
 
     Optional:
-       threshold : float, use max of this threshold in counts/pixel and nsig*rms to do a first
+       min_counts_per_pixel : float, use max of this min_counts_per_pixel in counts/pixel and nsig*rms to do a first
                     detection of peaks
     returns astropy.Table with spots, columns are xpix,ypix,xerr,yerr,counts
     """
@@ -138,7 +138,7 @@ def detectspots(fvcimage,threshold=500,nsig=7,psf_sigma=1.):
     n0=fvcimage.shape[0]
     n1=fvcimage.shape[1]
 
-    # find peaks = local maximum above threshold
+    # find peaks = local maximum above min_counts_per_pixel
     log.info("gaussian convolve with sigma = {:2.1f} pixels".format(psf_sigma))
     convolved_image=gaussian_convolve(fvcimage,psf_sigma)
 
@@ -164,10 +164,10 @@ def detectspots(fvcimage,threshold=500,nsig=7,psf_sigma=1.):
     #plt.hist(vals[ok]-mval,bins=100)
     #plt.show()
 
-    if threshold is None:
+    if min_counts_per_pixel is None:
         threshold=nsig*rms
     else:
-        threshold=max(threshold,nsig*rms)
+        threshold=max(min_counts_per_pixel,nsig*rms)
 
     peaks=np.zeros((n0,n1))
     peaks[1:-1,1:-1] = ((convolved_image[1:-1, 1:-1] > convolved_image[:-2, 1:-1]) *
@@ -214,6 +214,14 @@ def detectspots(fvcimage,threshold=500,nsig=7,psf_sigma=1.):
         #    log.error("failed to fit a centroid {}".format(e))
 
         log.debug("{} x={} y={} counts={}".format(j,xpix[j],ypix[j],counts[j]))
+
+    if min_counts_per_spot>0 :
+        good = (counts>=min_counts_per_spot)
+        xpix=xpix[good]
+        ypix=ypix[good]
+        xerr=xerr[good]
+        yerr=yerr[good]
+        counts=counts[good]
 
     for _ in range(100) :
         # iterate, removing duplicates
