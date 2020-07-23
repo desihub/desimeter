@@ -7,10 +7,7 @@ from pkg_resources import resource_filename
 import numpy as np
 from scipy.interpolate import interp1d
 
-# from desimodel.focalplane.geometry import qs2xy,xy2qs
-#from desimeter.log import get_logger
-
-from desimeter.transform.zhaoburge import getZhaoBurgeXY, transform, fit_scale_rotation_offset, fitZhaoBurge
+from desimeter.transform.zhaoburge import getZhaoBurgeXY, transform, fitZhaoBurge
 
 #- Utility transforms to/from reduced [-1,1] coordinates
 def _reduce_xyfp(x, y):
