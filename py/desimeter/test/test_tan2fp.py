@@ -42,34 +42,34 @@ class TestTan2FP(unittest.TestCase):
         xfp, yfp = echo22_tan2fp(xtan1, ytan1)
         rfp = np.sqrt(xfp**2 + yfp**2)
         self.assertLess(np.max(rfp), 415)
-        
+
         xtan2, ytan2 = echo22_fp2tan(xfp, yfp)
         dx = xtan2 - xtan1
         dy = ytan2 - ytan1
         dr = np.sqrt(dx**2 + dy**2)
         self.assertLess(np.max(dr), a*2e-6)
         self.assertLess(np.sqrt(np.mean(dr**2)), a*1e-6)
-    
+
     def test_echo22_fp2tan(self):
         rmax = 414.0
         a = np.arcsin(np.radians(1.63))
-        
+
         xfp1, yfp1 = np.random.uniform(-rmax, rmax, size=(2, 1000))
         keep = (xfp1**2 + yfp1**2) < rmax**2
         xfp1, yfp1 = xfp1[keep], yfp1[keep]
-        
+
         xtan, ytan = echo22_fp2tan(xfp1, yfp1)
         rtan = np.sqrt(xtan**2 + ytan**2)
         self.assertLess(np.max(rtan), a)
-        
+
         xfp2, yfp2 = echo22_tan2fp(xtan, ytan)
         dx, dy = xfp2-xfp1, yfp2-yfp1
         dr = np.sqrt(dx**2 + dy**2)
 
         self.assertLess(np.max(dr), 1e-3)   #- 1 um
         self.assertLess(np.sqrt(np.mean(dr**2)), 0.5e-3)   #- 0.5 um
-        
-    
+
+
     def test_radius2theta(self):
         r1 = np.arange(0,415.1, 1.0)
         theta = radius2theta(r1)
@@ -95,7 +95,7 @@ class TestTan2FP(unittest.TestCase):
         self.assertLess(np.max(np.abs(dt)), 0.1)
 
     def test_raytracefit_tan2fp(self) :
-        ifilename = resource_filename("desimeter","data/raytrace-tan2fp-4957-v17.csv")
+        ifilename = resource_filename("desimeter","data/raytrace-tan2fp-4957-v18.csv")
         table = Table.read(ifilename,format="csv")
         tmp=np.unique(table["ADC1"])
         adc1=float(tmp[tmp.size//2]) # one random value of adc1 on grid
@@ -112,7 +112,7 @@ class TestTan2FP(unittest.TestCase):
         self.assertLess(rms, 3e-3) # less than 3 um
 
     def test_raytracefit_fp2tan(self) :
-        ifilename = resource_filename("desimeter","data/raytrace-tan2fp-4957-v17.csv")
+        ifilename = resource_filename("desimeter","data/raytrace-tan2fp-4957-v18.csv")
         table = Table.read(ifilename,format="csv")
         tmp=np.unique(table["ADC1"])
         adc1=float(tmp[tmp.size//2]) # one random value of adc1 on grid
@@ -141,7 +141,7 @@ class TestTan2FP(unittest.TestCase):
         self.assertLess(rms,0.1) # less than 0.1 arcsec
 
     def test_default_tan2fp(self) :
-        ifilename = resource_filename("desimeter","data/raytrace-tan2fp-4957-v17.csv")
+        ifilename = resource_filename("desimeter","data/raytrace-tan2fp-4957-v18.csv")
         table = Table.read(ifilename,format="csv")
         tmp=np.unique(table["ADC1"])
         adc1=float(tmp[tmp.size//2]) # one random value of adc1 on grid
@@ -156,6 +156,6 @@ class TestTan2FP(unittest.TestCase):
         rms=np.sqrt( np.mean(  (xfp2-xfp)**2 + (yfp2-yfp)**2 ) )
         print("for ADC1={} ADC2={} rms(TAN->FP) = {:4.3f} microns".format(adc1,adc2,rms*1000.))
         self.assertLess(rms, 3e-3) # less than 3 um
-    
+
 if __name__ == '__main__':
     unittest.main()
