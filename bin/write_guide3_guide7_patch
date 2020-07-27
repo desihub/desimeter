@@ -1,0 +1,182 @@
+#!/usr/bin/env python
+
+from astropy.table import Table
+from astropy.io import ascii
+from pkg_resources import resource_filename
+from desimeter.transform.ptl2fp import fp2ptl
+import numpy as np
+
+def _get_pinhole_gfa_coords(pinhole_id):
+    """
+    get x_gfa, y_gfa pinhole coordinates at which to evaluate planar model
+
+    Args:
+        pinhole_id : int, should be one of (1, 2, 3, 4)
+
+    Returns:
+        coords : tuple, (x_gfa, y_gfa) pixel coordinates
+    """
+
+    assert(pinhole_id in [1, 2, 3, 4])
+
+    xy_gfa_dict = {1 : (0.90445804595947266, 13.898725032806396),
+                   2 : (2047.9033813476562, 13.899508476257324),
+		   3 : (2047.9044799804688, 1044.8986511230469),
+		   4 : (0.90369510650634766, 1044.8976745605469)}
+
+    coords = xy_gfa_dict[pinhole_id]
+
+    return coords
+
+def _get_plane_coeff(petal_loc, coord='X'):
+    """
+    get coefficients of planar surface mapping from x_gfa, y_gfa to x_fp, y_fp
+    
+    Args:
+        petal_loc : guide camera petal location in focal plane (0,2,3,5,7,8)
+        coord : string, should be either 'X' (for X_FP), or 'Y' (for Y_FP)
+
+    Returns:
+        coeff : list of three coefficients specifying planar model
+    """
+
+    assert(petal_loc in [0, 2, 3, 5, 7, 8])
+    assert(coord in ['X', 'Y'])
+
+    coeff_x_fp = {0: [91.8290008897, 0.0142564754, -0.0046540723],
+                  2: [405.7272754413, 0.0000436514, -0.0149327409], 
+                  3: [348.8824487879, -0.0088595464, -0.0120471442], 
+                  5: [-91.8627781345, -0.0142609354, 0.0046420089], 
+                  7: [-405.7801509760, -0.0000106187, 0.0149351226], 
+                  8: [-349.3793836387, 0.0087573071, 0.0121231345]}
+    
+    coeff_y_fp = {0: [-396.9957752088, 0.0046691204, 0.0141891317],
+                  2: [-35.2976124185, 0.0150007008, 0.0000343108],
+                  3: [210.2297400065, 0.0121055754, -0.0088252019],
+                  5: [396.8617645949, -0.0046561284, -0.0141934371],
+                  7: [35.4811212256, -0.0150023601, -0.0000019735],
+                  8: [-209.8801602520, -0.0121796381, 0.0087240329]}
+
+    coeff = coeff_x_fp[petal_loc] if coord == 'X' else coeff_y_fp[petal_loc]
+
+    return coeff
+
+def _get_pinhole_xy_fp(petal_loc, pinhole_id):
+    """
+    get pinhole focal plane coordinates according to planar models
+
+    Args:
+        petal_loc : int, one of (0,2,3,5,7,8)
+        pinhole_id : int, one of (1,2,3,4)
+
+    Returns:
+        fp_coords : tuple, (X_FP, Y_FP)
+    """
+    
+    x_gfa, y_gfa = _get_pinhole_gfa_coords(pinhole_id)
+
+    fp_coords = []
+    for coord in ['X', 'Y']:
+        coeff = _get_plane_coeff(petal_loc, coord=coord)
+        coord = coeff[0] + coeff[1]*x_gfa + coeff[2]*y_gfa
+        fp_coords.append(coord)
+     
+    return tuple(fp_coords)
+
+def _get_average_z(pinhole_id):
+    """
+    Get petal Z coordinate by averaging across petals with real metrology
+
+    Args:
+        pinhole_id : int, one of (1,2,3,4)
+
+    Returns:
+        z_ptl : float, average petal Z coordinate for this pinhole_id
+    """
+    
+    fname = resource_filename('desimeter',"data/fp-metrology.csv")
+
+    # could cache this...
+    tab = ascii.read(fname, format='csv')
+
+    tab = tab[(tab['PINHOLE_ID'] == pinhole_id) &
+              (tab['DEVICE_TYPE'] == 'GFA') &
+	      (tab['PETAL_LOC'] != 3) &
+	      (tab['PETAL_LOC'] != 7)]
+
+    assert(len(tab) == 8)
+
+    z_ptl = np.mean(tab['Z_PTL'])
+    return z_ptl
+
+def _get_petal_id(petal_loc):
+    """convert from petal_loc to petal_id"""
+
+    petal_loc2id = {0: 1,
+                    1: 5,
+                    2: 6,
+		    3: 3,
+		    4: 8,
+		    5: 10,
+		    6: 11,
+		    7: 2,
+		    8: 7,
+		    9: 9}
+
+    return petal_loc2id[petal_loc]
+
+def _get_gfa_device(petal_loc):
+    """convert from petal_loc to GFA device number"""
+    
+    petal2device = {0: 10,
+                    1: 5,
+                    2: 6,
+                    3: 2,
+                    4: 7,
+                    5: 8,
+                    6: 13,
+                    7: 1,
+                    8: 4,
+                    9: 3}
+
+    return petal2device[petal_loc]
+
+
+results = []
+for petal_loc in [3, 7]:
+    for pinhole_id in [1, 2, 3, 4]:
+
+        x_fp, y_fp = _get_pinhole_xy_fp(petal_loc, pinhole_id)
+
+        x_ptl, y_ptl, _z_ptl = fp2ptl(petal_loc, x_fp, y_fp)
+        
+        z_ptl = _get_average_z(pinhole_id)
+
+        petal_id = _get_petal_id(petal_loc)
+        result = (petal_id, petal_loc, pinhole_id, x_fp, y_fp,
+                  x_ptl, y_ptl, z_ptl)
+        results.append(result)
+
+t = Table()
+t['PETAL_ID'] = [r[0] for r in results]
+t['PETAL_LOC'] = [r[1] for r in results]
+t['DEVICE_LOC'] = ''
+t['DEVICE_TYPE'] = 'GFA'
+t['PINHOLE_ID'] = [r[2] for r in results]
+t['X_PTL'] = [r[5] for r in results]
+t['Y_PTL'] = [r[6] for r in results]
+t['Z_PTL'] = [r[7] for r in results]
+t['X_MNT'] = ''
+t['Y_MNT'] = ''
+t['Z_MNT'] = ''
+t['PTL_SOURCE'] = 'Calculated'
+t['PROJ_DISTANCE'] = ''
+t['PROVENANCE'] = 'DESI-5784'
+t['NOTES'] = [('GFA ' + str(_get_gfa_device(r[1])).zfill(2)) for r in results]
+t['X_FP'] = [r[3] for r in results]
+t['Y_FP'] = [r[4] for r in results]
+t['Z_FP'] = t['Z_PTL'] # this is true in existing fp-metrology.csv file
+t['LOCATION'] = ''
+
+outname = resource_filename('desimeter',"data/fp-metrology-gfa_patch.csv")
+ascii.write(t, outname, format='csv', fast_writer=False, overwrite=True)
