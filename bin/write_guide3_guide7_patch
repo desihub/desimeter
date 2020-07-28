@@ -14,7 +14,7 @@ def _get_pinhole_gfa_coords(pinhole_id):
         pinhole_id : int, should be one of (1, 2, 3, 4)
 
     Returns:
-        coords : tuple, (x_gfa, y_gfa) pixel coordinates
+        coords : tuple, (x_gfa, y_gfa) coordinates
     """
 
     assert(pinhole_id in [1, 2, 3, 4])
