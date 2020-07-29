@@ -7,7 +7,7 @@ import numpy as np
 import yaml
 from desimeter.log import get_logger
 from pkg_resources import resource_filename
-from astropy.table import Table
+from astropy.table import Table, vstack
 from desimeter.transform.ptl2fp import apply_ptl2fp
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -74,6 +74,12 @@ for i in range(patch["X_FP"].size) :
             j=jj
             log.info("Replacing LOCATION={} PINHOLE_ID={}".format(patch["LOCATION"][i],patch["PINHOLE_ID"][i]))
             spots[:][j] = patch[:][i]
+
+log.info("applying GUIDE3/GUIDE7 patch")
+filename = resource_filename('desimeter',"data/fp-metrology-gfa_patch.csv")
+log.info(" from {}".format(filename))
+gfa_patch = Table.read(filename, format="csv")
+spots = vstack([spots, gfa_patch])
 
 
 spots.write(args.outfile,format='csv',overwrite=True)
