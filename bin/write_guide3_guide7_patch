@@ -3,8 +3,10 @@
 from astropy.table import Table
 from astropy.io import ascii
 from pkg_resources import resource_filename
-from desimeter.transform.ptl2fp import fp2ptl
+from desimeter.transform.ptl2fp import fp2ptl, ptl2fp
 import numpy as np
+
+pinhole_ids = [1, 2, 3, 4]
 
 def _get_pinhole_gfa_coords(pinhole_id):
     """
@@ -14,15 +16,18 @@ def _get_pinhole_gfa_coords(pinhole_id):
         pinhole_id : int, should be one of (1, 2, 3, 4)
 
     Returns:
-        coords : tuple, (x_gfa, y_gfa) coordinates
+        coords : tuple, (x_gfa, y_gfa) pixel coordinates
     """
 
-    assert(pinhole_id in [1, 2, 3, 4])
+    assert(pinhole_id in pinhole_ids)
 
-    xy_gfa_dict = {1 : (0.90445804595947266, 13.898725032806396),
-                   2 : (2047.9033813476562, 13.899508476257324),
-		   3 : (2047.9044799804688, 1044.8986511230469),
-		   4 : (0.90369510650634766, 1044.8976745605469)}
+    szx = 2048
+    szy = 1032
+    
+    xy_gfa_dict = {1 : (0.0, 0.0),
+                   2 : (szx-1.0, 0.0),
+                   3 : (szx-1.0, szy-1.0),
+                   4 : (0.0, szy-1.0)}
 
     coords = xy_gfa_dict[pinhole_id]
 
@@ -83,31 +88,108 @@ def _get_pinhole_xy_fp(petal_loc, pinhole_id):
      
     return tuple(fp_coords)
 
-def _get_average_z(pinhole_id):
+def get_ptl_avg(pinhole_id, coord='Z'):
     """
-    Get petal Z coordinate by averaging across petals with real metrology
+    Get petal coordinate by averaging across petals with real metrology
 
     Args:
         pinhole_id : int, one of (1,2,3,4)
+        coord : string, one of 'X', 'Y', 'Z'
 
     Returns:
-        z_ptl : float, average petal Z coordinate for this pinhole_id
+        ptl : float, average petal coordinate for this pinhole_id
     """
+    
+    assert((coord == 'X') or (coord == 'Y') or (coord == 'Z'))
     
     fname = resource_filename('desimeter',"data/fp-metrology.csv")
 
-    # could cache this...
     tab = ascii.read(fname, format='csv')
 
-    tab = tab[(tab['PINHOLE_ID'] == pinhole_id) &
-              (tab['DEVICE_TYPE'] == 'GFA') &
-	      (tab['PETAL_LOC'] != 3) &
-	      (tab['PETAL_LOC'] != 7)]
+    tab = tab[(tab['PINHOLE_ID'] == pinhole_id) & (tab['DEVICE_TYPE'] == 'GFA')]
 
     assert(len(tab) == 8)
 
-    z_ptl = np.mean(tab['Z_PTL'])
-    return z_ptl
+    ptl = np.mean(tab[coord + '_PTL'])
+
+    return ptl
+
+def get_fp_avg_guess(petal_loc, pinhole_id):
+    """
+    Retrieve a guess for a pinhole's focal plane coords
+
+    Args:
+        petal_loc: int
+        pinhole_id: int, one of (1,2,3,4)
+
+    Returns:
+        xyz_fp: tuple
+    """
+    assert(pinhole_id in pinhole_ids)
+
+    coords = ['X', 'Y', 'Z']
+
+    xyz_ptl = [get_ptl_avg(pinhole_id, coord=coord) for coord in coords]
+
+    x_fp, y_fp, _ = ptl2fp(petal_loc, xyz_ptl[0], xyz_ptl[1])
+
+    xyz_fp = x_fp[0], y_fp[0], xyz_ptl[2]
+
+    return xyz_fp
+
+def _ccd_to_fs_offs(xfp, yfp, zfp):
+    """ partial copy of fit_gfa2fp """
+    
+    x01 =  np.array( [ xfp[1]-xfp[0], yfp[1]-yfp[0], zfp[1]-zfp[0] ] )
+    x01 /= np.sqrt(np.sum(x01**2))
+    x12 =  np.array( [ xfp[2]-xfp[1], yfp[2]-yfp[1], zfp[2]-zfp[1] ] )
+    x12 /= np.sqrt(np.sum(x12**2))
+    norm_vector= np.cross(x01,x12)
+
+    delta_z = 2.23 # mm
+    delta_x = delta_z*norm_vector[0]/norm_vector[2]
+    delta_y = delta_z*norm_vector[1]/norm_vector[2]
+
+    return delta_x, delta_y
+
+def _derive_ccd_fp_coords(petal_loc=3):
+
+    # get initial guess for X_FP, Y_FP, Z_FP of corners by
+    # averaging the petals with realmetrology
+
+    x_fp_guess = []
+    y_fp_guess = []
+    z_fp_guess = []
+    
+    for pinhole_id in pinhole_ids:
+        xyz_guess = get_fp_avg_guess(petal_loc, pinhole_id)
+        x_fp_guess.append(xyz_guess[0])
+        y_fp_guess.append(xyz_guess[1])
+        z_fp_guess.append(xyz_guess[2])
+
+    x_fp_guess = np.array(x_fp_guess)
+    y_fp_guess = np.array(y_fp_guess)
+    z_fp_guess = np.array(z_fp_guess)
+    
+    # evaluate the polynomial at the corner GFA pixel coordinates to 
+    # get FP coords at the focal surface
+
+    x_fp_planar = np.array([_get_pinhole_xy_fp(petal_loc, pinhole_id)[0] for pinhole_id in pinhole_ids])
+    y_fp_planar = np.array([_get_pinhole_xy_fp(petal_loc, pinhole_id)[1] for pinhole_id in pinhole_ids])
+    
+    n_iter = 10
+    for i in range(n_iter):
+        # use the guessed coordinates to derive offsets
+        delta_x, delta_y = _ccd_to_fs_offs(x_fp_guess, y_fp_guess, z_fp_guess)
+    
+        # the offsets should be SUBTRACTED from the focal surface FP coords
+        x_fp_physical = x_fp_planar - delta_x
+        y_fp_physical = y_fp_planar - delta_y
+
+        x_fp_guess = x_fp_physical
+        y_fp_guess = y_fp_physical
+    
+    return x_fp_physical, y_fp_physical
 
 def _get_petal_id(petal_loc):
     """convert from petal_loc to petal_id"""
@@ -144,17 +226,18 @@ def _get_gfa_device(petal_loc):
 
 results = []
 for petal_loc in [3, 7]:
-    for pinhole_id in [1, 2, 3, 4]:
-
-        x_fp, y_fp = _get_pinhole_xy_fp(petal_loc, pinhole_id)
-
-        x_ptl, y_ptl, _z_ptl = fp2ptl(petal_loc, x_fp, y_fp)
-        
-        z_ptl = _get_average_z(pinhole_id)
+    x_fp, y_fp = _derive_ccd_fp_coords(petal_loc=petal_loc)
+    
+    x_ptl, y_ptl, _ = fp2ptl(petal_loc, x_fp, y_fp)
+    for pinhole_id in pinhole_ids:
+        z_ptl = get_ptl_avg(pinhole_id, coord='Z')
 
         petal_id = _get_petal_id(petal_loc)
-        result = (petal_id, petal_loc, pinhole_id, x_fp, y_fp,
-                  x_ptl, y_ptl, z_ptl)
+        result = (petal_id, petal_loc, pinhole_id,
+                  x_fp[pinhole_id-1], y_fp[pinhole_id-1],
+                  x_ptl[pinhole_id-1], y_ptl[pinhole_id-1],
+                  z_ptl)
+        
         results.append(result)
 
 t = Table()
