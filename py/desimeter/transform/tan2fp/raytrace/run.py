@@ -3,7 +3,7 @@
 import numpy as np
 #import matplotlib.pyplot as plt
 from astropy.table import Table,Column # for the IO
-import RT185    # needs DESI-ADC.OPT.CSV  DESI-ADC.RAY.CSV  DESI-ADC.MED.CSV
+import RT185v2    # needs DESI-ADC-2.OPT.CSV  DESI-ADC-2.RAY.CSV  DESI-ADC-2.MED.CSV
 # These files give us up to 680 rays, 8 wavelengths.
 from desimeter.trig import sind
 
@@ -33,7 +33,7 @@ def incoming_rays(adc1=0.,adc2=0., dangle=0.2) :
 
 def trace(wuv12):                # TASK 10
     resultsList = []
-    arrayNine = RT185.getNine(wuv12)          # one star, but either monochromatic or polychromatic
+    arrayNine = RT185v2.getNine(wuv12)          # one star, but either monochromatic or polychromatic
     resultsList.append(arrayNine)
     return resultsList  # adc1, adc2, ngood, xave, yave, zave, xrms, yrms, zrms
 
@@ -48,7 +48,7 @@ def main() :
         yfp = np.zeros((rays.shape[0]))
         zfp = np.zeros((rays.shape[0]))
         for i,ray in enumerate(rays) :
-            adc1, adc2, ngood, xfp[i] , yfp[i], zfp[i], xrms, yrms, zrms = RT185.getNine(ray)
+            adc1, adc2, ngood, xfp[i] , yfp[i], zfp[i], xrms, yrms, zrms = RT185v2.getNine(ray)
             # avoid unused-var warning
             del zrms
 
@@ -88,6 +88,6 @@ def main() :
     table["Z_FP"] = result[:,6]
     table["WAVELENGTH"] = result[:,7]
 
-    table.write("raytrace-tan2fp-4957-v17.csv")
+    table.write("raytrace-tan2fp-4957-v18.csv")
 
 main()

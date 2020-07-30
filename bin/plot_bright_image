@@ -1,0 +1,48 @@
+#!/usr/bin/env python
+
+import argparse
+import sys,os
+import numpy as np
+import multiprocessing
+import matplotlib.pyplot as plt
+import fitsio
+
+
+from astropy.table import Table
+from desimeter.processfvc import process_fvc
+from desimeter.io import desimeter_data_dir,load_metrology,fvc2fp_filename
+from desimeter.brightimage import detect_phi_arms
+from desimeter.transform.fvc2fp import FVC2FP
+from desimeter.transform.ptl2fp import fp2ptl
+from desimeter.transform.xy2qs import xy2qs
+from desimeter.transform.zhaoburge import fit_scale_rotation_offset
+from desimeter.match import match_same_system
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="""Front illuminated FVC image processing""")
+parser.add_argument('--front-illuminated-image', type = str, default = None, required = True,
+                    help = 'path to a front illuminated FVC image fits file')
+parser.add_argument('--table', type = str, default = None, required = True,
+                    help = 'path to phi arm matched table')
+parser.add_argument('--vmin', type = float , default = 0)
+parser.add_argument('--vmax', type = float , default = 5000)
+parser.add_argument('--posids', action = 'store_true', help='show posititioners IDs')
+
+args  = parser.parse_args()
+spots = Table.read(args.table)
+img = fitsio.read(args.front_illuminated_image).astype(float)
+img -= 2000.
+img[img<args.vmin]=args.vmin
+img[img>args.vmax]=args.vmax
+plt.imshow(img,origin=0,cmap='gray')
+a=np.linspace(0,2*np.pi,40)
+rad=6./0.066
+xcircle=rad*np.cos(a)
+ycircle=rad*np.sin(a)
+for i in range(len(spots)) :
+    color="C{}".format(i%10)
+    plt.plot([spots["XPIX"][i],spots["XPIX_KNEE"][i],spots["XPIX_METRO"][i]],[spots["YPIX"][i],spots["YPIX_KNEE"][i],spots["YPIX_METRO"][i]],"-",color=color,lw=2)
+    plt.plot(xcircle+spots["XPIX_METRO"][i],ycircle+spots["YPIX_METRO"][i],"-",color=color,lw=2)
+    if args.posids :
+        plt.text(spots["XPIX_METRO"][i],spots["YPIX_METRO"][i],spots["DEVICE_ID"][i],color=color)
+plt.show()

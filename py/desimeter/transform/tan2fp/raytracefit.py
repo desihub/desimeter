@@ -7,10 +7,7 @@ from pkg_resources import resource_filename
 import numpy as np
 from scipy.interpolate import interp1d
 
-# from desimodel.focalplane.geometry import qs2xy,xy2qs
-#from desimeter.log import get_logger
-
-from desimeter.transform.zhaoburge import getZhaoBurgeXY, transform, fit_scale_rotation_offset, fitZhaoBurge
+from desimeter.transform.zhaoburge import getZhaoBurgeXY, transform, fitZhaoBurge
 
 #- Utility transforms to/from reduced [-1,1] coordinates
 def _reduce_xyfp(x, y):
@@ -116,22 +113,14 @@ class TAN2FP_RayTraceFit(object) :
             #################################################################
             ## CHOICE OF POLYNOMIALS IS HERE
             ##
-            polids = np.array([2, 5, 6, 9, 20, 27, 28, 29, 30],dtype=int)
+            polids = np.array([0,1,2,3,4,5,6,9,14,15,20,27,28,29,30],dtype=int) #
             #################################################################
             #- Perform fit
-            if 1 : # it's a bit better
-                scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = fit_scale_rotation_offset(rxtan, rytan, rxfp, ryfp, fitzb=True, zbpolids=polids)
-                self.scale[config] = scale
-                self.rotation[config] = rotation
-                self.offset_x[config] = offset_x
-                self.offset_y[config] = offset_y
-            else :
-                zbpolids, zbcoeffs, dx, dy =  fitZhaoBurge(rxtan, rytan, rxfp, ryfp, polids=polids)
-                del dx,dy
-                self.scale[config] = 1
-                self.rotation[config] = 0.
-                self.offset_x[config] = 0.
-                self.offset_y[config] = 0.
+            zbpolids, zbcoeffs =  fitZhaoBurge(rxtan, rytan, rxfp, ryfp, polids=polids)
+            self.scale[config] = 1
+            self.rotation[config] = 0.
+            self.offset_x[config] = 0.
+            self.offset_y[config] = 0.
 
             if self.zbpolids is None :
                 self.zbpolids = zbpolids

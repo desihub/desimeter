@@ -35,8 +35,12 @@ parser.add_argument('--pinhole-max-separation-mm', type = float, default = 1.5, 
                     help = 'pinhole maximum separation in pixels')
 parser.add_argument('--max-match-distance', type = float, default = 7, required = False,
                     help = 'maximum match distance in mm')
-parser.add_argument('--threshold', type = float, default = 500., required = False,
-                    help = "threshold for spots detection")
+parser.add_argument('--min-counts-per-pixel', type = float, default = 500., required = False,
+                    help = "threshold for spots detection in counts/pixel after convolution")
+parser.add_argument('--threshold', type = float, default = None, required = False,
+                    help = "(deprecated)")
+parser.add_argument('--min-counts', type = float, default = 10000., required = False,
+                    help = "(threshold for spots detection in counts (aperture flux around centroids)")
 parser.add_argument('--expected-positions', type = str, default = None, required = False,
                     help = 'path to fits file or CSV file with fibers expected position (table column EXP_Q and EXP_S')
 parser.add_argument('--hdu-for-expected-positions', type = str, default = "DATA", required = False,
@@ -70,6 +74,10 @@ log   = get_logger()
 if not args.outfile.endswith(".csv") :
     print("sorry output filename has to end with .csv")
     sys.exit(12)
+
+if args.threshold is not None :
+    print("sorry, please use option --min-counts-per-pixel instead of ambiguous and now deprecated --threshold.")
+    sys.exit(1)
 
 spots_list=[]
 
@@ -115,7 +123,7 @@ if filename.find(".fits")>0 :
             image = fx[extname].read().astype(float)
             if bias is not None :
                 image -= bias
-            spots_list.append( detectspots(image,threshold=args.threshold,nsig=7,psf_sigma=args.fvc_psf_sigma) )
+            spots_list.append( detectspots(image,min_counts_per_pixel=args.min_counts_per_pixel,min_counts_per_spot=args.min_counts,nsig=7,psf_sigma=args.fvc_psf_sigma) )
 
 
 elif filename.find(".csv")>0 :
@@ -200,9 +208,13 @@ for seqid,spots in enumerate(spots_list) :
     for k1,k2 in zip(["X_FP","Y_FP"],["X_FP_EXP","Y_FP_EXP"]) :
         if k2 not in spots.keys() : spots[k2] = np.zeros(len(spots))
         spots[k2][selection]=expected_pos[k1][indices_of_expected_pos]
-    for k in ["EXP_Q_0","EXP_S_0","PETAL_LOC","DEVICE_LOC","LOCATION"] :
+    for k in ["EXP_Q_0","EXP_S_0","PETAL_LOC","DEVICE_LOC","DEVICE_ID","DEVICE_TYPE","LOCATION"] :
         if k in expected_pos.keys() :
-            if k not in spots.keys() : spots[k] = np.zeros(len(spots))
+            if k not in spots.keys() :
+                if k in ["DEVICE_ID","DEVICE_TYPE"] :
+                    spots[k] = np.repeat("None           ",len(spots))
+                else :
+                    spots[k] = np.zeros(len(spots))
             spots[k][selection]=expected_pos[k][indices_of_expected_pos]
 
     # for spots with metrology X_FP_EXP=X_FP_METRO

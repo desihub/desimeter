@@ -1,0 +1,20 @@
+#!/usr/bin/env python
+
+import sys
+from desimeter.io import load_metrology
+import matplotlib.pyplot as plt
+import numpy as np
+
+metro=load_metrology()
+if not "BUS_ID" in metro.dtype.names :
+    print("error, no column BUS_ID in metrology")
+    sys.exit(12)
+
+busids=np.unique(metro["BUS_ID"])
+for bus in busids :
+    ii=np.where(metro["BUS_ID"]==bus)[0]
+    x=metro["X_FP"][ii]
+    y=metro["Y_FP"][ii]
+    plt.plot(x,y,"o",label="{}".format(bus))
+plt.legend()
+plt.show()
