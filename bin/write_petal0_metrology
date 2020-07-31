@@ -1,0 +1,115 @@
+#!/usr/bin/env python
+
+
+import argparse
+import sys,os
+import numpy as np
+import yaml
+from desimeter.log import get_logger
+from pkg_resources import resource_filename
+from astropy.table import Table
+from desimeter.transform.ptl2fp import apply_ptl2fp
+from desimeter.io import desimeter_data_dir
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="""Combine petal metrology and petal alignment data into a single CSV file""")
+
+parser.add_argument('-o','--outfile', type = str, default = None, required = True, help = 'output csv file')
+parser.add_argument('--no-replacement',action='store_true')
+
+if "DESIMETER_DATA" not in os.environ :
+    print("error: you need to set first the env. variable DESIMETER_DATA to point to the petal0 data")
+    datadir=resource_filename('desimeter',"data/lbl-petal0")
+    if os.path.isdir(datadir) :
+        print("maybe export DESIMETER_DATA={}".format(datadir))
+    sys.exit(12)
+
+
+args  = parser.parse_args()
+log = get_logger()
+
+log.info("reading petal metrology")
+filename = resource_filename('desimeter',"data/UMT-DESI-5421.csv")
+log.info(" in {}".format(filename))
+spots = Table.read(filename,format="csv")
+if 'col0' in spots.dtype.names :
+    spots.remove_column('col0')
+
+
+print("metrology columns:",spots.dtype.names)
+
+
+# force int type
+spots["PETAL_LOC"]=spots["PETAL_LOC"].astype(int)
+spots["DEVICE_LOC"]=spots["DEVICE_LOC"].astype(int)
+
+# keep only petal0
+spots = spots[:][spots["PETAL_ID"]==0]
+spots = spots[:][spots["DEVICE_LOC"]>0]
+
+# I choose PETAL_LOC = 0
+spots["PETAL_LOC"][:] = 0
+
+pids=np.zeros(spots["PINHOLE_ID"].size,dtype=int)
+for i,pid in enumerate(spots["PINHOLE_ID"]) :
+    pid=str(pid)
+    if pid[0]=="M":
+        pids[i]=int(pid[1])
+    else :
+        try :
+            pids[i]=int(pid)
+        except ValueError as e :
+            pids[i]=0
+spots["PINHOLE_ID"]=pids
+
+r=np.sqrt(spots["X_PTL"]**2+spots["Y_PTL"]**2)
+ii=np.where( r < 1.)[0]
+for i in ii :
+    log.warning("BAD DATA {} {} type={} xptl={} yptl={} xmnt={} ymnt={}".format(spots["PETAL_LOC"][i],spots["DEVICE_LOC"][i],spots["DEVICE_TYPE"][i],spots["X_PTL"][i],spots["Y_PTL"][i],spots["X_MNT"][i],spots["Y_MNT"][i]))
+spots=spots[:][r>1.] # exclude bad data??
+
+spots = apply_ptl2fp(spots)
+spots["LOCATION"] = spots["PETAL_LOC"]*1000+spots["DEVICE_LOC"]
+
+
+# add positioner id and bus id
+
+filename=resource_filename('desimeter',"data/lbl-petal0/lbnl_positioner_indexes_20200731.csv")
+if os.path.isfile(filename) :
+    print("reading",filename)
+    ids=Table.read(filename)
+    ids=ids[:][ids["DEVICE_LOC"]>=0]
+    loc2ind={loc:i for i,loc in enumerate(ids["DEVICE_LOC"])}
+    for loc in spots["DEVICE_LOC"] :
+        if not loc in loc2ind :
+            print("Missing LOC={} in {} ??".format(loc,filename))
+            sys.exit(12)
+    for k in ["DEVICE_ID","DEVICE_TYPE","BUS_ID"] :
+        spots[k]=np.array([ ids[k][loc2ind[loc]] for loc in spots["DEVICE_LOC"] ])
+
+#for loc in [461,501] :
+#    i=np.where(spots["DEVICE_LOC"]==loc)[0][0]
+#    log.warning("SPECIAL CASE FOR DEVICE_LOC={} (DEVICE_ID={}): Force DEVICE_TYPE=ETC".format(loc,spots["DEVICE_ID"][i]))
+#    spots["DEVICE_TYPE"][i]="ETC"
+
+if False :
+    log.info("applying patch")
+    filename=os.path.join(desimeter_data_dir(),"fp-metrology-patch.csv")
+    log.info(" from {}".format(filename))
+    patch = Table.read(filename,format="csv")
+    for i in range(patch["X_FP"].size) :
+        selection=(spots["LOCATION"]==patch["LOCATION"][i])&(spots["PINHOLE_ID"]==patch["PINHOLE_ID"][i])
+        jj=np.where(selection)[0]
+        if jj.size == 0 :
+            log.info("Adding LOCATION={} PINHOLE_ID={}".format(patch["LOCATION"][i],patch["PINHOLE_ID"][i]))
+            spots.add_row(patch[:][i])
+        else :
+            if not args.no_replacement :
+                j=jj
+                log.info("Replacing LOCATION={} PINHOLE_ID={}".format(patch["LOCATION"][i],patch["PINHOLE_ID"][i]))
+                spots[:][j] = patch[:][i]
+
+
+spots.write(args.outfile,format='csv',overwrite=True)
+
+log.info("wrote {}".format(args.outfile))
