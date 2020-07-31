@@ -110,7 +110,10 @@ elif jj.size > 0 : # sadly
         line = "dx={:4.3f}mm dy={:4.3f}mm".format(dx[j],dy[j])
         for k in table.dtype.names :
             if k=="XERR" or k=="YERR" : continue
-            line += " {}={:4.3f}".format(k,table[k][i])
+            try :
+                line += " {}={:4.3f}".format(k,table[k][i])
+            except ValueError :
+                line += " {}={}".format(k,table[k][i])
         print(line)
         label=None
         if j==jj[0]: label="large residual"
