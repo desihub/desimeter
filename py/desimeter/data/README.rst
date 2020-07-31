@@ -6,7 +6,7 @@ petal-alignments.yaml
 
 UMT-DESI-5421.csv
 --------------------------------------
-metrology of petals, from `DESI-5421`_ , currently v9 (using UMT.csv)
+metrology of petals, from `DESI-5421`_ , currently v11 (using UMT.csv)
 
 fp-metrology.csv
 --------------------------------------
