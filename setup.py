@@ -7,10 +7,10 @@
 # - python setup.py install
 # - python setup.py test
 #
-# Does not support:
-# - python setup.py version  (edit py/desimeter/_version.py instead)
+# Supported if desiutil is installed:
+# - python setup.py version [--tag TAGNAME]
 
-import os, glob, re
+import os, sys, glob, re
 from setuptools import setup, find_packages
 
 def _get_version():
@@ -34,6 +34,16 @@ setup_keywords = dict(
     license='BSD',
     url='https://github.com/desihub/desimeter',
 )
+
+#- Support "python setup.py version" if desiutil is installed
+if sys.argv[1] == 'version':
+    try:
+        from desiutil.setup import DesiVersion
+    except ImportError:
+        print('ERROR: please install desiutil to use "python setup.py version"')
+        sys.exit(1)
+
+    setup_keywords['cmdclass'] = {'version': DesiVersion}
 
 #- boilerplate, not sure if this is needed
 setup_keywords['zip_safe'] = False
