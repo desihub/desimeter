@@ -2,7 +2,7 @@
 desimeter change Log
 ====================
 
-0.5.0 (unreleased)
+0.5.1 (unreleased)
 ------------------
 
 * No changes yet
