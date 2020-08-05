@@ -2,9 +2,41 @@
 desimeter change Log
 ====================
 
-0.4.0
+0.5.0 (unreleased)
 ------------------
-* Positioner calibration [PR `#73`_, `#77`_, `#78`_, `#79`_, `#81`_, `#82`_, `#84`_, `#85`_, `#86`_, `#87`_, `#88`_, `#89`_, `#90`_, `#91`_, `#92`_, `#93`_, `#94`_, `#95`_, `#96`_]
+
+* No changes yet
+
+0.5.0 (2020-08-05)
+------------------
+
+* Added teststand petal 0 metrology [PR `#109`_]
+* Patch pseudo-metrology for Guide3 and Guide7 GFAs [PR `#108`_]
+* Updated raytracing model [PR `#107`_]
+* Added tools for analysing front-illuminated images [PR `#104`_, `#105`_]
+* Added fiber matching disambiguation code [PR `#103`_]
+* Added tools for matching moving spots to move requests [PR `#101`_]
+* Convert ptlxy to flat, improve log message detail [PR `#99`_]
+* Combined posmoves from DB with FVC image data [PR `#98`_]
+* Script to prepare calib posparmas for DB upload [PR `#97`_]
+
+.. _`#97`: https://github.com/desihub/desimeter/pull/97
+.. _`#98`: https://github.com/desihub/desimeter/pull/98
+.. _`#99`: https://github.com/desihub/desimeter/pull/99
+.. _`#101`: https://github.com/desihub/desimeter/pull/101
+.. _`#103`: https://github.com/desihub/desimeter/pull/103
+.. _`#104`: https://github.com/desihub/desimeter/pull/104
+.. _`#105`: https://github.com/desihub/desimeter/pull/105
+.. _`#107`: https://github.com/desihub/desimeter/pull/107
+.. _`#108`: https://github.com/desihub/desimeter/pull/108
+.. _`#109`: https://github.com/desihub/desimeter/pull/109
+
+0.4.0 (2020-06-15)
+------------------
+
+* Positioner calibration tools [PR `#73`_, `#77`_, `#78`_, `#79`_, `#81`_,
+  `#82`_, `#84`_, `#85`_, `#86`_, `#87`_, `#88`_, `#89`_, `#90`_, `#91`_,
+  `#92`_, `#93`_, `#94`_, `#95`_, `#96`_]
 * Codacy [PR `#75`_, `#76`_]
 * Support astropy 3.0.4 and matplotlib 2.1.2 [PR `#80`_]
 
@@ -31,7 +63,7 @@ desimeter change Log
 .. _`#95`: https://github.com/desihub/desimeter/pull/95
 .. _`#96`: https://github.com/desihub/desimeter/pull/96
 
-0.3.0
+0.3.0 (2020-05-05)
 ------------------
 * Connection to posmov db at LBL, documentation [PR `#70`_]
 * LBL petal 1 [PR `#69`_]
