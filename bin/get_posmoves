@@ -74,14 +74,13 @@ for petalid in petalids :
         if args.with_calib :
 
             # adding calib info
-            #calib=dbquery(comm,"select * from posmovedb.positioner_calibration_p%d where pos_id='%s' order by time_recorded",(int(petalid),posid))
             cmd="select * from posmovedb.positioner_calibration_p{} where pos_id='{}' order by time_recorded".format(int(petalid),posid)
             print(cmd)
             calib=dbquery(comm,cmd)
 
             # get time stamps to match
             tstamp_calib     =  np.array([d.timestamp() for d in calib["time_recorded"]])
-            tstamp_posmovedb =  np.array([d.timestamp() for d in calib["time_recorded"]])
+            tstamp_posmovedb =  np.array([d.timestamp() for d in posmoves["time_recorded"]])
 
             rename_keys={'time_recorded':'calib_time_recorded'}
 
@@ -97,7 +96,7 @@ for petalid in petalids :
 
             for t in tstamp_posmovedb :
                 j=np.where(tstamp_calib<t)[0][-1]
-                for k1,k1 in zip(new_keys,calib.keys) :
+                for k1,k2 in zip(new_keys,calib.keys()) :
                     posmoves[k1].append(calib[k2][j])
 
         # save, using astropy.Table io
