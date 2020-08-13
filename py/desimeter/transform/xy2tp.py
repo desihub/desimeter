@@ -53,8 +53,6 @@ def xy2tp(xy, r, ranges):
     In cases where unreachable == True, the returned tp value will be a
     closest possible approach to the unreachable point requested at xy.
     """
-    theta_centralizing_err_tol = 1e-4 # within this much xy error allowance, adjust theta toward center of its range
-    n_theta_centralizing_iters = 3 # number of points to try when attempting to centralize theta
     numeric_contraction = epsilon*10 # slight contraction to avoid numeric divide-by-zero type of errors
     x, y, r1, r2 = xy[0], xy[1], r[0], r[1]
     unreachable = False
@@ -62,8 +60,8 @@ def xy2tp(xy, r, ranges):
     # adjust targets within reachable annulus
     hypot = (x**2.0 + y**2.0)**0.5
     angle = math.atan2(y, x)
-    outer = r[0] + r[1]
-    inner = abs(r[0] - r[1])
+    outer = r1 + r2
+    inner = abs(r1 - r2)
     if hypot > outer or hypot < inner:
         unreachable = True
     inner += numeric_contraction
@@ -97,18 +95,6 @@ def xy2tp(xy, r, ranges):
             if TP[i] > range_max:
                 TP[i] = range_max
                 unreachable = True
-
-    # centralize theta
-    T_ctr = (ranges[0][0] + ranges[0][1])/2.0
-    T_options = linspace(TP[0], T_ctr, n_theta_centralizing_iters)
-    for T_try in T_options:
-        xy_try = tp2xy([T_try, TP[1]], r)
-        x_err = xy_try[0] - X
-        y_err = xy_try[1] - Y
-        vector_err = (x_err**2.0 + y_err**2.0)**0.5
-        if vector_err <= theta_centralizing_err_tol:
-            TP[0] = T_try
-            break
 
     return tuple(TP), unreachable
 
