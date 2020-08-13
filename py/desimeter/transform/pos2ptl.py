@@ -166,6 +166,8 @@ def loc2ext(x_loc, y_loc, r1, r2, t_offset, p_offset,
     r2 = _extend_list(r2, n)
     t_offset = _extend_list(t_offset, n)
     p_offset = _extend_list(p_offset, n)
+    t_guess = _extend_list(t_guess, n)
+    t_guess_tol = _extend_list(t_guess_tol, n)
     t_ext = []
     p_ext = []
     unreachable = []
@@ -177,8 +179,8 @@ def loc2ext(x_loc, y_loc, r1, r2, t_offset, p_offset,
         tp_ext, unreach = xy2tp.xy2tp(xy=[x_loc[i], y_loc[i]],
                                      r=[r1[i], r2[i]],
                                      ranges=ext_ranges,
-                                     t_guess=t_guess,
-                                     t_guess_tol=t_guess_tol,
+                                     t_guess=t_guess[i],
+                                     t_guess_tol=t_guess_tol[i],
                                      )
         t_ext.append(tp_ext[0])
         p_ext.append(tp_ext[1])
