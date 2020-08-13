@@ -108,19 +108,33 @@ def xy2tp(xy, r, ranges, t_guess=None, t_guess_tol=20.0):
     # wrap angles into travel ranges
     for i in [0, 1]:
         range_min, range_max = min(ranges[i]), max(ranges[i])
-        if TP[i] < range_min: # try +360 phase wrap
-            TP[i] += math.floor((range_max - TP[i])/360.0)*360.0
-            if TP[i] < range_min:
-                TP[i] = range_min
-                unreachable = True
-        elif TP[i] > range_max: # try -360 phase wrap
-            TP[i] -= math.floor((TP[i] - range_min)/360.0)*360.0
-            if TP[i] > range_max:
-                TP[i] = range_max
-                unreachable = True
-    
-    # temporary, for debug
-    if TP[1] < 0 or TP[1] > 180:
-        print(TP[1])
+        TP[i], fail = _wrap_into_range(TP[i], range_min, range_max)
+        if fail:
+            unreachable = True
 
     return tuple(TP), unreachable
+
+def _wrap_into_range(angle, range_min, range_max):
+    '''Check +/-360 deg phase wraps (as necessary) to put angle within the
+    argued range. All units in deg.
+    
+    INPUT:  angle ... value to be checked
+            range_min ... lowest allowed
+            range_max ... highest allowed
+    
+    OUTPUT: new ... new angle
+            unreachable ... boolean, True if not not possible to put angle in range
+    '''
+    new = angle
+    unreachable = False
+    if new < range_min: # try +360 phase wrap
+        new += math.floor((range_max - new)/360.0)*360.0
+        if new < range_min:
+            new = range_min
+            unreachable = True
+    elif new > range_max: # try -360 phase wrap
+        new -= math.floor((new - range_min)/360.0)*360.0
+        if new > range_max:
+            new = range_max
+            unreachable = True
+    return new, unreachable
