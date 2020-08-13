@@ -85,7 +85,6 @@ class TestPos2Ptl(unittest.TestCase):
         p_test = [-10, 10, 170, 190]
         ranges = [[-200, 200], [-20, 200]]
         t_guess_err = 3
-        t_guess_tol = 10
         R = [[r1, r2] for r1 in r_test for r2 in r_test]
         tp_test = [[t, p] for t in t_test for p in p_test]
         for r in R:
@@ -93,7 +92,7 @@ class TestPos2Ptl(unittest.TestCase):
                 for sign in [-1, 0, +1]:
                     xy_test = xy2tp.tp2xy(tp, r)
                     t_guess = tp[0] + sign*t_guess_err
-                    tp_calc, unreachable = xy2tp.xy2tp(xy_test, r, ranges, t_guess, t_guess_tol)
+                    tp_calc, unreachable = xy2tp.xy2tp(xy_test, r, ranges, t_guess, xy2tp.default_t_guess_tol)
                     assert not unreachable
                     for i in [0, 1]:
                         error = abs(tp_calc[i] - tp[i])
