@@ -86,6 +86,10 @@ def xy2tp(xy, r, ranges, t_guess=None, t_guess_tol=20.0):
     arccos_arg = min(arccos_arg, +1.0) # deal with slight numeric errors where arccos_arg comes back like +1.0000000000000002
     P = math.acos(arccos_arg)
     T = angle - math.atan2(r2*math.sin(P), r1 + r2*math.cos(P))
+    TP = [math.degrees(T), math.degrees(P)]
+    
+    # wrap angles into travel ranges
+    TP, range_fail = _wrap_TP_into_ranges(TP, ranges)
     
     # check alternate configuration: reflecting the arms across vector (X,Y)
     if t_guess != None:
@@ -97,26 +101,42 @@ def xy2tp(xy, r, ranges, t_guess=None, t_guess_tol=20.0):
         px_alt = X - tx_alt  # i.e., vector from alternate phi fulcrum to desired X,Y
         py_alt = Y - ty_alt
         T_alt = math.atan2(ty_alt, tx_alt)
+        P_alt = math.atan2(py_alt, px_alt) - T_alt
+        TP_alt = [math.degrees(T_alt), math.degrees(P_alt)]
+        TP_alt, range_fail_alt = _wrap_TP_into_ranges(TP_alt, ranges)
         closeness = abs(T - t_guess)
         closeness_alt = abs(T_alt - t_guess)
-        if closeness_alt < closeness and closeness_alt <= t_guess_tol:
-            T = T_alt
-            P = math.atan2(py_alt, px_alt) - T_alt
-    
-    TP = [math.degrees(T), math.degrees(P)]
+        closer = closeness_alt < closeness and closeness_alt <= t_guess_tol
+        orig_worked_alt_failed = not range_fail and range_fail_alt
+        orig_failed_alt_worked = range_fail and not range_fail_alt
+        if (closer or orig_failed_alt_worked) and not orig_worked_alt_failed:
+            print(f'orig {TP},  new {TP_alt}')
+            TP = TP_alt
+            range_fail = range_fail_alt
+            
+    unreachable |= range_fail
+    return tuple(TP), unreachable
 
-    # wrap angles into travel ranges
+def _wrap_TP_into_ranges(tp, ranges):
+    '''Call _wrap_into_range for theta and phi angles.
+    
+    INPUT:  tp ... [theta, phi], units deg
+            ranges ... see xy2tp docstr, units deg
+            
+    OUTPUT: TP ... wrapped angles
+            unreachable ... boolean, true if not possible to put either angle in range
+    '''
+    TP = [None, None]
+    unreachable = False
     for i in [0, 1]:
         range_min, range_max = min(ranges[i]), max(ranges[i])
-        TP[i], fail = _wrap_into_range(TP[i], range_min, range_max)
-        if fail:
-            unreachable = True
-
-    return tuple(TP), unreachable
+        TP[i], range_fail = _wrap_into_range(tp[i], range_min, range_max)
+        unreachable |= range_fail
+    return TP, unreachable
 
 def _wrap_into_range(angle, range_min, range_max):
     '''Check +/-360 deg phase wraps (as necessary) to put angle within the
-    argued range. All units in deg.
+    argued range. All units in radians.
     
     INPUT:  angle ... value to be checked
             range_min ... lowest allowed
