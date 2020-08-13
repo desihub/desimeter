@@ -86,13 +86,16 @@ def xy2tp(xy, r, ranges, t_guess=None, t_guess_tol=20.0):
     arccos_arg = min(arccos_arg, +1.0) # deal with slight numeric errors where arccos_arg comes back like +1.0000000000000002
     P = math.acos(arccos_arg)
     T = angle - math.atan2(r2*math.sin(P), r1 + r2*math.cos(P))
-    TP = [math.degrees(T), math.degrees(P)]
     
-    # wrap angles into travel ranges
+    # primary configuration of the arms
+    TP = [math.degrees(T), math.degrees(P)]
     TP, range_fail = _wrap_TP_into_ranges(TP, ranges)
     
-    # check alternate configuration: reflecting the arms across vector (X,Y)
+    # test alternate configurations
     if t_guess != None:
+        options = [{'TP':TP, 'range_fail':range_fail}]
+        
+        # reflecting the arms across vector (X,Y)
         tx = r1*math.cos(T)  # i.e., vector to phi fulcrum, which will be reflected
         ty = r1*math.sin(T)
         m = Y/X
@@ -104,15 +107,27 @@ def xy2tp(xy, r, ranges, t_guess=None, t_guess_tol=20.0):
         P_alt = math.atan2(py_alt, px_alt) - T_alt
         TP_alt = [math.degrees(T_alt), math.degrees(P_alt)]
         TP_alt, range_fail_alt = _wrap_TP_into_ranges(TP_alt, ranges)
-        closeness = abs(T - t_guess)
-        closeness_alt = abs(T_alt - t_guess)
-        closer = closeness_alt < closeness and closeness_alt <= t_guess_tol
-        orig_worked_alt_failed = not range_fail and range_fail_alt
-        orig_failed_alt_worked = range_fail and not range_fail_alt
-        if (closer or orig_failed_alt_worked) and not orig_worked_alt_failed:
-            print(f'orig {TP},  new {TP_alt}')
-            TP = TP_alt
-            range_fail = range_fail_alt
+        options.append({'TP':TP_alt, 'range_fail':range_fail_alt})
+        
+        # rotating theta by +/-360 deg
+        for center_TP in [opt['TP'] for opt in options]:
+            TP_alts = [[center_TP[0] + wrap, center_TP[1]] for wrap in [-360.0, 360.0]]
+            for TP_alt in TP_alts:
+                TP_alt, range_fail_alt = _wrap_TP_into_ranges(TP_alt, ranges)
+                options.append({'TP':TP_alt, 'range_fail':range_fail_alt})
+        
+        # selection
+        for opt in options:
+            opt['closeness'] = abs(opt['TP'][0] - t_guess)
+            opt['closeness_fail'] = opt['closeness'] > t_guess_tol
+        all_fail = all(opt['closeness_fail'] for opt in options) or \
+                   all(opt['range_fail'] for opt in options)
+        if not all_fail:
+            options.sort(key=lambda x: x['closeness'])  # tertiary sort
+            options.sort(key=lambda x: x['closeness_fail'])  # secondary sort
+            options.sort(key=lambda x: x['range_fail'])  # primary sort
+            TP = options[0]['TP']
+            range_fail = options[0]['range_fail']
             
     unreachable |= range_fail
     return tuple(TP), unreachable
