@@ -24,6 +24,7 @@ local, etc.)
 import math
 import sys
 epsilon = sys.float_info.epsilon
+default_t_guess_tol = 20.0
 
 def tp2xy(tp, r):
     """Converts TP angles into XY cartesian coordinates, where arm lengths
@@ -38,7 +39,7 @@ def tp2xy(tp, r):
     y = r[0] * math.sin(t) + r[1] * math.sin(t_plus_p)
     return x, y
 
-def xy2tp(xy, r, ranges, t_guess=None, t_guess_tol=20.0):
+def xy2tp(xy, r, ranges, t_guess=None, t_guess_tol=default_t_guess_tol):
     """Converts XY cartesian coordinates into TP angles, where arm lengths
      associated with angles theta and phi are respectively r[1] and r[2].
 
@@ -46,11 +47,11 @@ def xy2tp(xy, r, ranges, t_guess=None, t_guess_tol=20.0):
                r ... [central arm length, eccentric arm length]
           ranges ... [[min(theta), max(theta)], [min(phi), max(phi)]]
          t_guess ... optional guess at approx theta expected, unit degrees
-     t_guess_tol ... default=20, unit degrees
+     t_guess_tol ... ignore t_guess if more than this far from mathematically
+                     possible theta options, default=20, unit degrees
 
     OUTPUTS:  tp ... [theta,phi], unit degrees
-     unreachable ... boolean, True if the requested xy cannot be reached
-                     by any tp
+     unreachable ... boolean, True if the requested xy cannot be reached by any tp
 
     In cases where unreachable == True, the returned tp value will be a
     closest possible approach to the unreachable point requested at xy.
