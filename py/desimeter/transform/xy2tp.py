@@ -38,13 +38,15 @@ def tp2xy(tp, r):
     y = r[0] * math.sin(t) + r[1] * math.sin(t_plus_p)
     return x, y
 
-def xy2tp(xy, r, ranges):
+def xy2tp(xy, r, ranges, t_guess=None, t_guess_tol=20.0):
     """Converts XY cartesian coordinates into TP angles, where arm lengths
      associated with angles theta and phi are respectively r[1] and r[2].
 
     INPUTS:   xy ... [x,y]
                r ... [central arm length, eccentric arm length]
           ranges ... [[min(theta), max(theta)], [min(phi), max(phi)]]
+         t_guess ... optional guess at approx theta expected, unit degrees
+     t_guess_tol ... default=20, unit degrees
 
     OUTPUTS:  tp ... [theta,phi], unit degrees
      unreachable ... boolean, True if the requested xy cannot be reached
@@ -52,6 +54,10 @@ def xy2tp(xy, r, ranges):
 
     In cases where unreachable == True, the returned tp value will be a
     closest possible approach to the unreachable point requested at xy.
+    
+    Guess value for theta (when provided by caller) will be used to disambiguate
+    between mathematically possible alternate (t,p) pairs. If not provided, then
+    the function will pick a pair for which p is within [0,180].
     """
     numeric_contraction = epsilon*10 # slight contraction to avoid numeric divide-by-zero type of errors
     x, y, r1, r2 = xy[0], xy[1], r[0], r[1]
@@ -80,6 +86,23 @@ def xy2tp(xy, r, ranges):
     arccos_arg = min(arccos_arg, +1.0) # deal with slight numeric errors where arccos_arg comes back like +1.0000000000000002
     P = math.acos(arccos_arg)
     T = angle - math.atan2(r2*math.sin(P), r1 + r2*math.cos(P))
+    
+    # check alternate configuration: reflecting the arms across vector (X,Y)
+    if t_guess != None:
+        tx = r1*math.cos(T)  # i.e., vector to phi fulcrum, which will be reflected
+        ty = r1*math.sin(T)
+        m = Y/X
+        tx_alt = ((1 - m**2)*tx + 2*m*ty)/(m**2 + 1)
+        ty_alt = ((m**2 - 1)*ty + 2*m*tx)/(m**2 + 1)
+        px_alt = X - tx_alt  # i.e., vector from alternate phi fulcrum to desired X,Y
+        py_alt = Y - ty_alt
+        T_alt = math.atan2(ty_alt, tx_alt)
+        closeness = abs(T - t_guess)
+        closeness_alt = abs(T_alt - t_guess)
+        if closeness_alt < closeness and closeness_alt <= t_guess_tol:
+            T = T_alt
+            P = math.atan2(py_alt, px_alt) - T_alt
+    
     TP = [math.degrees(T), math.degrees(P)]
 
     # wrap angles into travel ranges
@@ -95,5 +118,9 @@ def xy2tp(xy, r, ranges):
             if TP[i] > range_max:
                 TP[i] = range_max
                 unreachable = True
+    
+    # temporary, for debug
+    if TP[1] < 0 or TP[1] > 180:
+        print(TP[1])
 
     return tuple(TP), unreachable
