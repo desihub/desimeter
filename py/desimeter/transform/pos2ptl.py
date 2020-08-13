@@ -130,14 +130,16 @@ def loc2flat(u_loc, u_offset):
     u_flat = _add_offset(u_loc, u_offset)
     return u_flat
 
-def loc2ext(x_loc, y_loc, r1, r2, t_offset, p_offset):
+def loc2ext(x_loc, y_loc, r1, r2, t_offset, p_offset,
+            t_guess=None, t_guess_tol=xy2tp.default_t_guess_tol):
     '''Converts (x_loc, y_loc) coordinates to (t_ext, p_ext).
     READ THE FINE PRINT: Returned tuple has 3 elements.
 
     INPUTS:
         x_loc, y_loc ... positioner local (x,y), as described in module notes
         r1, r2       ... kinematic arms LENGTH_R1 and LENGTH_R2, scalar or vector
-        t_offset, p_offset ... [deg] OFFSET_T and OFFSET_P
+        t_offset, p_offset ... [deg] OFFSET_T and OFFSET_P   
+        t_guess and t_guess_tol ... see comments in xy2tp.xy2tp() docstr
 
     OUTPUTS:
         t_ext, p_ext ... externally-measured (theta,phi), see module notes
@@ -174,7 +176,10 @@ def loc2ext(x_loc, y_loc, r1, r2, t_offset, p_offset):
                        float(int2ext(_default_p_int_range[1], p_offset[i]))]]
         tp_ext, unreach = xy2tp.xy2tp(xy=[x_loc[i], y_loc[i]],
                                      r=[r1[i], r2[i]],
-                                     ranges=ext_ranges)
+                                     ranges=ext_ranges,
+                                     t_guess=t_guess,
+                                     t_guess_tol=t_guess_tol,
+                                     )
         t_ext.append(tp_ext[0])
         p_ext.append(tp_ext[1])
         unreachable.append(unreach)
@@ -303,14 +308,16 @@ def int2loc(t_int, p_int, r1, r2, t_offset, p_offset):
     x_loc, y_loc = ext2loc(t_ext, p_ext, r1, r2)
     return x_loc, y_loc
 
-def loc2int(x_loc, y_loc, r1, r2, t_offset, p_offset):
+def loc2int(x_loc, y_loc, r1, r2, t_offset, p_offset,
+            t_guess=None, t_guess_tol=xy2tp.default_t_guess_tol):
     '''Composite of loc2ext followed by ext2int. See docs of those functions
     for more details.
 
-    INPUTS:   x_loc, y_loc, r1, r2, t_offset, p_offset
+    INPUTS:   x_loc, y_loc, r1, r2, t_offset, p_offset, t_guess, t_guess_tol
+                
     OUTPUTS:  t_int, p_int, unreachable
     '''
-    t_ext, p_ext, unreachable = loc2ext(x_loc, y_loc, r1, r2, t_offset, p_offset)
+    t_ext, p_ext, unreachable = loc2ext(x_loc, y_loc, r1, r2, t_offset, p_offset, t_guess, t_guess_tol)
     t_int = ext2int(t_ext, t_offset)
     p_int = ext2int(p_ext, p_offset)
     return t_int, p_int, unreachable
@@ -327,16 +334,17 @@ def int2ptl(t_int, p_int, r1, r2, t_offset, p_offset, x_offset, y_offset):
     x_ptl, y_ptl = flat2ptl(x_flat,y_flat)
     return x_ptl, y_ptl
 
-def ptl2int(x_ptl, y_ptl, r1, r2, t_offset, p_offset, x_offset, y_offset):
+def ptl2int(x_ptl, y_ptl, r1, r2, t_offset, p_offset, x_offset, y_offset,
+            t_guess=None, t_guess_tol=xy2tp.default_t_guess_tol):
     '''Composite of ptl2flat flat2loc loc2ext ext2int.
 
-    INPUTS:   x_ptl, y_ptl, r1, r2, t_offset, p_offset, x_offset, y_offset
+    INPUTS:   x_ptl, y_ptl, r1, r2, t_offset, p_offset, x_offset, y_offset, t_guess, t_guess_tol
     OUTPUTS:  t_int, p_int, unreachable
     '''
     x_flat, y_flat = ptl2flat(x_ptl, y_ptl)
     x_loc = flat2loc(x_flat, x_offset)
     y_loc = flat2loc(y_flat, y_offset)
-    t_int, p_int, unreachable = loc2int(x_loc, y_loc, r1, r2, t_offset, p_offset)
+    t_int, p_int, unreachable = loc2int(x_loc, y_loc, r1, r2, t_offset, p_offset, t_guess, t_guess_tol)
     return t_int, p_int, unreachable
 
 def _to_numpy(u):
