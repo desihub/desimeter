@@ -161,6 +161,8 @@ def loc2ext(x_loc, y_loc, r1, r2, t_offset, p_offset,
     r2 = _to_list(r2)
     t_offset = _to_list(t_offset)
     p_offset = _to_list(p_offset)
+    t_guess = _to_list(t_guess)
+    t_guess_tol = _to_list(t_guess_tol)
     n = len(x_loc)
     r1 = _extend_list(r1, n)
     r2 = _extend_list(r2, n)
