@@ -24,7 +24,7 @@ local, etc.)
 import math
 import sys
 epsilon = sys.float_info.epsilon
-default_t_guess_tol = 20.0
+default_t_guess_tol = 10.0
 
 def tp2xy(tp, r):
     """Converts TP angles into XY cartesian coordinates, where arm lengths
