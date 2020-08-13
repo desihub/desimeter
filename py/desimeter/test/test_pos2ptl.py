@@ -78,14 +78,14 @@ class TestPos2Ptl(unittest.TestCase):
                       f'error={errors[i][worst]:8.2E}')
                 assert errors[i][worst] < tol
 
-    def test_xy2tp_alts(self):
-        tol = 0.005
+    def test_xy2tp(self):
+        tol = 0.001
         r_test = [2.5, 3.5]
         t_test = [-190, 0, 190]
         p_test = [-10, 10, 170, 190]
         ranges = [[-200, 200], [-20, 200]]
-        t_guess_err = 5
-        t_guess_tol = 20
+        t_guess_err = 3
+        t_guess_tol = 10
         R = [[r1, r2] for r1 in r_test for r2 in r_test]
         tp_test = [[t, p] for t in t_test for p in p_test]
         for r in R:
