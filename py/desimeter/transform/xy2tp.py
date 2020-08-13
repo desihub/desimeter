@@ -97,8 +97,3 @@ def xy2tp(xy, r, ranges):
                 unreachable = True
 
     return tuple(TP), unreachable
-
-def linspace(start,stop,num):
-    """Return a list of floats linearly spaced from start to stop (inclusive).
-    List has num elements."""
-    return [i*(stop-start)/(num-1)+start for i in range(num)]
