@@ -138,7 +138,7 @@ def loc2ext(x_loc, y_loc, r1, r2, t_offset, p_offset,
     INPUTS:
         x_loc, y_loc ... positioner local (x,y), as described in module notes
         r1, r2       ... kinematic arms LENGTH_R1 and LENGTH_R2, scalar or vector
-        t_offset, p_offset ... [deg] OFFSET_T and OFFSET_P   
+        t_offset, p_offset ... [deg] OFFSET_T and OFFSET_P
         t_guess_ext and t_guess_tol ... see comments in xy2tp.xy2tp() docstr
 
     OUTPUTS:
@@ -316,9 +316,9 @@ def loc2int(x_loc, y_loc, r1, r2, t_offset, p_offset,
             t_int_guess=None, t_guess_tol=xy2tp.default_t_guess_tol):
     '''Composite of loc2ext followed by ext2int. See docs of those functions
     for more details.
-
+    
     INPUTS:   x_loc, y_loc, r1, r2, t_offset, p_offset, t_guess_int, t_guess_tol
-                
+    
     OUTPUTS:  t_int, p_int, unreachable
     '''
     if t_int_guess is None:
