@@ -99,7 +99,7 @@ class TestPos2Ptl(unittest.TestCase):
                         if error >= tol:
                             print(f'\nError in xy2tp test:\n error[{i}] = {error:.4f}\n tp_calc = {tp_calc}' +
                                   f'\n tp_nom = {tp}\n r = {r}\n t_guess = {t_guess}')
-                            print(f' Sample call:\n  xy2tp.xy2tp({xy_test},{r},{ranges},{t_guess},{t_guess_tol})')
+                            print(f' Sample call:\n  xy2tp.xy2tp({xy_test},{r},{ranges},{t_guess},{xy2tp.default_t_guess_tol})')
                         assert error < tol 
         
 if __name__ == '__main__':
