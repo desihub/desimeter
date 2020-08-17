@@ -14,8 +14,13 @@ in the small, atomic operations done when operating the instrument.
 
 import math
 import sys
+try:
+    import posconstants as pc
+    default_t_guess_tol = pc.default_t_guess_tol
+except:
+    default_t_guess_tol = 30.0
 epsilon = sys.float_info.epsilon
-default_t_guess_tol = 30.0
+
 
 def tp2xy(tp, r):
     """Converts TP angles into XY cartesian coordinates, where arm lengths
