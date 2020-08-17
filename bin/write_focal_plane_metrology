@@ -8,7 +8,7 @@ import yaml
 from desimeter.log import get_logger
 from pkg_resources import resource_filename
 from astropy.table import Table, vstack
-from desimeter.transform.ptl2fp import apply_ptl2fp
+from desimeter.transform.ptl2fp import apply_ptl2fp, fp2ptl
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Combine petal metrology and petal alignment data into a single CSV file""")
@@ -75,10 +75,20 @@ for i in range(patch["X_FP"].size) :
             log.info("Replacing LOCATION={} PINHOLE_ID={}".format(patch["LOCATION"][i],patch["PINHOLE_ID"][i]))
             spots[:][j] = patch[:][i]
 
-log.info("applying GUIDE3/GUIDE7 patch")
+log.info("applying star-based guide GFA metrology patch")
 filename = resource_filename('desimeter',"data/fp-metrology-gfa_patch.csv")
 log.info(" from {}".format(filename))
 gfa_patch = Table.read(filename, format="csv")
+
+for i,row in enumerate(gfa_patch):
+    if np.isnan(row['X_PTL']):
+        # this is the case of replacing real metrology with tweaked metrology
+        spots = spots[np.logical_not((spots['DEVICE_TYPE'] == 'GFA') & (spots['PETAL_LOC'] == row['PETAL_LOC']))]
+        x_ptl, y_ptl, _ = fp2ptl(row['PETAL_LOC'], row['X_FP'], row['Y_FP'], z_fp=row['Z_FP'])
+        gfa_patch[i]['X_PTL'] = x_ptl
+        gfa_patch[i]['Y_PTL'] = y_ptl
+        gfa_patch[i]['Z_PTL'] = row['Z_FP']
+
 spots = vstack([spots, gfa_patch])
 
 
