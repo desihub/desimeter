@@ -3,22 +3,13 @@
 This module provides the fundamental coordinate transformations between fiber
 positioner (theta, phi) angles and an (x, y) cartesian space.
 
-It is a direct copy of static methods from the postransforms module on SVN:
-    /code/focalplane/plate_control/trunk/petal/postransforms.py
-    SVN revision r131291
+It is kept manually synchronized with a file of the same name in the online
+instrument code:
+    /code/focalplane/plate_control/<some_branch>/petal/xy2tp.py
 
-That module generally works with python lists and the math module, rather
+This module generally works with python lists and the math module, rather
 numpy arrays. That is done for speed, since numpy carries tremendous overhead
-in the more atomic operations done on the instrument.
-
-Since desimeter tends to work with numpy arrays, the usage of these functions
-is not expected to be done directly. Rather one will use the thin wrappers
-in the pos2ptl module.
-
-Another reason for the wrappers is that the pos2ptl module uses some more
-specific nomenclature. I.e. there are different kinds of "tp" (internally-
-tracked vs externally-measured) and different kinds of xy (petal vs flat vs
-local, etc.)
+in the small, atomic operations done when operating the instrument.
 """
 
 import math
