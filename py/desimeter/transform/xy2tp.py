@@ -17,7 +17,7 @@ import sys
 try:
     import posconstants as pc
     default_t_guess_tol = pc.default_t_guess_tol
-except:
+except ModuleNotFoundError :
     default_t_guess_tol = 30.0
 epsilon = sys.float_info.epsilon
 
@@ -51,7 +51,7 @@ def xy2tp(xy, r, ranges, t_guess=None, t_guess_tol=default_t_guess_tol):
 
     In cases where unreachable == True, the returned tp value will be a
     closest possible approach to the unreachable point requested at xy.
-    
+
     Guess value for theta (when provided by caller) will be used to disambiguate
     between mathematically possible alternate (t,p) pairs. If not provided, then
     the function will pick a pair for which p is within [0,180].
@@ -83,15 +83,15 @@ def xy2tp(xy, r, ranges, t_guess=None, t_guess_tol=default_t_guess_tol):
     arccos_arg = min(arccos_arg, +1.0) # deal with slight numeric errors where arccos_arg comes back like +1.0000000000000002
     P = math.acos(arccos_arg)
     T = angle - math.atan2(r2*math.sin(P), r1 + r2*math.cos(P))
-    
+
     # primary configuration of the arms
     TP = [math.degrees(T), math.degrees(P)]
     TP, range_fail = _wrap_TP_into_ranges(TP, ranges)
-    
+
     # test alternate configurations
     if t_guess != None:
         options = [{'TP':TP, 'range_fail':range_fail}]
-        
+
         # reflecting the arms across vector (X,Y)
         tx = r1*math.cos(T)  # i.e., vector to phi fulcrum, which will be reflected
         ty = r1*math.sin(T)
@@ -105,14 +105,14 @@ def xy2tp(xy, r, ranges, t_guess=None, t_guess_tol=default_t_guess_tol):
         TP_alt = [math.degrees(T_alt), math.degrees(P_alt)]
         TP_alt, range_fail_alt = _wrap_TP_into_ranges(TP_alt, ranges)
         options.append({'TP':TP_alt, 'range_fail':range_fail_alt})
-        
+
         # rotating theta by +/-360 deg
         for center_TP in [opt['TP'] for opt in options]:
             TP_alts = [[center_TP[0] + wrap, center_TP[1]] for wrap in [-360.0, 360.0]]
             for TP_alt in TP_alts:
                 TP_alt, range_fail_alt = _wrap_TP_into_ranges(TP_alt, ranges)
                 options.append({'TP':TP_alt, 'range_fail':range_fail_alt})
-        
+
         # selection
         for opt in options:
             opt['closeness'] = abs(opt['TP'][0] - t_guess)
@@ -125,16 +125,16 @@ def xy2tp(xy, r, ranges, t_guess=None, t_guess_tol=default_t_guess_tol):
             options.sort(key=lambda x: x['range_fail'])  # primary sort
             TP = options[0]['TP']
             range_fail = options[0]['range_fail']
-            
+
     unreachable |= range_fail
     return tuple(TP), unreachable
 
 def _wrap_TP_into_ranges(tp, ranges):
     '''Call _wrap_into_range for theta and phi angles.
-    
+
     INPUT:  tp ... [theta, phi], units deg
             ranges ... see xy2tp docstr, units deg
-            
+
     OUTPUT: TP ... wrapped angles
             unreachable ... boolean, true if not possible to put either angle in range
     '''
@@ -149,11 +149,11 @@ def _wrap_TP_into_ranges(tp, ranges):
 def _wrap_into_range(angle, range_min, range_max):
     '''Check +/-360 deg phase wraps (as necessary) to put angle within the
     argued range. All units in radians.
-    
+
     INPUT:  angle ... value to be checked
             range_min ... lowest allowed
             range_max ... highest allowed
-    
+
     OUTPUT: new ... new angle
             unreachable ... boolean, True if not not possible to put angle in range
     '''

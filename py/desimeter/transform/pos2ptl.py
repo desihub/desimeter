@@ -316,9 +316,9 @@ def loc2int(x_loc, y_loc, r1, r2, t_offset, p_offset,
             t_int_guess=None, t_guess_tol=xy2tp.default_t_guess_tol):
     '''Composite of loc2ext followed by ext2int. See docs of those functions
     for more details.
-    
+
     INPUTS:   x_loc, y_loc, r1, r2, t_offset, p_offset, t_guess_int, t_guess_tol
-    
+
     OUTPUTS:  t_int, p_int, unreachable
     '''
     if t_int_guess is None:
