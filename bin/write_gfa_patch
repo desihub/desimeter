@@ -5,8 +5,27 @@ from astropy.io import ascii
 from pkg_resources import resource_filename
 from desimeter.transform.ptl2fp import fp2ptl, ptl2fp
 import numpy as np
+from desimeter import io
+import os
 
 pinhole_ids = [1, 2, 3, 4]
+
+def _has_real_metrology(petal_loc):
+    """
+    determine if a petal's GFA has real metrology available
+
+    Args:
+        petal_loc : int, should be one of (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+
+    Returns:
+        result : bool
+    """
+
+    assert(petal_loc in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+
+    result = petal_loc in [0, 1, 2, 4, 5, 6, 8, 9]
+
+    return result
 
 def _get_pinhole_gfa_coords(pinhole_id):
     """
@@ -54,7 +73,7 @@ def _get_plane_coeff(petal_loc, coord='X'):
                   5: [-91.8627781345, -0.0142609354, 0.0046420089], 
                   7: [-405.7801509760, -0.0000106187, 0.0149351226], 
                   8: [-349.3793836387, 0.0087573071, 0.0121231345]}
-    
+
     coeff_y_fp = {0: [-396.9957752088, 0.0046691204, 0.0141891317],
                   2: [-35.2976124185, 0.0150007008, 0.0000343108],
                   3: [210.2297400065, 0.0121055754, -0.0088252019],
@@ -106,7 +125,9 @@ def get_ptl_avg(pinhole_id, coord='Z'):
 
     tab = ascii.read(fname, format='csv')
 
-    tab = tab[(tab['PINHOLE_ID'] == pinhole_id) & (tab['DEVICE_TYPE'] == 'GFA')]
+    real = np.array([_has_real_metrology(t['PETAL_LOC']) for t in tab])
+
+    tab = tab[(tab['PINHOLE_ID'] == pinhole_id) & (tab['DEVICE_TYPE'] == 'GFA') & real]
 
     assert(len(tab) == 8)
 
@@ -137,6 +158,31 @@ def get_fp_avg_guess(petal_loc, pinhole_id):
 
     return xyz_fp
 
+def _get_real_metrology(petal_loc, pinhole_id):
+    """
+    for GFA pinhole with real metrology, return its focal plane coordinates
+
+    Args:
+        petal_loc: int, should be one of (0, 2, 5, 8)
+        pinhole_id: int, one of (1,2,3,4)
+
+    Returns:
+        xyz_fp: tuple
+    """
+
+    assert(_has_real_metrology(petal_loc))
+    assert(pinhole_id in pinhole_ids)
+
+    tab = io.load_metrology()
+
+    row = tab[(tab['PINHOLE_ID'] == pinhole_id) & (tab['DEVICE_TYPE'] == 'GFA') & (tab['PETAL_LOC'] == petal_loc)]
+
+    assert(len(row) == 1)
+
+    xyz_fp = row['X_FP'][0], row['Y_FP'][0], row['Z_FP'][0]
+
+    return xyz_fp
+
 def _ccd_to_fs_offs(xfp, yfp, zfp):
     """ partial copy of fit_gfa2fp """
     
@@ -155,14 +201,19 @@ def _ccd_to_fs_offs(xfp, yfp, zfp):
 def _derive_ccd_fp_coords(petal_loc=3):
 
     # get initial guess for X_FP, Y_FP, Z_FP of corners by
-    # averaging the petals with realmetrology
+    # averaging the petals with real metrology
+
+    has_real = _has_real_metrology(petal_loc)
 
     x_fp_guess = []
     y_fp_guess = []
     z_fp_guess = []
-    
+
     for pinhole_id in pinhole_ids:
-        xyz_guess = get_fp_avg_guess(petal_loc, pinhole_id)
+        if not has_real:
+            xyz_guess = get_fp_avg_guess(petal_loc, pinhole_id)
+        else:
+            xyz_guess = _get_real_metrology(petal_loc, pinhole_id)
         x_fp_guess.append(xyz_guess[0])
         y_fp_guess.append(xyz_guess[1])
         z_fp_guess.append(xyz_guess[2])
@@ -194,7 +245,7 @@ def _derive_ccd_fp_coords(petal_loc=3):
 def _get_petal_id(petal_loc):
     """convert from petal_loc to petal_id"""
 
-    petal_loc2id = {0: 1,
+    petal_loc2id = {0: 4,
                     1: 5,
                     2: 6,
 		    3: 3,
@@ -225,18 +276,22 @@ def _get_gfa_device(petal_loc):
 
 
 results = []
-for petal_loc in [3, 7]:
+for petal_loc in [0, 2, 3, 5, 7, 8]:
     x_fp, y_fp = _derive_ccd_fp_coords(petal_loc=petal_loc)
     
     x_ptl, y_ptl, _ = fp2ptl(petal_loc, x_fp, y_fp)
     for pinhole_id in pinhole_ids:
-        z_ptl = get_ptl_avg(pinhole_id, coord='Z')
+        has_real = _has_real_metrology(petal_loc)
+        if not has_real:
+            z_ptl = get_ptl_avg(pinhole_id, coord='Z')
+        else:
+            _, __, z_ptl = _get_real_metrology(petal_loc, pinhole_id)
 
         petal_id = _get_petal_id(petal_loc)
         result = (petal_id, petal_loc, pinhole_id,
                   x_fp[pinhole_id-1], y_fp[pinhole_id-1],
                   x_ptl[pinhole_id-1], y_ptl[pinhole_id-1],
-                  z_ptl)
+                  z_ptl, has_real)
         
         results.append(result)
 
@@ -246,20 +301,20 @@ t['PETAL_LOC'] = [r[1] for r in results]
 t['DEVICE_LOC'] = ''
 t['DEVICE_TYPE'] = 'GFA'
 t['PINHOLE_ID'] = [r[2] for r in results]
-t['X_PTL'] = [r[5] for r in results]
-t['Y_PTL'] = [r[6] for r in results]
-t['Z_PTL'] = [r[7] for r in results]
+t['X_PTL'] = [(np.nan if r[8] else r[5]) for r in results]
+t['Y_PTL'] = [(np.nan if r[8] else r[6]) for r in results]
+t['Z_PTL'] = [(np.nan if r[8] else r[7]) for r in results]
 t['X_MNT'] = ''
 t['Y_MNT'] = ''
 t['Z_MNT'] = ''
 t['PTL_SOURCE'] = 'Calculated'
 t['PROJ_DISTANCE'] = ''
-t['PROVENANCE'] = 'DESI-5784'
+t['PROVENANCE'] = [('DESI-5817' if r[8] else 'DESI-5784') for r in results]
 t['NOTES'] = [('GFA ' + str(_get_gfa_device(r[1])).zfill(2)) for r in results]
 t['X_FP'] = [r[3] for r in results]
 t['Y_FP'] = [r[4] for r in results]
-t['Z_FP'] = t['Z_PTL'] # this is true in existing fp-metrology.csv file
+t['Z_FP'] = [r[7] for r in results] # original fp-metrology.csv has Z_FP=Z_PTL
 t['LOCATION'] = ''
 
-outname = resource_filename('desimeter',"data/fp-metrology-gfa_patch.csv")
+outname = os.path.join(os.environ['DESIMETER_DATA'], 'fp-metrology-gfa_patch.csv')
 ascii.write(t, outname, format='csv', fast_writer=False, overwrite=True)
