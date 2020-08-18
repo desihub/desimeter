@@ -177,6 +177,10 @@ for seqid,spots in enumerate(spots_list) :
                 x,y = qs2xy(q=expected_pos["EXP_Q_0"],s=expected_pos["EXP_S_0"])
                 expected_pos["X_FP"] = x
                 expected_pos["Y_FP"] = y
+                bad_expected_pos = (np.isnan(x)|np.isnan(y))
+                if np.sum(bad_expected_pos) > 0 :
+                    expected_pos["X_FP"][bad_expected_pos]=-99999.
+                    expected_pos["Y_FP"][bad_expected_pos]=-99999.
             else :
                 log.error("No EXP_Q_0 nor X_FP in expected positions file {}".format(args.expected_positions))
     else :
