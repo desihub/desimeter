@@ -4,6 +4,7 @@ from pkg_resources import resource_filename
 import os
 import numpy as np
 import desimeter.transform.pos2ptl as pos2ptl
+import desimeter.transform.xy2tp as xy2tp
         
 class TestPos2Ptl(unittest.TestCase):
     '''Tests below compare results from this module to a presumed canonical
@@ -77,6 +78,29 @@ class TestPos2Ptl(unittest.TestCase):
                       f'error={errors[i][worst]:8.2E}')
                 assert errors[i][worst] < tol
 
+    def test_xy2tp(self):
+        tol = 0.001
+        r_test = [2.5, 3.5]
+        t_test = [-190, 0, 190]
+        p_test = [-10, 10, 170, 190]
+        ranges = [[-200, 200], [-20, 200]]
+        t_guess_err = 3
+        R = [[r1, r2] for r1 in r_test for r2 in r_test]
+        tp_test = [[t, p] for t in t_test for p in p_test]
+        for r in R:
+            for tp in tp_test:
+                for sign in [-1, 0, +1]:
+                    xy_test = xy2tp.tp2xy(tp, r)
+                    t_guess = tp[0] + sign*t_guess_err
+                    tp_calc, unreachable = xy2tp.xy2tp(xy_test, r, ranges, t_guess, xy2tp.default_t_guess_tol)
+                    assert not unreachable
+                    for i in [0, 1]:
+                        error = abs(tp_calc[i] - tp[i])
+                        if error >= tol:
+                            print(f'\nError in xy2tp test:\n error[{i}] = {error:.4f}\n tp_calc = {tp_calc}' +
+                                  f'\n tp_nom = {tp}\n r = {r}\n t_guess = {t_guess}')
+                            print(f' Sample call:\n  xy2tp.xy2tp({xy_test},{r},{ranges},{t_guess},{xy2tp.default_t_guess_tol})')
+                        assert error < tol 
         
 if __name__ == '__main__':
     unittest.main()
