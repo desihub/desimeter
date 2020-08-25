@@ -22,7 +22,6 @@ parser.add_argument('--other-metrology', type=str, default=None, required = Fals
 parser.add_argument('--plot',action='store_true',help="plot")
 
 
-
 args  = parser.parse_args()
 zbpolids = parse_fibers(args.zbpolids)
 if not np.all(np.in1d([0,1,2,27],zbpolids)) :
@@ -175,6 +174,12 @@ if args.plot :
             fid_nmad2d=1.20*np.median(dist[fid])
             print("nmad2d(FID)=",fid_nmad2d)
             print("rms2d(FID)=",fid_rms2d)
+            plt.text(x0,y0-2*ystep,"FID rms (2D)  = {:4.0f} um".format(fid_rms2d*1000.),color="red")
+            plt.text(x0,y0-3*ystep,"FID nmad (2D) = {:4.0f} um".format(fid_nmad2d*1000.),color="red")
+
+            plt.figure("fiducials")
+            plt.plot(x1b[fid],y1b[fid],".",c='red')
+            plt.quiver(x1b[fid],y1b[fid],x1b[fid]-x2[fid],y1b[fid]-y2[fid],color="red")
             plt.text(x0,y0-2*ystep,"FID rms (2D)  = {:4.0f} um".format(fid_rms2d*1000.),color="red")
             plt.text(x0,y0-3*ystep,"FID nmad (2D) = {:4.0f} um".format(fid_nmad2d*1000.),color="red")
 
