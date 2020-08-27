@@ -28,8 +28,6 @@ parser.add_argument('-o','--outfile', type = str, default = None, required = Tru
                     help = 'path to output table')
 parser.add_argument('--minccf', type = float, default = 0.2, required = False,
                     help = 'minimum cross-correlation between the template and data to remove non-fibers/fiducials')
-parser.add_argument('--pad', type = int, default = 40, required = False,
-                    help = 'padding around the fiber to analyze')
 parser.add_argument('--ang-step', type = float, default = 1., required = False,
                     help = 'step in degrees?? in phi angle scan')
 parser.add_argument('--nproc', type = int, default = 1, required = False,
@@ -46,7 +44,7 @@ else :
     print("Process standard back illuminated FVC image {}".format(args.back_illuminated))
     spots = process_fvc(args.back_illuminated)
     template_filename = os.path.join(desimeter_data_dir(),"fiber_arm_outline.fits")
-    detect_phi_arms(spots,args.front_illuminated,template_filename,args.pad,args.ang_step,args.nproc)
+    detect_phi_arms(spots,args.front_illuminated,template_filename,args.ang_step,args.nproc)
 
 good=np.where((spots["ANGLE"]>-360)&(spots["CCF"]>0.2))[0]
 spots = spots[good]
