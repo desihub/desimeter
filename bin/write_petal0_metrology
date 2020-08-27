@@ -78,14 +78,50 @@ filename=resource_filename('desimeter',"data/lbl-petal0/lbnl_positioner_indexes_
 if os.path.isfile(filename) :
     print("reading",filename)
     ids=Table.read(filename)
+    ids=ids[:][(ids["DEVICE_LOC"]>=0)&(ids["PETAL_ID"]=="0")]
     ids=ids[:][ids["DEVICE_LOC"]>=0]
+    print(ids["DEVICE_ID"])
+    ii=np.where(ids["DEVICE_ID"]=='07004')[0][0]
+    print(ii)
+    print(ids["DEVICE_ID"][ii],ids["PETAL_ID"][ii],ids["DEVICE_LOC"][ii])
+    ii=np.where((ids["DEVICE_LOC"]==int(ids["DEVICE_LOC"][ii])))[0]
+    print(ii)
+    print(ids["DEVICE_ID"][ii],ids["PETAL_ID"][ii],ids["DEVICE_LOC"][ii])
+
     loc2ind={loc:i for i,loc in enumerate(ids["DEVICE_LOC"])}
     for loc in spots["DEVICE_LOC"] :
         if not loc in loc2ind :
             print("Missing LOC={} in {} ??".format(loc,filename))
-            sys.exit(12)
     for k in ["DEVICE_ID","DEVICE_TYPE","BUS_ID"] :
-        spots[k]=np.array([ ids[k][loc2ind[loc]] for loc in spots["DEVICE_LOC"] ])
+        vals=[]
+        for i,loc in enumerate( spots["DEVICE_LOC"] ) :
+            if loc in loc2ind :
+                vals.append(ids[k][loc2ind[loc]])
+            else :
+                vals.append("UNKNOWN")
+        spots[k]=vals
+
+
+    # these are the fids with device locations device_loc = {11: 'P146', 75:'P145', 150:'P147', 239:'P144', 321:'P148', 439:'P078', 482:'P059', 496:'P002', 517:'P067', 534:'P073',541:'P151',542:'P150'}
+    did={11: 'P146', 75:'P145', 150:'P147', 239:'P144', 321:'P148', 439:'P078', 482:'P059', 496:'P002', 517:'P067', 534:'P073',541:'P151',542:'P150'}
+    for loc in did.keys() :
+        ii=np.where(spots["DEVICE_LOC"]==loc)[0]
+        if spots["DEVICE_TYPE"][ii[0]]=="UNKNOWN" :
+            if loc in [541,542] :
+                device_type = "GIF"
+            else :
+                device_type = "FIF"
+            print("use for loc={} id={} and type={}".format(loc,did[loc],device_type))
+            spots["DEVICE_TYPE"][ii]=device_type
+            spots["DEVICE_ID"][ii]=did[loc]
+        else :
+            print("checking loc={} id={} ..".format(loc,did[loc]))
+            ok=(did[loc]==spots["DEVICE_ID"][ii[0]])
+            if ok :
+                print("ok")
+            else :
+                print("error {}!={} ({}?)".format(did[loc],spots["DEVICE_ID"][ii[0]],spots["DEVICE_TYPE"][ii[0]]))
+                sys.exit(12)
 
 #for loc in [461,501] :
 #    i=np.where(spots["DEVICE_LOC"]==loc)[0][0]
