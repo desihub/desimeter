@@ -16,12 +16,10 @@ for petal in np.unique(spots['PETAL_LOC']) :
     petalid = spots['PETAL_ID'][selection][0]
     plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",alpha=0.5,label="PETAL LOC={} ID={}".format(petal,petalid))
 
-selection=(spots['DEVICE_TYPE']=="FIF")
-plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",label="FIF")
-selection=(spots['DEVICE_TYPE']=="GIF")
-plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",label="GIF")
-selection=(spots['DEVICE_TYPE']=="ETC")
-plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",label="ETC")
+for what in np.unique(spots['DEVICE_TYPE']) :
+    if what=="POS": continue
+    selection=(spots['DEVICE_TYPE']==what)
+    plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",label=what)
 
 first=True
 for petal in np.unique(spots['PETAL_LOC']) :
