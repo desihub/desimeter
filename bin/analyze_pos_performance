@@ -1,0 +1,96 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""Tool for analyzing positioner performance. Typically operates on data tables
+retrieved using the "get_posmoves --with-calib" tool.
+"""
+
+# command line argument parsing
+import argparse
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('-i', '--infiles', type=str, required=True, nargs='*',
+                    help='Path to input csv file(s), containing results from "get_posmoves --with-calib" ' +
+                         '(see that function''s help for full syntax). Regex is ok (like M*.csv). Multiple ' +
+                         'file args are also ok (like M00001.csv M00002.csv M01*.csv).')
+parser.add_argument('-o', '--outdir', type=str, required=True, help='Path to directory where to save output files.')
+parser.add_argument('-np', '--n_processes_max', type=int, default=None,  help='max number of processors to use')
+args = parser.parse_args()
+
+# proceed with bulk of imports
+import os
+import glob
+import multiprocessing
+from astropy.table import Table
+
+# paths
+infiles = []
+for s in args.infiles:
+    these = glob.glob(s)
+    infiles.extend(these)
+infiles = [os.path.realpath(p) for p in infiles]
+save_dir = os.path.realpath(args.outdir)
+if not os.path.isdir(save_dir):
+    os.path.os.makedirs(save_dir)
+
+# data identifiers and keywords
+required = {'POS_ID', 'POS_T', 'POS_P', 'TOTAL_MOVE_SEQUENCES', 'PTL_X', 'PTL_Y',
+            'LENGTH_R1', 'LENGTH_R2', 'OFFSET_X', 'OFFSET_Y', 'OFFSET_T', 'OFFSET_P'}
+optional = {'LOG_NOTE'}
+sequence_note_prefix = 'sequence: '
+
+# function defs
+def read(path):
+    '''Read in data from disk. If data multiple posids, their respective data
+    will be returned in multiple tables.
+    
+    Basic validation that the required data exists will be performed. This includes
+    checking that the data includes actual moves. Thus the function is tolerant of
+    data files for non-moving positioners --- they will be automatically skipped.
+    
+    INPUTS:  path ... must be a csv file, including move and calibration data
+    
+    OUTPUT:  (out, msg) ... out is a dict with keys = posids and values = astropy tables
+                        ... msg is a string suitable for printing at stdout
+    '''
+    data = {}
+    msg = ''
+    if 'csv' not in path:
+        return data, msg  # skips non-data files
+    table = Table.read(path)
+    missing = required - set(table.columns)
+    if any(missing):
+        msg = f'Skipped data at {path} due to missing columns {missing}'
+        return data, msg
+    posids = set(table['POS_ID'])
+    for posid in posids:
+        selection = table['POS_ID'] == posid
+        this = table[selection]
+        move_counter = this['TOTAL_MOVE_SEQUENCES']
+        n_moves = len(set(move_counter)) - 1
+        if n_moves > 0:
+            data[posid] = this
+            msg = f'Read data at {path}'
+        else:
+            msg = f'Skipped data at {path} (contains no moves)'
+    return data, msg
+
+# containers / handlers for multiprocessed data
+read_results = {}
+def store_read_results(data, msg):
+    if data:
+        read_results.update(data)
+    if msg:
+        print(msg)
+
+single_process = args.n_processes_max == 1  # useful for debugging
+if __name__ == '__main__':
+    if single_process:
+        for path in infiles:
+            data, msg = read(path)
+            store_read_results(data, msg)
+    else:
+        with multiprocessing.Pool(processes=args.n_processes_max) as pool:
+            pool_results = pool.imap(read, infiles)
+            pool.close()
+            pool.join()
+        for result in pool_results:
+            store_read_results(*result)
