@@ -122,6 +122,8 @@ if os.path.isfile(filename) :
             else :
                 print("error {}!={} ({}?)".format(did[loc],spots["DEVICE_ID"][ii[0]],spots["DEVICE_TYPE"][ii[0]]))
                 sys.exit(12)
+    for i in np.where(spots["DEVICE_TYPE"]=="POS")[0] :
+        spots["DEVICE_ID"][i]="M{:05d}".format(int(spots["DEVICE_ID"][i]))
 
 #for loc in [461,501] :
 #    i=np.where(spots["DEVICE_LOC"]==loc)[0][0]
