@@ -5,7 +5,7 @@ import fitsio
 import multiprocessing
 
 
-def detect_phi_arm(x,y,image,template,pad=40,ang_step=1.) :
+def detect_phi_arm(x,y,image,template,ang_step=1.) :
     """
     detection of phi arm angle
 
@@ -14,12 +14,15 @@ def detect_phi_arm(x,y,image,template,pad=40,ang_step=1.) :
      y: float, y pixel coordinate of fiber tip
      image: 2D np.array : bright image
      template: 2D np.array : template
-     pad: int, half size of image stamp around x,y
      ang_step: float, step in degree of azimuthal angle scan
 
     returns angle, ccfval with angle in radians and ccfval the cross
     correlation coefficient
     """
+
+    assert(template.shape[0] == template.shape[1])
+    pad=template.shape[0]//2
+
 
     D = image
 
@@ -46,8 +49,8 @@ def detect_phi_arm(x,y,image,template,pad=40,ang_step=1.) :
 
     return angle, ccfval
 
-def detect_phi_arm_with_index(index,x,y,image,template,pad,ang_step) :
-    angle, ccfval = detect_phi_arm(x,y,image,template,pad,ang_step)
+def detect_phi_arm_with_index(index,x,y,image,template,ang_step) :
+    angle, ccfval = detect_phi_arm(x,y,image,template,ang_step)
     return index,angle,ccfval
 
 def _func(arg) :
@@ -56,7 +59,7 @@ def _func(arg) :
     print("{} angle={:4.1f} ccf={:4.3f}".format(index,angle,ccfval))
     return index, angle, ccfval
 
-def detect_phi_arms(spots,image_filename,template_filename,pad,ang_step,nproc=1) :
+def detect_phi_arms(spots,image_filename,template_filename,ang_step,nproc=1) :
 
     template          = fitsio.read(template_filename).astype(float)
     template /= np.sqrt(np.sum(template**2))
@@ -73,7 +76,7 @@ def detect_phi_arms(spots,image_filename,template_filename,pad,ang_step,nproc=1)
         pool = multiprocessing.Pool(nproc)
         func_args = []
         for i in range(ndet) :
-            arguments={"index":i,"x":det["XPIX"][i],"y":det["YPIX"][i],"image":image,"template":template,"pad":pad,"ang_step":ang_step}
+            arguments={"index":i,"x":det["XPIX"][i],"y":det["YPIX"][i],"image":image,"template":template,"ang_step":ang_step}
             func_args.append( arguments )
         results  =  pool.map(_func, func_args)
         pool.close()
@@ -84,5 +87,5 @@ def detect_phi_arms(spots,image_filename,template_filename,pad,ang_step,nproc=1)
             det['CCF'][i]=result[2]
     else :
         for i in range(ndet) :
-            det['ANGLE'][i], det['CCF'][i] = detect_phi_arm(det["XPIX"][i],det["YPIX"][i],image,template,pad=pad,ang_step=ang_step)
+            det['ANGLE'][i], det['CCF'][i] = detect_phi_arm(det["XPIX"][i],det["YPIX"][i],image,template,ang_step=ang_step)
             print("{}/{} angle={:4.1f} ccf={:4.3f}".format(i,ndet,det['ANGLE'][i], det['CCF'][i]))
