@@ -14,6 +14,7 @@ parser.add_argument('-i','--infile', type = str, default = None, required = True
                     help = 'path to a FVC spots table in CSV format (with X_FP,Y_FP,X_FP_METRO,Y_FP_METRO columns)')
 parser.add_argument('--expected', action = "store_true",
                     help = 'compare with expected location (X_FP_EXP,Y_FP_EXP) instead of (X_FP_METRO,Y_FP_METRO)')
+parser.add_argument('--posids',type=str,help="comma separated list of positioner ids to highlight")
 
 args  = parser.parse_args()
 
@@ -98,6 +99,17 @@ if args.expected :
 
 dx=xm-x
 dy=ym-y
+
+if args.posids is not None :
+    posids=args.posids.split(",")
+    for posid in posids :
+        i=np.where(table["DEVICE_ID"]==posid)[0]
+        if len(i)==0 :
+            print(posid,"not matched")
+            continue
+        i=i[0]
+        plt.plot(table["X_FP"][i],table["Y_FP"][i],"o",label=posid)
+
 
 
 jj=np.where((np.abs(dx)>0.1)|(np.abs(dy)>0.1))[0]
