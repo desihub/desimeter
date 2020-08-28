@@ -10,7 +10,8 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('-i', '--infiles', type=str, required=True, nargs='*',
                     help='Path to input csv file(s), containing results from "get_posmoves --with-calib" ' +
                          '(see that function''s help for full syntax). Regex is ok (like M*.csv). Multiple ' +
-                         'file args are also ok (like M00001.csv M00002.csv M01*.csv).')
+                         'file args are also ok (like M00001.csv M00002.csv M01*.csv), as is a directory ' +
+                         'that contains the files.')
 parser.add_argument('-o', '--outdir', type=str, required=True, help='Path to directory where to save output files.')
 parser.add_argument('-np', '--n_processes_max', type=int, default=None,  help='max number of processors to use')
 args = parser.parse_args()
@@ -21,12 +22,19 @@ import glob
 import multiprocessing
 import numpy as np
 from astropy.table import Table
+import desimeter.transform.pos2ptl as pos2ptl
 
 # paths
 infiles = []
 for s in args.infiles:
     these = glob.glob(s)
-    infiles.extend(these)
+    for this in these:
+        if os.path.isdir(this):
+            contents = os.listdir(this)
+            contents = [os.path.join(this, file) for file in contents]
+            infiles.extend(contents)
+        else:
+            infiles.append(this)
 infiles = [os.path.realpath(p) for p in infiles]
 save_dir = os.path.realpath(args.outdir)
 if not os.path.isdir(save_dir):
@@ -48,36 +56,17 @@ def nulls(*args):
         idxs |= {i for i in range(len(array)) if not(array[i]) or array[i] in special_null_cases}
     return idxs
 
-def read(path):
-    '''Read in data from disk. If data multiple posids, their respective data
-    will be returned in multiple tables.
-    
-    Basic validation that the required data exists will be performed. This includes
-    checking that the data includes actual moves. Thus the function is tolerant of
-    data files for non-moving positioners --- they will be automatically skipped.
-    
-    INPUTS:  path ... must be a csv file, including move and calibration data
-    OUTPUT:  data ... dict with keys = posids and values = astropy tables
-    '''
-    data = {}
-    if 'csv' not in path:
-        return data  # i.e. skip non-data files
-    table = Table.read(path)
-    missing = required - set(table.columns)
-    if any(missing):
-        print(f'Skipped data at {path} due to missing columns {missing}')
-        return data
-    posids = set(table['POS_ID'])
-    for posid in posids:
-        selection = table['POS_ID'] == posid
-        this = table[selection]
-        no_move = nulls(table['MOVE_CMD'])
-        if len(no_move) == len(table):
-            print(f'Skipped data at {path} (contains no moves)')
-        else:
-            data[posid] = this
-            print(f'Read data at {path}')
-    return data
+def tokenize_note(log_note):
+    '''Returns list of tokens in a LOG_NOTE entry.'''
+    tokens = log_note.split(';')
+    tokens = [token.strip() for token in tokens]
+    return tokens
+
+def parse_val(string, separator=' ', typefunc=int):
+    '''Parse a number out of typical token format from LOG_NOTE strings.'''
+    split = string.split(separator)
+    val = typefunc(split[1]) if len(split) > 0 else None
+    return val
 
 def remove_nonmoving_rows(table):
     '''Deletes rows with no move.
@@ -106,20 +95,130 @@ def remove_unused_columns(table):
     new.remove_columns(list(useless))
     return new
 
+def read(path):
+    '''Read in data from disk. If data has multiple posids, their respective data
+    will be returned in multiple tables.
+    
+    Basic validation that the required data exists will be performed. This includes
+    checking that the data includes actual moves. Thus the function is tolerant of
+    data files for non-moving positioners --- they will be automatically skipped.
+    
+    INPUTS:  path ... must be a csv file, including move and calibration data
+    OUTPUT:  data ... dict with keys = posids and values = astropy tables
+    '''
+    data = {}
+    if 'csv' not in path:
+        return data  # i.e. skip non-data files
+    table = Table.read(path)
+    missing = required - set(table.columns)
+    if any(missing):
+        print(f'Skipped data at {path} due to missing columns {missing}')
+        return data
+    initial_posids = set(table['POS_ID'])
+    table = remove_unused_columns(table)
+    table = remove_nonmoving_rows(table)
+    posids = set(table['POS_ID'])
+    posids_removed = initial_posids - posids
+    if any(posids_removed):
+        print(f'Skipped data for {posids_removed} (contained no moves) at {path}')
+    for posid in posids:
+        selection = table['POS_ID'] == posid
+        this = table[selection]
+        data[posid] = this
+        print(f'Read data for {posid} at {path}')
+    return data
+
+def calc_errors(table):
+    '''Identifies measured and target values, then calculates errors.
+    
+    INPUTS:  table ... astropy table containing 'PTL_X', 'PTL_Y', 'POS_T', 'POS_P',
+                       'LENGTH_R1', 'LENGTH_R2', 'OFFSET_T', 'OFFSET_P', 'OFFSET_X',
+                       'OFFSET_Y'
+    OUTPUT:  copy of table, where measured data columns will have _MEAS  appended to
+             their names (for clarity) and new columns will be added with _TARG suffix,
+             as well as new columns with ERR_ prefix
+    '''
+    new = table.copy()
+    for key in ['PTL_X', 'PTL_Y', 'PTL_Z', 'OBS_X', 'OBS_Y']:
+        if key in new.columns:
+            new.rename_column(key, f'{key}_MEAS')
+    meas_x, meas_y = new['PTL_X_MEAS'], new['PTL_Y_MEAS']
+    targ_x, targ_y = pos2ptl.int2ptl(t_int=new['POS_T'], p_int=new['POS_P'],
+                                     r1=new['LENGTH_R1'], r2=new['LENGTH_R1'],
+                                     t_offset=new['OFFSET_T'], p_offset=new['OFFSET_P'],
+                                     x_offset=new['OFFSET_X'], y_offset=new['OFFSET_Y'])
+    new['PTL_X_TARG'] = targ_x
+    new['PTL_Y_TARG'] = targ_y
+    new['ERR_X'] = meas_x - targ_x
+    new['ERR_Y'] = meas_y - targ_y
+    new['ERR_XY'] = np.hypot(new['ERR_X'], new['ERR_Y'])
+    return new
+
+def identify_submoves(table):
+    '''Searches LOG_NOTE field to identify submoves (i.e. correction moves).
+    
+    INPUTS:  table ... astropy table containing 'LOG_NOTE' and 'EXPOSURE_ID'
+    OUTPUT:  copy of table, with new columns 'MOVE' and 'SUBMOVE', containing
+             integer IDs identifying any moves and submoves.
+             
+    Note that 'MOVE' values may not be unique, if the dataset includes multiple
+    tests. In such cases, uniqueness can be determined by inspecting also the
+    EXPOSURE_ID field --- within which MOVE *will* be unique. Additionally, note
+    that 'MOVE' integers may not correspond 1:1 with those given in the LOG_NOTE
+    fields, again due to handling of uniqueness corner cases. However, 'SUBMOVE'
+    ids *will* correspond exactly to those in LOG_NOTE.
+    '''
+    new = table.copy()
+    new.sort('POS_MOVE_INDEX')
+    move_counter = -1
+    moves = []
+    submoves = []
+    last_expid = new['EXPOSURE_ID'][0]
+    last_named_move = None  # different from move_counter ... this is from LOG_NOTE field
+    for i in range(len(new)):
+        expid = new['EXPOSURE_ID'][i]
+        if expid != last_expid:
+            move_counter = -1
+            last_expid = expid
+        note = new['LOG_NOTE'][i]
+        if 'submove' not in note:
+            move_counter += 1
+            submove = 0
+        else:
+            tokens = tokenize_note(note)
+            found_move, found_submove = False, False
+            for token in tokens:
+                if token.find('move') == 0:
+                    named_move = parse_val(token)
+                    found_move = True
+                if token.find('submove') == 0:
+                    submove = parse_val(token)
+                    found_submove = True
+            assert found_move and found_submove, f'move/submove parsing error of LOG_NOTE: {note}'
+            if named_move != last_named_move:
+                move_counter += 1
+                last_named_move = named_move
+        moves.append(move_counter)
+        submoves.append(submove)
+    new['MOVE'] = moves
+    new['SUBMOVE'] = submoves
+    return new
+
 def analyze(table):
     '''Analyze the data for one table, containing one positioner's data.
     
     INPUTS:  table ... astropy table, as generated by read()
-    OUTPUT:  (data, msg) ... data is a single-element dict with key = posid and value = astropy tables
+    OUTPUT:  (data, msg) ... data is a single-element dict with key = posid and value = astropy table
+                             (note that the astropy table may contain additional results in its metadata)
                          ... msg is a string suitable for printing at stdout
     '''
     data, msg = {}, ''
-    table = remove_nonmoving_rows(table)
-    table = remove_unused_columns(table)
     table.sort('POS_MOVE_INDEX')
     posids = set(table['POS_ID'])
     assert len(posids) == 1, f'error: input to analyze should be a table with only one posid, not {posids}'
     posid = posids.pop()
+    table = calc_errors(table)
+    table = identify_submoves(table)
     data[posid] = table
     return data, msg    
 
@@ -128,6 +227,7 @@ data = {}
 for path in infiles:
     this_data = read(path)
     data.update(this_data)
+assert any(data), 'No data to analyze. Please check that input file args are correct.'
 
 # containers / handlers for multiprocessed analysis data
 results = {}
