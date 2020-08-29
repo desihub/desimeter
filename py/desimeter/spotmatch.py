@@ -7,12 +7,13 @@ Wrapper to the C program 'match_positions' from David Rabinowitz.
 import os
 import numpy as np
 import subprocess
+import shutil
 
 from astropy.table import Table
 
 from desimeter.io import load_metrology,fvc2fp_filename
 from desimeter.transform.fvc2fp import FVC2FP
-    
+
 def _compute_pixel_scale(fvc2fp) :
     """
     computes square root of determinant of jacobian to get the pixel scale in mm
@@ -30,24 +31,24 @@ def _compute_pixel_scale(fvc2fp) :
     J[1,0]=(yfp[1]-yfp[0])/eps
     J[1,1]=(yfp[2]-yfp[0])/eps
     return np.sqrt(np.abs(np.linalg.det(J))) # mm per pixel
-    
+
 
 def _device_id_to_int(device_id) :
     return int(str(device_id).replace("M","").replace("P",""))
 
 def _write_spotmatch_fiducial_config_file(filename) :
-    
+
 
     """
     example:
-    
+
 
     """
     metrology = load_metrology()
-    
+
     selection  = (metrology["DEVICE_TYPE"]=="FIF")|(metrology["DEVICE_TYPE"]=="GIF")
     device_ids = np.unique(metrology["DEVICE_ID"][selection])
-    
+
     with open(filename,"w") as ofile :
 
         for device_id in device_ids :
@@ -59,7 +60,7 @@ def _write_spotmatch_fiducial_config_file(filename) :
             my = np.mean(yfp)
             dx = xfp-mx
             dy = yfp-my
-            
+
             device_id_int = _device_id_to_int(device_id)
             ofile.write("{} {:4.3f} {:4.3f} 000.0 0.001 {:05d} 8\n".format(device_id_int,0.,0.,0))
             for i in range(dx.size) :
@@ -69,7 +70,7 @@ def _write_spotmatch_fiducial_config_file(filename) :
 def _write_spotmatch_targets_file(x_fp,y_fp,device_id,filename,fvc2fp=None) :
     """
     example:
-    
+
 1000 179.640 5616.148  12.000   0.001 4
 1001 336.988 5615.164  12.000   0.001 4
 1002 259.003 5479.802  12.000   0.001 4
@@ -77,17 +78,17 @@ def _write_spotmatch_targets_file(x_fp,y_fp,device_id,filename,fvc2fp=None) :
 1004 415.894 5478.573  12.000   0.001 4
 1005 650.448 5612.610  12.000   0.001 4
 1006 572.602 5477.142  12.000   0.001 4
-...    
+...
     """
-    if fvc2fp is None: 
+    if fvc2fp is None:
         fvc2fp = FVC2FP.read(fvc2fp_filename())
         print("use default fvc2fp")
-        
+
     x_fp = np.array(x_fp)
     y_fp = np.array(y_fp)
     device_id = np.array(device_id)
     flags = np.repeat(4,x_fp.size)
-    
+
     # add fiducials centers
     metrology = load_metrology()
     selection  = (metrology["DEVICE_TYPE"]=="FIF")|(metrology["DEVICE_TYPE"]=="GIF")
@@ -100,7 +101,7 @@ def _write_spotmatch_targets_file(x_fp,y_fp,device_id,filename,fvc2fp=None) :
         y_fp = np.append(y_fp,my)
         device_id = np.append(device_id,fid_device_id)
         flags = np.append(flags,8)
-        
+
 
     xpix,ypix = fvc2fp.fp2fvc(x_fp,y_fp)
 
@@ -109,9 +110,9 @@ def _write_spotmatch_targets_file(x_fp,y_fp,device_id,filename,fvc2fp=None) :
             device_id_int = _device_id_to_int(device_id[i])
             ofile.write("{} {:4.3f} {:4.3f} 12.000 0.001 {}\n".format(device_id_int,xpix[i],ypix[i],flags[i]))
     print("wrote",filename)
-    
-    
-    
+
+
+
 def _write_spotmatch_measured_pos_file(xpix,ypix,filename):
     """
     example:
@@ -125,9 +126,9 @@ def _write_spotmatch_measured_pos_file(xpix,ypix,filename):
 4857.292 2876.005  12.943 7   2.323
 
     """
-    
+
     assert(len(xpix)==len(ypix))
-    
+
     with open(filename,"w") as ofile :
         for i in range(len(xpix)) :
             ofile.write("{:4.3f} {:4.3f} 12.000 {} 2.000\n".format(xpix[i],ypix[i],i+1))
@@ -147,27 +148,31 @@ def _write_spotmatch_reference_pos_file(filename,fvc2fp=None) :
     """
 
     metrology = load_metrology()
-    if fvc2fp is None: 
+    if fvc2fp is None:
         fvc2fp = FVC2FP.read(fvc2fp_filename())
-    
+
     selection = (metrology["DEVICE_TYPE"]=="FIF")|(metrology["DEVICE_TYPE"]=="GIF")
     xpix,ypix   = fvc2fp.fp2fvc(metrology["X_FP"][selection],metrology["Y_FP"][selection])
     device_ids  = metrology["DEVICE_ID"][selection]
     pinhole_ids = metrology["PINHOLE_ID"][selection]
-    
+
     num={1:515,2:1027,3:259,4:771} # the code wants that
-    
+
     with open(filename,"w") as ofile :
         for i in range(xpix.size) :
             device_id_int = _device_id_to_int(device_ids[i])
             ofile.write(" {} {:4.3f} {:4.3f} 12.000 {} 2.000 pinhole\n".format(device_id_int,xpix[i],ypix[i],num[pinhole_ids[i]]))
 
     print("wrote",filename)
-            
+
 def spotmatch(xpix,ypix,expected_x_fp=None,expected_y_fp=None,expected_device_id=None,verbose=0,match_radius_pixels=50) :
     """
 
     """
+
+    if shutil.which("match_positions") is None :
+        raise RuntimeError("match_positions is not in PATH. You need to install spotmatch first. It's in https://desi.lbl.gov/trac/browser/code/online/FVC/spotmatch.")
+
 
     image_rows=6000
     image_cols=6000
@@ -177,16 +182,16 @@ def spotmatch(xpix,ypix,expected_x_fp=None,expected_y_fp=None,expected_device_id
     target_y0=0
     fid_x_dir=-1
     fid_y_dir=1
-    
+
     tmp_dir="."
-    
+
     fvc2fp = FVC2FP.read(fvc2fp_filename())
     exp_pixel_scale = _compute_pixel_scale(fvc2fp)
-    
-    
+
+
     fiducial_config_filename=os.path.join(tmp_dir,"match_fiducials.test")
     _write_spotmatch_fiducial_config_file(fiducial_config_filename)
-    
+
     if expected_x_fp is None :
         print("input expected = None, so we use the centers of positioners as the expected spots")
         metrology = load_metrology()
@@ -194,14 +199,14 @@ def spotmatch(xpix,ypix,expected_x_fp=None,expected_y_fp=None,expected_device_id
         expected_x_fp = spots["X_FP"]
         expected_y_fp = spots["Y_FP"]
         expected_device_id = spots["DEVICE_ID"]
-        
+
 
     targets_filename=os.path.join(tmp_dir,"match_targets.test")
     _write_spotmatch_targets_file(expected_x_fp,expected_y_fp,expected_device_id,targets_filename,fvc2fp)
-    
+
     measured_pos_filename=os.path.join(tmp_dir,"match_centroids.test")
     _write_spotmatch_measured_pos_file(xpix,ypix,measured_pos_filename)
-    
+
     reference_pos_filename=os.path.join(tmp_dir,"pinhole_references.test")
     _write_spotmatch_reference_pos_file(reference_pos_filename,fvc2fp=None)
 
@@ -214,10 +219,10 @@ easured_pos_file ./match_centroids.tmp -pos_save_file ./measured_pos.tmp -refere
 
 
     """
-    
+
     match_centers_filename=os.path.join(tmp_dir,"match_centers.test")
     saved_pos_filename=os.path.join(tmp_dir,"saved_pos.test")
-    
+
     cmd =  "match_positions"
     cmd += " -verbose {}".format(verbose)
     cmd += " -image_rows {}".format(image_rows)
@@ -234,8 +239,8 @@ easured_pos_file ./match_centroids.tmp -pos_save_file ./measured_pos.tmp -refere
     cmd += " -measured_pos_file {}".format(measured_pos_filename)
     cmd += " -pos_save_file {}".format(saved_pos_filename)
     cmd += " -reference_pos_file {}".format(reference_pos_filename)
-    
-    
+
+
     print(cmd)
 
     subprocess.call(cmd.split(" "))
