@@ -104,14 +104,15 @@ class TestPos2Ptl(unittest.TestCase):
                     t_guess = tp_nom[0] + sign*t_guess_err
                     check_xy2tp(tp_nom, xy_test, r, ranges, t_guess, xy2tp.default_t_guess_tol)
         # specific cases known to have caused issues in the past
-        tp_nom = [(2.27556, 173.80926),]
-        xy_test = [(0.00464, 0.32395),]
-        r = [[3.0, 3.0],]
-        ranges = [[[-200.0, 200.0], [-3.6253, 185.0]],]
-        t_guess = [-183.946,]
-        t_guess_tol = [30,]
-        for i in range(len(xy_test)):
-            check_xy2tp(tp_nom[i], xy_test[i], r[i], ranges[i], t_guess[i], t_guess_tol[i])
+        tp_nom =  {'a':(2.27556, 173.80926), 'b':(-0.29619, 173.23958), }
+        xy_test = {'a':(0.00464,   0.32395), 'b':( 0.02268,   0.35304), }
+        r = {'a':[3.0, 3.0], 'b':[3.0, 3.0], }
+        ranges = {'a': [[-200.0, 200.0], [-3.6253, 185.0]],
+                  'b': [[-195.95685, 195.95685], [-3.92183, 185.0]], }
+        t_guess = {'a':-183.946, 'b':-186.89834}
+        t_guess_tol = {'a':30, 'b':30}
+        for k in tp_nom:
+            check_xy2tp(tp_nom[k], xy_test[k], r[k], ranges[k], t_guess[k], t_guess_tol[k])
             
 
 if __name__ == '__main__':
