@@ -107,7 +107,10 @@ def xy2tp(xy, r, ranges, t_guess=None, t_guess_tol=default_t_guess_tol):
         options.append({'TP':TP_alt, 'range_fail':range_fail_alt})
 
         # rotating theta by +/-360 deg
-        for center_TP in [opt['TP'] for opt in options]:
+        for opt in options.copy():
+            if opt['range_fail']:
+                continue  # because cannot base a viable alternate on a config that doesn't achieve xy
+            center_TP = opt['TP']
             TP_alts = [[center_TP[0] + wrap, center_TP[1]] for wrap in [-360.0, 360.0]]
             for TP_alt in TP_alts:
                 TP_alt, range_fail_alt = _wrap_TP_into_ranges(TP_alt, ranges)
