@@ -79,8 +79,9 @@ class TestPos2Ptl(unittest.TestCase):
                 assert errors[i][worst] < tol
 
     def test_xy2tp(self):
+        tol = 0.001
+        n_tested = 0
         def check_xy2tp(tp_nom, xy_test, r, ranges, t_guess, t_guess_tol):
-            tol = 0.001
             tp_calc, unreachable = xy2tp.xy2tp(xy_test, r, ranges, t_guess, t_guess_tol)
             assert not unreachable
             for i in [0, 1]:
@@ -103,6 +104,7 @@ class TestPos2Ptl(unittest.TestCase):
                     xy_test = xy2tp.tp2xy(tp_nom, r)
                     t_guess = tp_nom[0] + sign*t_guess_err
                     check_xy2tp(tp_nom, xy_test, r, ranges, t_guess, xy2tp.default_t_guess_tol)
+                    n_tested += 1
         # specific cases known to have caused issues in the past
         tp_nom =  {'a':(2.27556, 173.80926), 'b':(-0.29619, 173.23958), }
         xy_test = {'a':(0.00464,   0.32395), 'b':( 0.02268,   0.35304), }
@@ -113,6 +115,8 @@ class TestPos2Ptl(unittest.TestCase):
         t_guess_tol = {'a':30, 'b':30}
         for k in tp_nom:
             check_xy2tp(tp_nom[k], xy_test[k], r[k], ranges[k], t_guess[k], t_guess_tol[k])
+            n_tested += 1
+        print(f'\nxy2tp tested on {n_tested} points:\n err tol={tol}\n All ok')
             
 
 if __name__ == '__main__':
