@@ -90,6 +90,9 @@ class FVC2FP(object):
         params['zbcoeffs'] = list(self.zbcoeffs)
         return json.dumps(params)
 
+    def __str__(self) :
+        return self.tojson()
+
     @classmethod
     def fromjson(cls, jsonstring):
         tx = cls()
