@@ -79,8 +79,18 @@ class TestPos2Ptl(unittest.TestCase):
                 assert errors[i][worst] < tol
 
     def test_xy2tp(self):
-        tol = 0.001
-        r_test = [2.5, 3.5]
+        def check_xy2tp(tp_nom, xy_test, r, ranges, t_guess, t_guess_tol):
+            tol = 0.001
+            tp_calc, unreachable = xy2tp.xy2tp(xy_test, r, ranges, t_guess, t_guess_tol)
+            assert not unreachable
+            for i in [0, 1]:
+                error = abs(tp_calc[i] - tp_nom[i])
+                if error >= tol:
+                    print(f'\nError in xy2tp test:\n error[{i}] = {error:.4f}\n tp_calc = {tp_calc}' +
+                          f'\n tp_nom = {tp_nom}\n r = {r}\n t_guess = {t_guess}')
+                    print(f' Sample call:\n  xy2tp.xy2tp({xy_test},{r},{ranges},{t_guess},{xy2tp.default_t_guess_tol})')
+                assert error < tol
+        r_test = [2.5, 3.0, 3.5]
         t_test = [-190, 0, 190]
         p_test = [-10, 10, 170, 190]
         ranges = [[-200, 200], [-20, 200]]
@@ -88,20 +98,22 @@ class TestPos2Ptl(unittest.TestCase):
         R = [[r1, r2] for r1 in r_test for r2 in r_test]
         tp_test = [[t, p] for t in t_test for p in p_test]
         for r in R:
-            for tp in tp_test:
+            for tp_nom in tp_test:
                 for sign in [-1, 0, +1]:
-                    xy_test = xy2tp.tp2xy(tp, r)
-                    t_guess = tp[0] + sign*t_guess_err
-                    tp_calc, unreachable = xy2tp.xy2tp(xy_test, r, ranges, t_guess, xy2tp.default_t_guess_tol)
-                    assert not unreachable
-                    for i in [0, 1]:
-                        error = abs(tp_calc[i] - tp[i])
-                        if error >= tol:
-                            print(f'\nError in xy2tp test:\n error[{i}] = {error:.4f}\n tp_calc = {tp_calc}' +
-                                  f'\n tp_nom = {tp}\n r = {r}\n t_guess = {t_guess}')
-                            print(f' Sample call:\n  xy2tp.xy2tp({xy_test},{r},{ranges},{t_guess},{xy2tp.default_t_guess_tol})')
-                        assert error < tol 
-        
+                    xy_test = xy2tp.tp2xy(tp_nom, r)
+                    t_guess = tp_nom[0] + sign*t_guess_err
+                    check_xy2tp(tp_nom, xy_test, r, ranges, t_guess, xy2tp.default_t_guess_tol)
+        # specific cases known to have caused issues in the past
+        tp_nom = [(2.27556, 173.80926),]
+        xy_test = [(0.00464, 0.32395),]
+        r = [[3.0, 3.0],]
+        ranges = [[[-200.0, 200.0], [-3.6253, 185.0]],]
+        t_guess = [-183.946,]
+        t_guess_tol = [30,]
+        for i in range(len(xy_test)):
+            check_xy2tp(tp_nom[i], xy_test[i], r[i], ranges[i], t_guess[i], t_guess_tol[i])
+            
+
 if __name__ == '__main__':
     unittest.main()
     
