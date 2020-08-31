@@ -202,7 +202,7 @@ def calc_errors(table):
             new.rename_column(key, f'{key}_MEAS')
     meas_x, meas_y = new['PTL_X_MEAS'], new['PTL_Y_MEAS']
     targ_x, targ_y = pos2ptl.int2ptl(t_int=new['POS_T'], p_int=new['POS_P'],
-                                     r1=new['LENGTH_R1'], r2=new['LENGTH_R1'],
+                                     r1=new['LENGTH_R1'], r2=new['LENGTH_R2'],
                                      t_offset=new['OFFSET_T'], p_offset=new['OFFSET_P'],
                                      x_offset=new['OFFSET_X'], y_offset=new['OFFSET_Y'])
     is_submove0 = new['SUBMOVE'] == 0
@@ -219,6 +219,20 @@ def calc_errors(table):
     new['ERR_X'] = meas_x - targ_x
     new['ERR_Y'] = meas_y - targ_y
     new['ERR_XY'] = np.hypot(new['ERR_X'], new['ERR_Y'])
+    return new
+
+def calc_loc(table):
+    '''Adds columns for "LOC" coordinates, matching any prefixed with "PTL".
+    '''
+    new = table.copy()
+    suffixes = [col.split('PTL_X')[1] for col in table.columns if col.find('PTL_X') == 0]
+    for suffix in suffixes:
+        x_flat, y_flat = pos2ptl.ptl2flat(x_ptl=new['PTL_X' + suffix],
+                                          y_ptl=new['PTL_Y' + suffix])
+        x_loc = pos2ptl.flat2loc(x_flat, new['OFFSET_X'])
+        y_loc = pos2ptl.flat2loc(y_flat, new['OFFSET_Y'])
+        new['LOC_X' + suffix] = x_loc
+        new['LOC_Y' + suffix] = y_loc
     return new
 
 def analyze_one_pos(table):
@@ -362,7 +376,7 @@ def summary_stats_str(table, submove='all'):
             s += left_cell(prefix + name) + row_str(row_data, scale=1000)
             prefix = '... '
     row_widths = [len(x) for x in s.split('\n')]
-    header = f'Positioning errors summary (units={unit}):'
+    header = f'Positioning errors summary (distance units = {unit}):'
     s = format(header, f'<{max(row_widths)}') + '\n' + s
     return s
 
@@ -504,3 +518,4 @@ if __name__ == '__main__':
     else:
         with multiprocessing.Pool(processes=args.n_processes_max) as pool:
             pass
+    results = calc_loc(results)
