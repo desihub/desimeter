@@ -255,7 +255,7 @@ def analyze_one_pos(table):
     stats = Table(stats_dict)
     return new, stats, msg
 
-def summarize_stats(table, sigmas=[1,2,3,4,5,math.inf], stat_names=['max', 'rms', 'median']):
+def summarize_stats(table, sigmas=[1,2,3,4,5,math.inf], stat_names=['max', 'min', 'median', 'rms']):
     '''Generate summary statistics for each submove, gathering positioners into
     error quantiles at the specified "sigma" levels.
     
@@ -398,31 +398,21 @@ def bigchart(table, summary_stats=None, extra_note=''):
     '''
     limits = None
     paths = []
-    submoves = sorted(set(table['SUBMOVE']))
-    
-    # testrows = table[0:2].copy()
-    # testrows['PTL_X_TARG'][0] = 420
-    # testrows['PTL_Y_TARG'][0] = 420
-    # testrows['PTL_X_TARG'][1] = -420
-    # testrows['PTL_Y_TARG'][1] = -420
-    # table = vstack([table, testrows])
-    
+    submoves = sorted(set(table['SUBMOVE']))    
     for submove in submoves:
         selection = table['SUBMOVE'] == submove
         selection = [selection[i] for i in range(len(table))]
         assert any(selection)
         p = table[selection]
         if submoves.index(submove) == 0:
-            data_width_mm = get_span(p, 'PTL_X')
-            data_height_mm = get_span(p, 'PTL_Y')
-            plot_width_in = 10
-            plot_height_in = 8
-            dots_per_mm = 10
-            dpi = max(data_width_mm * dots_per_mm / plot_width_in,
-                      data_height_mm * dots_per_mm / plot_height_in)
-            dpi = int(np.ceil(dpi))
-            dpi = max(dpi, 150)
-        fig = init_plot(figsize=(plot_width_in, plot_height_in), dpi=dpi)
+            dpi = 200
+            min_plot_dims = (10, 8)
+            dots_per_mm = 12
+            data_width_mm = [get_span(p, 'PTL_X'), get_span(p, 'PTL_Y')]
+            plot_width_in = [mm * dots_per_mm / dpi for mm in data_width_mm]
+            plot_width_in = [max(plot_width_in[i], min_plot_dims[i]) for i in [0,1]]
+            plot_width_in[1] += 2
+        fig = init_plot(figsize=tuple(plot_width_in), dpi=dpi)
         for suffix, desc in {'TARG':'target', 'MEAS':'measured'}.items():
             shape = 'o' if suffix == 'TARG' else '+'
             plt.plot(p[f'PTL_X_{suffix}'], p[f'PTL_Y_{suffix}'], shape, label=desc)
@@ -442,7 +432,7 @@ def bigchart(table, summary_stats=None, extra_note=''):
         expids_str = '-'.join([str(x) for x in expids])
         dates = {datetime.split(' ')[0] for datetime in p['DATE']}
         dates = sorted(dates)
-        vert_space = ''.join(['\n']*4)
+        vert_space = ''.join(['\n']*5)
         note = vert_space
         note += f'Exposure ID(s): {expids}\n'
         note += f'Submove: {submove}\n'
@@ -450,7 +440,7 @@ def bigchart(table, summary_stats=None, extra_note=''):
         note += f'Date analyzed: {Time.now().iso.split(" ")[0]}\n'
         note += meta_str(summary_stats)
         note += extra_note
-        strip_final_return = lambda s: s[:-1] if s[:-1] == '\n' else s
+        strip_final_return = lambda s: s[:-1] if s[-1] == '\n' else s
         note = strip_final_return(note)
         note_fontsize = 'small'
         plt.annotate(note, xy=(0.01, 0.0), xycoords='axes fraction',
@@ -471,8 +461,8 @@ def bigchart(table, summary_stats=None, extra_note=''):
             plt.ylim(limits['y'])
         limits = {'x': plt.xlim(), 'y': plt.ylim()}
         fig.tight_layout()
-        path = os.path.join(save_dir, f'expid_{expids_str}_submove_{submove}.png')
-        save_and_close_plot(fig, path)
+        path = os.path.join(save_dir, f'expid_{expids_str}_submove_{submove}')
+        save_and_close_plot(fig, path + '.png')
         paths.append(path)
     return paths
 
