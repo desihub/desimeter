@@ -42,6 +42,7 @@ infiles = [os.path.realpath(p) for p in infiles]
 save_dir = os.path.realpath(args.outdir)
 if not os.path.isdir(save_dir):
     os.path.os.makedirs(save_dir)
+img_format = 'png'  # for plot outputs
 
 # data identifiers and keywords
 required = {'PETAL_ID', 'POS_ID', 'POS_MOVE_INDEX', 'POS_T', 'POS_P', 'PTL_X', 'PTL_Y',
@@ -452,18 +453,37 @@ def get_summary_stats_str(table, submove='all'):
     s = format(header, f'<{max(row_widths)}') + '\n' + s
     return s
 
-def init_plot(figsize=(8,6), dpi=150):
-    '''Initialize a plot. Returns figure handle.'''
+default_plot_limits = {'xfig': 10, 'yfig': 8, 'dpi': 200}  # xfig and yfig are in inches
+
+def init_plot(limits=default_plot_limits):
+    '''Initialize a plot.
+    INPUT:  limits ... dict with keys 'xfig', 'yfig', 'dpi'
+    OUTPUT: Returns figure handle
+    '''
     plt.ioff()
-    fig = plt.figure(figsize=figsize, dpi=dpi)
+    fig = plt.figure(figsize=(limits['xfig'], limits['yfig']), dpi=limits['dpi'])
     plt.clf()
     return fig
 
-def save_and_close_plot(fig, savepath):
-    '''Save plot to disk and close. Argue the figure handle to be closed, and the
-    path where to save the image. Extension determines image format.'''
+def finalize_plot(savepath, limits={}):
+    '''Updates plot limits (if necessary) and saves current plot to disk. Then
+    closes it.
+    
+    INPUT:  savepath ... where to save the image. Extension determines image format
+            limits ... dict that optionally includes keys 'xlim', 'ylim'
+            
+    OUTPUT: updated limits dict, containing entries for the current plot xlim and ylim
+    '''
+    fig = plt.gcf()
+    if 'xlim' in limits:
+        plt.xlim(limits['xlim'])
+        plt.ylim(limits['ylim'])
+    limits['xlim'] = plt.xlim()
+    limits['ylim'] = plt.ylim()
+    fig.tight_layout()
     plt.savefig(savepath, bbox_inches='tight')
     plt.close(fig)
+    return limits
     
 def get_span(table, prefix='PTL_X'):
     '''Returns max - min for all measured and target 'PTL_X' or 'PTL_Y' data in table.'''
@@ -494,10 +514,27 @@ def get_submove_description(table, submove):
     s += f'Date analyzed: {Time.now().iso.split(" ")[0]}'
     return s
 
-def bigchart(table, note1='', note2='', limits=None):
+def place_notes(note1='', note2=''):
+    '''Puts note strings on the current plot.
+    '''
+    note_fontsize = 'small'
+    vert_space = ''.join(['\n']*5)
+    note_kwargs = {'xycoords': 'axes fraction', 'fontfamily': 'monospace',
+                   'fontsize': note_fontsize, 'verticalalignment': 'top'}
+    for note, special in {note1: {'xy': (0.01, 0.0), 'horizontalalignment': 'left'},
+                          note2: {'xy': (0.99, 0.0), 'horizontalalignment': 'right'},
+                          }.items():
+        note = vert_space + note
+        note = strip_final_return(note)
+        note_kwargs.update(special)
+        if note:
+            plt.annotate(note, **note_kwargs)
+
+def bigchart(table, note1='', note2='', limits={}):
     '''Plot all targets and measurements for positioners on one big chart.
     
-    INPUT:  table ... astropy table including
+    INPUT:  table ... astropy table including 'PTL_X_MEAS', 'PTL_Y_MEAS', 'PTL_X_TARG',
+                      'PTL_Y_TARG', 'POS_ID', 'DEVICE_LOC', 'EXPOSURE_ID'
             note1 ... optional multi-line string, to be printed at bottom of chart
             note2 ... optional multi-line string, to be printed at bottom of chart
             limits ... optionally can force plot limits (e.g. to homogenize plots
@@ -505,9 +542,9 @@ def bigchart(table, note1='', note2='', limits=None):
                        'ylim', 'xfig', 'yfig', and 'dpi'. xfig and yfig are in inches
             
     OUTPUT: path ... path to output plot file
-            limits ... 2-tuple giving the (x,y) limits of the plot
+            limits ... dict of same format as described above
     '''
-    if limits == None:
+    if not limits:
         dpi = 200
         min_plot_dims = (10, 8)
         dots_per_mm = 12
@@ -516,7 +553,7 @@ def bigchart(table, note1='', note2='', limits=None):
         fig_size_in = [max(fig_size_in[i], min_plot_dims[i]) for i in [0,1]]
         fig_size_in[1] += 2
         limits = {'xfig': fig_size_in[0], 'yfig': fig_size_in[1], 'dpi':dpi}
-    fig = init_plot(figsize=(limits['xfig'], limits['yfig']), dpi=limits['dpi'])
+    init_plot(limits)
     for suffix, desc in {'TARG':'target', 'MEAS':'measured'}.items():
         shape = 'o' if suffix == 'TARG' else '+'
         plt.plot(table[f'PTL_X_{suffix}'], table[f'PTL_Y_{suffix}'], shape, label=desc)
@@ -532,39 +569,38 @@ def bigchart(table, note1='', note2='', limits=None):
                      fontfamily='monospace', fontsize='small')
     plt.xlabel('PTL_X (mm)')
     plt.ylabel('PTL_Y (mm)')
-    note_fontsize = 'small'
-    vert_space = ''.join(['\n']*5)
-    note_kwargs = {'xycoords': 'axes fraction', 'fontfamily': 'monospace',
-                   'fontsize': note_fontsize, 'verticalalignment': 'top'}
-    for note, special in {note1: {'xy': (0.01, 0.0), 'horizontalalignment': 'left'},
-                          note2: {'xy': (0.99, 0.0), 'horizontalalignment': 'right'},
-                          }.items():
-        note = vert_space + note
-        note = strip_final_return(note)
-        note_kwargs.update(special)
-        plt.annotate(note, **note_kwargs)
+    place_notes(note1, note2)
     plt.legend(loc='upper left')
     plt.axis('equal')
-    if 'xlim' in limits:
-        plt.xlim(limits['xlim'])
-        plt.ylim(limits['ylim'])
-    limits['xlim'] = plt.xlim()
-    limits['ylim'] = plt.ylim()
-    fig.tight_layout()
     expids_str = get_expids_str(table)
-    path = os.path.join(save_dir, f'expid_{expids_str}_submove_{submove}')
-    save_and_close_plot(fig, path + '.png')
+    path = os.path.join(save_dir, f'expid_{expids_str}_chart_submove_{submove}.' + img_format)
+    limits = finalize_plot(path, limits)
     return path, limits
 
-def histograms(table):
-    '''For each submove, make a histogram of positioning errors.
+def histogram(table, note1, note2, limits):
+    '''Make a histogram of positioning errors.
     
-    INPUT:  table ... astropy table of targets and measured positons, as generated by analyze()
-            stats ... optional astropy table of summary statistics, as generated by summary_stats()
-            extra_note ... optional multi-line string to include in plot annotations
+    INPUT:  table ... astropy table including 'ERR_XY', 'PTL_Y_MEAS', 'PTL_X_TARG',
+                      'PTL_Y_TARG', 'POS_ID', 'DEVICE_LOC', 'EXPOSURE_ID'
+            note1 ... optional multi-line string, to be printed at bottom of chart
+            note2 ... optional multi-line string, to be printed at bottom of chart
+            limits ... optionally can force plot limits (e.g. to homogenize plots
+                       for multiple submoves). format is a dict with keys: 'xlim',
+                       'ylim', 'xfig', 'yfig', and 'dpi'. xfig and yfig are in inches
             
-    OUTPUT: paths ... paths to output plot file(s)
+    OUTPUT: path ... path to output plot file
+            limits ... dict of same format as described above
     '''
+    if limits == None:
+        limits = default_plot_limits
+    init_plot(limits)
+    
+    place_notes(note1, note2)
+    plt.legend(loc='upper left')
+    expids_str = get_expids_str(table)
+    path = os.path.join(save_dir, f'expid_{expids_str}_hist_submove_{submove}.' + img_format)
+    limits = finalize_plot(path, limits)
+    return path, limits
 
 def strip_final_return(string):
     '''Remove final carriage return if present.'''
@@ -604,14 +640,14 @@ if __name__ == '__main__':
     stats = vstack(stats_list)
     summary = summarize_stats(moves)
     submoves = get_submove_ids(moves)
-    plot_limits = None
+    chart_limits = {}
     for submove in submoves:
         selection = get_submove_rows(moves, submove)
         table = moves[selection]
         note1 = get_submove_description(table, submove)
         note1 += '\n' + meta_str(summary)
         note2 = get_summary_stats_str(summary, submove)
-        path, plot_limits = bigchart(table, note1, note2, plot_limits)
+        path, chart_limits = bigchart(table, note1, note2, chart_limits)
         print(f'Saved big chart for submove {submove} to {path}')
     expids_str = 'expid_' + get_expids_str(moves)
     moves_path = os.path.join(save_dir, f'{expids_str}_moves.csv')
