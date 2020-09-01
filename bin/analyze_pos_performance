@@ -674,12 +674,16 @@ if __name__ == '__main__':
         print(f'Saved histogram for submove {submove} to {path}')
     expids_str = 'expid_' + get_expids_str(moves)
     moves_path = os.path.join(save_dir, f'{expids_str}_moves.csv')
-    stats_path   = os.path.join(save_dir, f'{expids_str}_stats_by_positioner.csv')
-    summary_path = os.path.join(save_dir, f'{expids_str}_stats_summary.csv')
+    stats_path = os.path.join(save_dir, f'{expids_str}_stats_by_positioner.csv')
+    summary_path_base = os.path.join(save_dir, f'{expids_str}_stats_summary')
     moves.write(moves_path, overwrite=True)
-    print('Saved move-by-move data table to {results_path}')
+    print(f'Saved move-by-move data table to {moves_path}')
     stats.write(stats_path, overwrite=True)
-    print('Saved positioner-by-positioner performance stats to {stats_path}')
-    summary.write(summary_path, overwrite=True)
-    print('Saved overall summary stats to {summary_path}')
+    print(f'Saved positioner-by-positioner performance stats to {stats_path}')
+    ecsv_path = summary_path_base + '.ecsv'
+    summary.write(ecsv_path, overwrite=True, delimiter=',')
+    print(f'Saved overall summary stats + metadata to {ecsv_path}')
+    csv_path = summary_path_base + '.csv'
+    summary.write(csv_path, overwrite=True)
+    print(f'Saved overall summary stats (no metadata) to {csv_path}')
     
