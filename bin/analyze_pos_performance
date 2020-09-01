@@ -249,6 +249,18 @@ def detect_num_fvc_images(table):
     num_images = [null_num_images] + np.diff(new['EXPOSURE_ITER']).tolist()
     new['NUM_IMAGES'] = num_images
     return new
+
+def calc_target_radii(table):
+    '''Calculates local radius of each target from its positioner's center.
+    
+    INPUT:  table ... astropy table including columns 'LOC_X_TARG' and 'LOC_Y_TARG'
+    
+    OUTPUT: copy of table, adding column 'TARGET_RADIUS'
+    '''
+    new = table.copy()
+    radii = np.hypot(table['LOC_X_TARG'], table['LOC_Y_TARG'])
+    new['TARGET_RADIUS'] = radii
+    return new
     
 def analyze_one_pos(table):
     '''Analyze the data for one table, containing one positioner's data.
@@ -272,8 +284,11 @@ def analyze_one_pos(table):
     posid = posids.pop()
     new = identify_submoves(new)
     new = calc_errors(new)
+    new = calc_loc(new)
+    new = calc_target_radii(new)
     new = detect_num_fvc_images(new)
-    stats_dict = {name:[] for name in ['POS_ID', 'SUBMOVE', 'N_TARGETS'] + list(stat_funcs)}
+    stats_cols = ['POS_ID', 'SUBMOVE', 'N_TARGETS'] + list(stat_funcs)
+    stats_dict = {name:[] for name in stats_cols}
     submoves = sorted(set(new['SUBMOVE']))
     for submove in submoves:
         selection = new['SUBMOVE'] == submove
@@ -286,13 +301,13 @@ def analyze_one_pos(table):
     stats = Table(stats_dict)
     return new, stats, msg
 
-def summarize_stats(table, sigmas=[1,2,3,4,5,math.inf], stat_names=['max', 'min', 'median', 'rms']):
+def summarize_stats(table, sigmas=[1,2,3,4,5,math.inf], stat_names=stat_funcs.keys()):
     '''Generate summary statistics for each submove, gathering positioners into
     error quantiles at the specified "sigma" levels.
     
     INPUTS:  table ... astropy table with data for one or many positioners. The table
-                       must include columns for 'SUBMOVE', 'POS_ID', 'ERR_XY', and
-                       'NUM_IMAGES'
+                       must include columns for 'SUBMOVE', 'POS_ID', 'ERR_XY',
+                       'NUM_IMAGES', and 'TARGET_RADIUS'
                        
              sigmas ... list of ints giving which sigma quantiles to gather the data
                         into. In other words, sigma=1 corresponds to 63.2% quantile,
@@ -313,10 +328,15 @@ def summarize_stats(table, sigmas=[1,2,3,4,5,math.inf], stat_names=['max', 'min'
     new_columns = ['SUBMOVE', 'SIGMA', 'QUANTILE', 'N_TARGETS'] + list(uppercase_names.values())
     new_dict = {key:[] for key in new_columns}
     quantiles = {s: 1 - math.exp(-s) for s in sigmas}
+    max_radius = -math.inf
+    min_radius = math.inf
     for submove in submoves:
         selection = table['SUBMOVE'] == submove
         err = table['ERR_XY'][selection].tolist()
         err = np.sort(err)
+        radii = table['TARGET_RADIUS'][selection].tolist()
+        max_radius = max(max_radius, max(radii))
+        min_radius = min(min_radius, min(radii))
         for sigma in sigmas:
             quantile = quantiles[sigma]
             cutoff = np.quantile(err, quantile, interpolation='midpoint')
@@ -340,6 +360,8 @@ def summarize_stats(table, sigmas=[1,2,3,4,5,math.inf], stat_names=['max', 'min'
     new.meta['n_positioners'] = len(set(table['POS_ID']))
     new.meta['n_targets'] = len([x for x in table['SUBMOVE'] == sorted(submoves)[0] if x])
     new.meta['num_images'] = num_images
+    new.meta['max_radius'] = max_radius
+    new.meta['min_radius'] = min_radius
     return new
 
 def meta_str(table):
@@ -347,10 +369,15 @@ def meta_str(table):
     '''
     alts = {'n_positioners': 'Num positioners',
             'n_targets': 'Total num targets',
-            'num_images': 'Num images per meas'}
+            'num_images': 'Num images per meas',
+            'max_radius': 'Max target radius (mm)',
+            'min_radius': 'Min target radius (mm)'}
+    formats = {'max_radius': '.3f', 'min_radius': '.3f'}
     s = ''
     for key, val in table.meta.items():
         name = alts[key] if key in alts else key
+        if key in formats:
+            val = format(val, formats[key])
         s += f'{name}: {val}\n'
     return s
 
@@ -548,7 +575,6 @@ if __name__ == '__main__':
     paths = bigchart(results, summary_stats=summary_stats, extra_note='')
     for path in paths:
         print(f'Saved big chart to {path}')
-    results = calc_loc(results)
     expids_str = 'expid_' + get_expids_str(results)
     results_path = os.path.join(save_dir, f'{expids_str}_moves.csv')
     stats_path   = os.path.join(save_dir, f'{expids_str}_stats_by_positioner.csv')
