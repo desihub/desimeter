@@ -405,9 +405,6 @@ def summary_stats_str(table, submove='all'):
     s = format(header, f'<{max(row_widths)}') + '\n' + s
     return s
 
-def histogram(stats_table):
-    pass
-
 def init_plot(figsize=(8,6), dpi=150):
     '''Initialize a plot. Returns figure handle.'''
     plt.ioff()
@@ -511,6 +508,9 @@ def bigchart(table, summary_stats=None, extra_note=''):
         save_and_close_plot(fig, path + '.png')
         paths.append(path)
     return paths
+
+def histogram(something):
+    pass
 
 # read in the data files
 input_data = {}
