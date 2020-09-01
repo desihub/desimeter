@@ -24,8 +24,11 @@ import numpy as np
 import math
 from astropy.table import Table, vstack
 from astropy.time import Time
+from astropy.visualization import hist
+from astropy.stats import knuth_bin_width
 import desimeter.transform.pos2ptl as pos2ptl
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FormatStrFormatter
 
 # paths
 infiles = []
@@ -453,7 +456,7 @@ def get_summary_stats_str(table, submove='all'):
     s = format(header, f'<{max(row_widths)}') + '\n' + s
     return s
 
-default_plot_limits = {'xfig': 10, 'yfig': 8, 'dpi': 200}  # xfig and yfig are in inches
+default_plot_limits = {'xfig': 10, 'yfig': 8, 'dpi': 150}  # xfig and yfig are in inches
 
 def init_plot(limits=default_plot_limits):
     '''Initialize a plot.
@@ -470,16 +473,19 @@ def finalize_plot(savepath, limits={}):
     closes it.
     
     INPUT:  savepath ... where to save the image. Extension determines image format
-            limits ... dict that optionally includes keys 'xlim', 'ylim'
+            limits ... dict that optionally includes keys 'xlim', 'ylim' for an xy plot
+                       or 'xlim', 'bins' for a histogram
             
     OUTPUT: updated limits dict, containing entries for the current plot xlim and ylim
     '''
     fig = plt.gcf()
     if 'xlim' in limits:
         plt.xlim(limits['xlim'])
+    if 'ylim' in limits:
         plt.ylim(limits['ylim'])
     limits['xlim'] = plt.xlim()
-    limits['ylim'] = plt.ylim()
+    if 'bins' not in limits:  # i.e. skip this if it's a histogram
+        limits['ylim'] = plt.ylim()
     fig.tight_layout()
     plt.savefig(savepath, bbox_inches='tight')
     plt.close(fig)
@@ -509,8 +515,8 @@ def get_submove_description(table, submove):
     expids_str = get_expids_str(table[selection])
     s = ''
     s += f'Submove: {submove}\n'
-    s += f'Exposure ID(s): {expids_str}\n'
-    s += f'Date(s) measured: {dates}\n'
+    s += f'Exposure ID{"s" if "-" in expids_str else ""}: {expids_str}\n'
+    s += f'Date{"s" if len(dates) > 1 else ""} measured: {dates if len(dates) > 1 else dates[0]}\n'
     s += f'Date analyzed: {Time.now().iso.split(" ")[0]}'
     return s
 
@@ -521,7 +527,7 @@ def place_notes(note1='', note2=''):
     vert_space = ''.join(['\n']*5)
     note_kwargs = {'xycoords': 'axes fraction', 'fontfamily': 'monospace',
                    'fontsize': note_fontsize, 'verticalalignment': 'top'}
-    for note, special in {note1: {'xy': (0.01, 0.0), 'horizontalalignment': 'left'},
+    for note, special in {note1: {'xy': (0.00, 0.0), 'horizontalalignment': 'left'},
                           note2: {'xy': (0.99, 0.0), 'horizontalalignment': 'right'},
                           }.items():
         note = vert_space + note
@@ -577,26 +583,40 @@ def bigchart(table, note1='', note2='', limits={}):
     limits = finalize_plot(path, limits)
     return path, limits
 
-def histogram(table, note1, note2, limits):
+def histogram(table, note1='', note2='', limits={}):
     '''Make a histogram of positioning errors.
     
-    INPUT:  table ... astropy table including 'ERR_XY', 'PTL_Y_MEAS', 'PTL_X_TARG',
-                      'PTL_Y_TARG', 'POS_ID', 'DEVICE_LOC', 'EXPOSURE_ID'
+    INPUT:  table ... astropy table including 'ERR_XY' and 'SUBMOVE'
             note1 ... optional multi-line string, to be printed at bottom of chart
             note2 ... optional multi-line string, to be printed at bottom of chart
             limits ... optionally can force plot limits (e.g. to homogenize plots
                        for multiple submoves). format is a dict with keys: 'xlim',
-                       'ylim', 'xfig', 'yfig', and 'dpi'. xfig and yfig are in inches
+                       'bins', 'xfig', 'yfig', and 'dpi'. xfig and yfig are in inches
             
     OUTPUT: path ... path to output plot file
             limits ... dict of same format as described above
     '''
-    if limits == None:
-        limits = default_plot_limits
+    if not limits:
+        limits = {'xfig': 9.5, 'yfig': 7, 'dpi': 200}
     init_plot(limits)
-    
-    place_notes(note1, note2)
-    plt.legend(loc='upper left')
+    submoves = get_submove_ids(table)
+    submoves_str = f'SUBMOVE{"S " + str(submoves) if len(submoves) > 1 else " " + str(submoves[0])}'
+    scale = 1000
+    n_bins_min = 20
+    data = table['ERR_XY'] * scale
+    if 'bins' in limits:
+        bins = limits['bins']
+    else:
+        bins = knuth_bin_width(data, return_bins=True)[1]
+        bins = max(len(bins), n_bins_min)
+    _, bins, _ = hist(data, bins=bins, max_bins=1000, label=submoves_str)
+    limits['bins'] = bins
+    mean = np.mean(data)
+    plt.plot([mean, mean], plt.ylim(), 'r--', label='mean')
+    plt.xlabel('XY ERROR (um)')
+    plt.legend(loc='upper right')
+    plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
+    place_notes(note1, note2)    
     expids_str = get_expids_str(table)
     path = os.path.join(save_dir, f'expid_{expids_str}_hist_submove_{submove}.' + img_format)
     limits = finalize_plot(path, limits)
@@ -641,6 +661,7 @@ if __name__ == '__main__':
     summary = summarize_stats(moves)
     submoves = get_submove_ids(moves)
     chart_limits = {}
+    hist_limits = {}
     for submove in submoves:
         selection = get_submove_rows(moves, submove)
         table = moves[selection]
@@ -649,6 +670,8 @@ if __name__ == '__main__':
         note2 = get_summary_stats_str(summary, submove)
         path, chart_limits = bigchart(table, note1, note2, chart_limits)
         print(f'Saved big chart for submove {submove} to {path}')
+        path, hist_limits = histogram(table, note1, note2, hist_limits)
+        print(f'Saved histogram for submove {submove} to {path}')
     expids_str = 'expid_' + get_expids_str(moves)
     moves_path = os.path.join(save_dir, f'{expids_str}_moves.csv')
     stats_path   = os.path.join(save_dir, f'{expids_str}_stats_by_positioner.csv')
