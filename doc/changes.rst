@@ -2,10 +2,31 @@
 desimeter change Log
 ====================
 
-0.5.1 (unreleased)
+0.5.2 (unreleased)
 ------------------
 
 * No changes yet
+
+0.5.1 (2020-09-01)
+------------------
+
+* Add xytest analysis code [PR `#119`_]
+* Fix xy2tp phi wrapping error [PR `#118`_]
+* Fix bug when setting IDs to positioners for petal 0 [PR `#117`_]
+* Add Front illuminated focal plane "bright image" analysis code [PR `#116`_]
+* Add robustness to NaN in coordinates [PR `#115`_]
+* Update GFA metrology using onsky data [PR `#113`_]
+* Improve xy2tp [PR `#112`_]
+* Add ptl2int convenience wrapper function [PR `#111`_]
+
+.. _`#111`: https://github.com/desihub/desimeter/pull/111
+.. _`#112`: https://github.com/desihub/desimeter/pull/112
+.. _`#113`: https://github.com/desihub/desimeter/pull/113
+.. _`#115`: https://github.com/desihub/desimeter/pull/115
+.. _`#116`: https://github.com/desihub/desimeter/pull/116
+.. _`#117`: https://github.com/desihub/desimeter/pull/117
+.. _`#118`: https://github.com/desihub/desimeter/pull/118
+.. _`#119`: https://github.com/desihub/desimeter/pull/119
 
 0.5.0 (2020-08-05)
 ------------------
