@@ -235,6 +235,21 @@ def calc_loc(table):
         new['LOC_Y' + suffix] = y_loc
     return new
 
+null_num_images = -1
+def detect_num_fvc_images(table):
+    '''Where possible, identifies how many images were taken per measurement.
+    
+    INPUT:  table ... astropy table including columns 'EXPOSURE_ID' and 'EXPOSURE_ITER'
+    
+    OUTPUT: copy of table, with new column NUM_IMAGES, whose values are ints. Where
+            unknown, the value will be -1
+    '''
+    new = table.copy()
+    new.sort(keys=['EXPOSURE_ID', 'EXPOSURE_ITER'])
+    num_images = [null_num_images] + np.diff(new['EXPOSURE_ITER']).tolist()
+    new['NUM_IMAGES'] = num_images
+    return new
+    
 def analyze_one_pos(table):
     '''Analyze the data for one table, containing one positioner's data.
     
@@ -257,13 +272,15 @@ def analyze_one_pos(table):
     posid = posids.pop()
     new = identify_submoves(new)
     new = calc_errors(new)
-    stats_dict = {name:[] for name in ['POS_ID', 'SUBMOVE'] + list(stat_funcs)}
+    new = detect_num_fvc_images(new)
+    stats_dict = {name:[] for name in ['POS_ID', 'SUBMOVE', 'N_TARGETS'] + list(stat_funcs)}
     submoves = sorted(set(new['SUBMOVE']))
     for submove in submoves:
-        stats_dict['POS_ID'].append(posid)
-        stats_dict['SUBMOVE'].append(submove)
         selection = new['SUBMOVE'] == submove
         err_xy = new['ERR_XY'][selection].tolist()
+        stats_dict['POS_ID'].append(posid)
+        stats_dict['SUBMOVE'].append(submove)
+        stats_dict['N_TARGETS'].append(len(err_xy))
         for name, func in stat_funcs.items():
             stats_dict[name].append(func(err_xy))
     stats = Table(stats_dict)
@@ -274,7 +291,8 @@ def summarize_stats(table, sigmas=[1,2,3,4,5,math.inf], stat_names=['max', 'min'
     error quantiles at the specified "sigma" levels.
     
     INPUTS:  table ... astropy table with data for one or many positioners. The table
-                       must include columns for 'SUBMOVE', 'POS_ID', and 'ERR_XY'.
+                       must include columns for 'SUBMOVE', 'POS_ID', 'ERR_XY', and
+                       'NUM_IMAGES'
                        
              sigmas ... list of ints giving which sigma quantiles to gather the data
                         into. In other words, sigma=1 corresponds to 63.2% quantile,
@@ -312,17 +330,24 @@ def summarize_stats(table, sigmas=[1,2,3,4,5,math.inf], stat_names=['max', 'min'
                 func = stat_funcs[name]
                 stat_result = func(these_err)
                 key = uppercase_names[name]
-                new_dict[key].append(stat_result)
+                new_dict[key].append(stat_result)    
+    num_images = set(table['NUM_IMAGES'])
+    if null_num_images in num_images:
+        num_images.remove(null_num_images)
+    if len(num_images) == 1:
+        num_images = num_images.pop()
     new = Table(new_dict)
     new.meta['n_positioners'] = len(set(table['POS_ID']))
     new.meta['n_targets'] = len([x for x in table['SUBMOVE'] == sorted(submoves)[0] if x])
+    new.meta['num_images'] = num_images
     return new
 
 def meta_str(table):
     '''Produces a multi-line string representation of meta data in table.
     '''
     alts = {'n_positioners': 'Num positioners',
-            'n_targets': 'Total num targets'}
+            'n_targets': 'Total num targets',
+            'num_images': 'Num images per meas'}
     s = ''
     for key, val in table.meta.items():
         name = alts[key] if key in alts else key
@@ -401,6 +426,14 @@ def get_span(table, prefix='PTL_X'):
     vec = table[f'{prefix}_TARG'].tolist() + table[f'{prefix}_MEAS'].tolist()
     return max(vec) - min(vec)
 
+def get_expids_str(table):
+    '''Returns a string representing the set of unique 'EXPOSURE_ID' in the astropy
+    table. Suitable for use in filenames.
+    '''
+    expids = sorted(set(table['EXPOSURE_ID']))
+    expids_str = '-'.join([str(x) for x in expids])
+    return expids_str
+
 def bigchart(table, summary_stats=None, extra_note=''):
     '''Plot all targets and measurements for positioners on one big chart.
     
@@ -442,13 +475,12 @@ def bigchart(table, summary_stats=None, extra_note=''):
                          fontfamily='monospace', fontsize='small')
         plt.xlabel('PTL_X (mm)')
         plt.ylabel('PTL_Y (mm)')
-        expids = sorted(set(p['EXPOSURE_ID']))
-        expids_str = '-'.join([str(x) for x in expids])
         dates = {datetime.split(' ')[0] for datetime in p['DATE']}
         dates = sorted(dates)
+        expids_str = get_expids_str(p)
         vert_space = ''.join(['\n']*5)
         note = vert_space
-        note += f'Exposure ID(s): {expids}\n'
+        note += f'Exposure ID(s): {expids_str}\n'
         note += f'Submove: {submove}\n'
         note += f'Date(s) measured: {dates}\n'
         note += f'Date analyzed: {Time.now().iso.split(" ")[0]}\n'
@@ -512,10 +544,19 @@ if __name__ == '__main__':
             store_result(*result)
     results = vstack(results_list)
     stats = vstack(stats_list)
-    if single_process:
-        summary_stats = summarize_stats(results)
-        paths = bigchart(results, summary_stats=summary_stats, extra_note='')
-    else:
-        with multiprocessing.Pool(processes=args.n_processes_max) as pool:
-            pass
+    summary_stats = summarize_stats(results)
+    paths = bigchart(results, summary_stats=summary_stats, extra_note='')
+    for path in paths:
+        print(f'Saved big chart to {path}')
     results = calc_loc(results)
+    expids_str = 'expid_' + get_expids_str(results)
+    results_path = os.path.join(save_dir, f'{expids_str}_moves.csv')
+    stats_path   = os.path.join(save_dir, f'{expids_str}_stats_by_positioner.csv')
+    summary_path = os.path.join(save_dir, f'{expids_str}_stats_summary.csv')
+    results.write(results_path, overwrite=True)
+    print('Saved move-by-move data table to {results_path}')
+    stats.write(stats_path, overwrite=True)
+    print('Saved positioner-by-positioner performance stats to {stats_path}')
+    summary_stats.write(summary_path, overwrite=True)
+    print('Saved overall summary stats to {summary_path}')
+    
