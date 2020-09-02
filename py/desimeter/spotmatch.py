@@ -290,8 +290,7 @@ def spotmatch(xpix,ypix,expected_x_fp=None,expected_y_fp=None,expected_location=
 
 
     print(cmd)
-    parts=cmd.split(" ")
-    subprocess.call(parts)
+    subprocess.call(cmd.split(" "),shell=False)
 
     location=[]
     xpix=[]
