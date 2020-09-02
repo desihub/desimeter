@@ -90,6 +90,9 @@ class FVC2FP(object):
         params['zbcoeffs'] = list(self.zbcoeffs)
         return json.dumps(params)
 
+    def __str__(self) :
+        return self.tojson()
+
     @classmethod
     def fromjson(cls, jsonstring):
         tx = cls()
@@ -131,7 +134,7 @@ class FVC2FP(object):
             self.metrology = load_metrology()
 
         #- Trim spots to just fiducial spots (not posioners, not unmatchs spots)
-        ii = (spots['LOCATION']>0) & (spots['PINHOLE_ID']>0)
+        ii = (spots['LOCATION']>=0) & (spots['PINHOLE_ID']>0)
         fidspots = spots[ii]
 
         #- trim metrology to just the ones that have spots
