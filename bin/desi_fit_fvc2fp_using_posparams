@@ -23,6 +23,7 @@ parser.add_argument('--zbpolids', type=str, default="0,1,2,3,4,5,6,9,20,27,28,29
 parser.add_argument('--other-metrology', type=str, default=None, required = False,
                     help = 'use other metrology table')
 parser.add_argument('--plot',action='store_true',help="plot")
+parser.add_argument('--max-fit-rms',type=float,default=0.02,help="maximum rms of residuals to fit (given by column FIT_ERROR_STATIC")
 parser.add_argument('--output-metrology-patch',type=str, default=None, required = False,
                     help = 'save new metrology patch using this transform')
 
@@ -51,7 +52,13 @@ for filename in args.infile :
     if not os.path.isfile(filename) : continue
     t=Table.read(filename)
 
-    t=t[t["FLAGS"]==0] # select good ones
+    if "FLAGS" in t.dtype.names :
+        print("select entries with FLAGS==0")
+        t=t[t["FLAGS"]==0] # select good ones
+
+    if "FIT_ERROR_STATIC" in t.dtype.names and args.max_fit_rms>0 :
+        print("select entries with FIT_ERROR_STATIC<{:4.3f}".format(args.max_fit_rms))
+        t=t[t["FIT_ERROR_STATIC"]<args.max_fit_rms] # select good ones
 
     if "OFFSET_X" in t.dtype.names :
         xkey="OFFSET_X"
