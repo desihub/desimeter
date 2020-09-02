@@ -334,10 +334,24 @@ def spotmatch(xpix,ypix,expected_x_fp=None,expected_y_fp=None,expected_location=
     cmd += " -pos_save_file {}".format(saved_pos_filename)
     cmd += " -reference_pos_file {}".format(reference_pos_filename)
     cmd += " -device_centers_file {}".format(device_centers_filename)
-    cmd += " -positioner_reach {:4.3f}".format(positioner_reach_in_pixels)
+
+    position_reach_option = " -positioner_reach {:4.3f}".format(positioner_reach_in_pixels)
+    cmd += position_reach_option
 
     print(cmd)
-    subprocess.call(cmd.split(" "),shell=False)
+    status,output = subprocess.getstatusoutput(cmd)
+    print(output)
+
+    if status != 0 :
+        if output.find("unexpected command-line argument [ -positioner_reach ]")>=0 :
+            print("WARNING, -positioner_reach is not an argument, we rerun without it, but this means you have in the path an old version of spotmatch")
+            new_cmd = cmd.replace(position_reach_option,"")
+            print(new_cmd)
+            status,output = subprocess.getstatusoutput(new_cmd)
+            print(output)
+
+    if status != 0 :
+        raise RuntimeError("Error {} from match_positions called in desimeter".format(status))
 
     location=[]
     xpix=[]
