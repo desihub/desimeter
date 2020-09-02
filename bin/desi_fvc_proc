@@ -160,7 +160,6 @@ for seqid,spots in enumerate(spots_list) :
 
     if args.use_spotmatch :
         spots = spotmatch(spots["XPIX"],spots["YPIX"])
-        spots.write("spotmatch.csv",overwrite=True) ; print("wrote","spotmatch.csv")
         # drop pinholes, keep only center
         spots = spots[(spots["PINHOLE_ID"]==0)|(spots["PINHOLE_ID"]==99)]
         n_matched_fiducials = np.sum(spots['PINHOLE_ID'] == 99)
