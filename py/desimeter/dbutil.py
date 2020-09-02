@@ -55,5 +55,6 @@ def get_petal_loc(petal_id) :
     petal_id2loc[11]=6
     # lbl petal 1 tests
     petal_id2loc[1]=0
+    petal_id2loc[0]=0
 
     return petal_id2loc[petal_id]
