@@ -44,7 +44,7 @@ class TestSpotmatch(unittest.TestCase):
 
         print("test: number of spots sent to spotmatch=",len(xpix))
 
-        res = spotmatch(xpix,ypix,expected_x_fp=None,expected_y_fp=None,expected_device_id=None)
+        res = spotmatch(xpix,ypix,expected_x_fp=None,expected_y_fp=None,expected_location=None)
         #res.write("res.csv",overwrite=True)
 
 if __name__ == '__main__':
