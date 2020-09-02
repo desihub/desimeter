@@ -18,7 +18,11 @@ from desimeter.transform.fvc2fp import FVC2FP
 def _compute_pixel_scale(fvc2fp) :
     """
     computes square root of determinant of jacobian to get the pixel scale in mm
-    returns pixel scale
+
+    Args:
+      a instance of desimeter.transform.fvc2fp.FVC2FP
+
+    returns pixel size in mm
     """
     xc=3000.
     yc=3000.
@@ -38,8 +42,10 @@ def _write_spotmatch_fiducial_config_file(filename) :
 
 
     """
-    example:
+    writes the spotmatch fiducial config file from desimeter metrology
 
+    Args:
+       filename : path to output file
 
     """
     metrology = load_metrology()
@@ -66,7 +72,18 @@ def _write_spotmatch_fiducial_config_file(filename) :
 
 def _write_spotmatch_targets_file(x_fp,y_fp,location,filename,fvc2fp=None) :
     """
-    example:
+    writes the spotmatch targets file from desimeter metrology and a transform.
+
+    Args:
+       x_fp : 1D numpy array with targets focal plane coordinates X in mm
+       y_fp : 1D numpy array with targets focal plane coordinates Y in mm
+       location : 1D numpy array with location index ( = petal_loc*10000+device_loc)
+       filename : path to output file
+
+    Optionnally:
+       fvc2fp : a instance of desimeter.transform.fvc2fp.FVC2FP (default is default of desimeter)
+
+example:
 
 1000 179.640 5616.148  12.000   0.001 4
 1001 336.988 5615.164  12.000   0.001 4
@@ -111,6 +128,13 @@ def _write_spotmatch_targets_file(x_fp,y_fp,location,filename,fvc2fp=None) :
 
 def _write_spotmatch_measured_pos_file(xpix,ypix,filename):
     """
+    writes the spotmatch measured spots file.
+
+    Args:
+       xpix : 1D numpy array with FVC image X pixel coordinates of detected spots
+       ypix : 1D numpy array with FVC image Y pixel coordinates of detected spots
+       filename : path to output file
+
     example:
 
 3495.648 2544.892  16.170 1   3.101
@@ -133,6 +157,14 @@ def _write_spotmatch_measured_pos_file(xpix,ypix,filename):
 
 def _write_spotmatch_reference_pos_file(filename,fvc2fp=None) :
     """
+    writes the spotmatch reference pos file from metrology and a transform
+
+    Args:
+       filename : path to output file
+
+    Optionnally:
+       fvc2fp : a instance of desimeter.transform.fvc2fp.FVC2FP (default is default of desimeter)
+
     example:
 
  1541 4179.496 2557.798 13.670 515 1.897 pinhole
@@ -162,7 +194,31 @@ def _write_spotmatch_reference_pos_file(filename,fvc2fp=None) :
 
 def spotmatch(xpix,ypix,expected_x_fp=None,expected_y_fp=None,expected_location=None,verbose=0,match_radius_pixels=70) :
     """
+    Wrapper to spotmatch in desimeter. Calls the C executable 'match_positions' that has to be in the path. All inputs
+    to match_positions are generated in this call using desimeter metrology table, the default fvc2fp transform and the inputs
 
+    Args :
+       xpix : 1D numpy array with FVC image X pixel coordinates of detected spots
+       ypix : 1D numpy array with FVC image Y pixel coordinates of detected spots
+
+    Optionnally :
+       expected_x_fp : 1D numpy array with expected targets focal plane coordinates X in mm
+       expected_y_fp : 1D numpy array with expected targets focal plane coordinates Y in mm
+       expected_location :  1D numpy array with targets location index ( = petal_loc*10000+device_loc)
+       verbose : 0 or 1
+       match_radius_pixels : match radius in pixels
+
+    returns :
+       an astropy.table.Table object with at least the columns
+       LOCATION,XPIX,YPIX,FLAG,ERR,SPOTMATCH_DEVICE_TYPE,DEVICE_ID,DEVICE_TYPE,DEVICE_LOC,PETAL_LOC,PINHOLE_ID
+       and possibly other columns from the input metrology table
+       LOCATION = petal_loc*10000+device_loc for matched spots
+       or a negative number if not matched
+       PINHOLE_ID = 0 for positioners (DEVICE_TYPE="POS")
+       PINHOLE_ID = 99 for fiducial centers (DEVICE_TYPE="FIF" or DEVICE_TYPE="GIF")
+       PINHOLE_ID = 10, 11, 12, or 13 for fiducial pinholes (DEVICE_TYPE="FIF" or DEVICE_TYPE="GIF")
+       the pinholes in a fiducial are not matched to the metrology, so only the fiducial centers (PINHOLE_ID = 99)
+       can be used to fit the transform.
     """
 
     if shutil.which("match_positions") is None :
