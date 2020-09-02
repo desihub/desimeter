@@ -125,6 +125,46 @@ example:
     print("wrote",filename)
 
 
+def _write_spotmatch_device_centers_file(filename,fvc2fp=None) :
+    """
+    writes the spotmatch device centers file from desimeter metrology and a transform.
+
+    Args:
+       filename : path to output file
+
+    Optionnally:
+       fvc2fp : a instance of desimeter.transform.fvc2fp.FVC2FP (default is default of desimeter)
+
+    """
+    if fvc2fp is None:
+        fvc2fp = FVC2FP.read(fvc2fp_filename())
+        print("use default fvc2fp")
+
+    metrology = load_metrology()
+    selection  = (metrology["DEVICE_TYPE"]=="POS")
+    x_fp = metrology["X_FP"][selection]
+    y_fp = metrology["Y_FP"][selection]
+    location = metrology["LOCATION"][selection]
+    flags = np.repeat(4,x_fp.size)
+
+    # add fiducials centers
+    selection  = (metrology["DEVICE_TYPE"]=="FIF")|(metrology["DEVICE_TYPE"]=="GIF")
+    fid_locations = np.unique(metrology["LOCATION"][selection])
+    for fid_location in fid_locations :
+        selection = (metrology["LOCATION"]==fid_location)
+        mx = np.mean(metrology["X_FP"][selection])
+        my = np.mean(metrology["Y_FP"][selection])
+        x_fp = np.append(x_fp,mx)
+        y_fp = np.append(y_fp,my)
+        location = np.append(location,fid_location)
+        flags = np.append(flags,8)
+
+    xpix,ypix = fvc2fp.fp2fvc(x_fp,y_fp)
+
+    with open(filename,"w") as ofile :
+        for i in range(xpix.size) :
+            ofile.write("{} {:4.3f} {:4.3f} 12.000 0.001 {}\n".format(location[i],xpix[i],ypix[i],flags[i]))
+    print("wrote",filename)
 
 def _write_spotmatch_measured_pos_file(xpix,ypix,filename):
     """
@@ -262,11 +302,17 @@ def spotmatch(xpix,ypix,expected_x_fp=None,expected_y_fp=None,expected_location=
     reference_pos_filename=os.path.join(tmp_dir,"desimeter_spotmatch_pinhole_references.txt")
     _write_spotmatch_reference_pos_file(reference_pos_filename,fvc2fp=None)
 
+    device_centers_filename=os.path.join(tmp_dir,"desimeter_spotmatch_device_centers.txt")
+    _write_spotmatch_device_centers_file(device_centers_filename,fvc2fp=None)
+
     # example
     # match_positions -verbose 1 -image_rows 6000 -image_cols 6000 -target_x_dir 1 -target_y_dir 1 -target_x0 0.0 -target_y0 0.0 -fid_x_dir -1 -fid_y_dir 1 -exp_pixel_scale 0.073 -match_radius 50 -reduced_pos_file ./match_centers.tmp -fiducial_config_file ./match_fiducials.tmp -target_pos_file ./match_targets.tmp -measured_pos_file ./match_centroids.tmp -pos_save_file ./measured_pos.tmp -reference_pos_file ./pinhole_references_20200410.dat
 
     match_centers_filename=os.path.join(tmp_dir,"desimeter_spotmatch_output_centers.txt")
     saved_pos_filename=os.path.join(tmp_dir,"desimeter_spotmatch_saved_output.txt")
+
+    positioner_reach_in_mm = 6.6 # see https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=5708
+    positioner_reach_in_pixels = positioner_reach_in_mm/exp_pixel_scale
 
     cmd =  "match_positions"
     cmd += " -verbose {}".format(verbose)
@@ -287,7 +333,8 @@ def spotmatch(xpix,ypix,expected_x_fp=None,expected_y_fp=None,expected_location=
     cmd += " -measured_pos_file {}".format(measured_pos_filename)
     cmd += " -pos_save_file {}".format(saved_pos_filename)
     cmd += " -reference_pos_file {}".format(reference_pos_filename)
-
+    cmd += " -device_centers_file {}".format(device_centers_filename)
+    cmd += " -positioner_reach {:4.3f}".format(positioner_reach_in_pixels)
 
     print(cmd)
     subprocess.call(cmd.split(" "),shell=False)
