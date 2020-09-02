@@ -150,7 +150,8 @@ def _write_spotmatch_measured_pos_file(xpix,ypix,filename):
     assert(len(xpix)==len(ypix))
 
     with open(filename,"w") as ofile :
-        for i in range(len(xpix)) :
+        npix=len(xpix)
+        for i in range(npix) :
             ofile.write("{:4.3f} {:4.3f} 12.000 {} 2.000\n".format(xpix[i],ypix[i],i+1))
 
     print("wrote",filename)
@@ -261,15 +262,8 @@ def spotmatch(xpix,ypix,expected_x_fp=None,expected_y_fp=None,expected_location=
     reference_pos_filename=os.path.join(tmp_dir,"desimeter_spotmatch_pinhole_references.txt")
     _write_spotmatch_reference_pos_file(reference_pos_filename,fvc2fp=None)
 
-    """
-match_positions -verbose 1 -image_rows 6000 -image_cols 6000 -target_x_dir 1 -t
-arget_y_dir 1 -target_x0 0.0 -target_y0 0.0 -fid_x_dir -1 -fid_y_dir 1 -exp_pixel_scale 0.073 -match_radius 50 -redu
-ced_pos_file ./match_centers.tmp -fiducial_config_file ./match_fiducials.tmp -target_pos_file ./match_targets.tmp -m
-easured_pos_file ./match_centroids.tmp -pos_save_file ./measured_pos.tmp -reference_pos_file ./pinhole_references_20
-200410.dat
-
-
-    """
+    # example
+    # match_positions -verbose 1 -image_rows 6000 -image_cols 6000 -target_x_dir 1 -target_y_dir 1 -target_x0 0.0 -target_y0 0.0 -fid_x_dir -1 -fid_y_dir 1 -exp_pixel_scale 0.073 -match_radius 50 -reduced_pos_file ./match_centers.tmp -fiducial_config_file ./match_fiducials.tmp -target_pos_file ./match_targets.tmp -measured_pos_file ./match_centroids.tmp -pos_save_file ./measured_pos.tmp -reference_pos_file ./pinhole_references_20200410.dat
 
     match_centers_filename=os.path.join(tmp_dir,"desimeter_spotmatch_output_centers.txt")
     saved_pos_filename=os.path.join(tmp_dir,"desimeter_spotmatch_saved_output.txt")
@@ -278,6 +272,9 @@ easured_pos_file ./match_centroids.tmp -pos_save_file ./measured_pos.tmp -refere
     cmd += " -verbose {}".format(verbose)
     cmd += " -image_rows {}".format(image_rows)
     cmd += " -image_cols {}".format(image_cols)
+    cmd += " -target_x0 {}".format(target_x0)
+    cmd += " -target_y0 {}".format(target_y0)
+    cmd += " -target_y_dir {}".format(target_y_dir)
     cmd += " -target_x_dir {}".format(target_x_dir)
     cmd += " -target_y_dir {}".format(target_y_dir)
     cmd += " -fid_x_dir {}".format(fid_x_dir)
@@ -293,10 +290,8 @@ easured_pos_file ./match_centroids.tmp -pos_save_file ./measured_pos.tmp -refere
 
 
     print(cmd)
-
-    subprocess.call(cmd.split(" "))
-
-
+    parts=cmd.split(" ")
+    subprocess.call(parts)
 
     location=[]
     xpix=[]
