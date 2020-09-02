@@ -16,6 +16,7 @@ from desimeter.match import match_same_system
 from desimeter.transform.xy2qs import qs2xy
 from desimeter.fieldmodel import FieldModel
 from desimeter.io import load_metrology,fvc2fp_filename,fvc_bias_filename
+from desimeter.spotmatch import spotmatch
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""FVC image processing""")
@@ -67,6 +68,8 @@ parser.add_argument('--bias', type = str, default = None, required = False,
                     help = 'use this master bias fits file instead of $DESIMETER_DATA/bias.fits if exist')
 parser.add_argument('--no-bias', action = 'store_true',
                     help = 'do not apply a bias correction (by default, use $DESIMETER_DATA/bias.fits if exist')
+parser.add_argument('--use-spotmatch', action = 'store_true',
+                    help = 'use spotmatch instead of desimeter code for matching positioners and fiducials (requires the program match_positions installed and in the PATH)')
 
 args  = parser.parse_args()
 log   = get_logger()
@@ -155,10 +158,16 @@ for seqid,spots in enumerate(spots_list) :
         print("wrote {}".format(outfile))
         continue
 
-    spots = findfiducials(spots,input_transform=args.input_transform,pinhole_max_separation_mm=args.pinhole_max_separation_mm)
+    if args.use_spotmatch :
+        spots = spotmatch(spots["XPIX"],spots["YPIX"])
+        spots.write("spotmatch.csv",overwrite=True) ; print("wrote","spotmatch.csv")
+        # drop pinholes, keep only center
+        spots = spots[(spots["PINHOLE_ID"]==0)|(spots["PINHOLE_ID"]==99)]
+        n_matched_fiducials = np.sum(spots['PINHOLE_ID'] == 99)
+    else :
+        spots = findfiducials(spots,input_transform=args.input_transform,pinhole_max_separation_mm=args.pinhole_max_separation_mm)
+        n_matched_fiducials = np.sum(spots['PINHOLE_ID'] == 4)
 
-    n_matched_pinholes = np.sum(spots['PINHOLE_ID'] > 0)
-    n_matched_fiducials = np.sum(spots['PINHOLE_ID'] == 4)
     if n_matched_fiducials < 3:
         log.error('Fewer than three matched fiducials; exiting early.')
         sys.exit(13)
@@ -166,7 +175,25 @@ for seqid,spots in enumerate(spots_list) :
 
     tx = FVC2FP.read_jsonfile(fvc2fp_filename())
 
-    tx.fit(spots, update_spots=True, zbfit=(args.zbfit), fixed_scale=args.fixed_scale, fixed_rotation=args.fixed_rotation)
+
+    if args.use_spotmatch :
+        metrology = load_metrology()
+        # keep only the center of fiducials
+        selection = (metrology["DEVICE_TYPE"]=="FIF")|(metrology["DEVICE_TYPE"]=="GIF")
+        for loc in np.unique(metrology["LOCATION"][selection]) :
+            # all the pinholes at that location
+            ii = np.where(metrology["LOCATION"]==loc)[0]
+            # replace first entry by mean of pinholes
+            metrology["X_FP"][ii[0]] = np.mean(metrology["X_FP"][ii])
+            metrology["Y_FP"][ii[0]] = np.mean(metrology["Y_FP"][ii])
+            # set a dummy pinhole id = 10 just to make sure it's not interpreted as an existing pinhole
+            metrology["PINHOLE_ID"][ii[0]] = 99
+            # drop the others
+            metrology.remove_rows(ii[1:])
+    else :
+        metrology = None
+
+    tx.fit(spots, metrology=metrology, update_spots=True, zbfit=(args.zbfit), fixed_scale=args.fixed_scale, fixed_rotation=args.fixed_rotation)
 
     if args.expected_positions is not None :
         log.info("reading expected positions in {}".format(args.expected_positions))
