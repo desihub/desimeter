@@ -385,6 +385,7 @@ def spotmatch(xpix,ypix,expected_x_fp=None,expected_y_fp=None,expected_location=
 
     res["DEVICE_ID"]   = np.repeat("unknown",nspots)
     res["DEVICE_TYPE"] = np.repeat("unknown",nspots)
+    res["BUS_ID"] = np.repeat("unknown",nspots)
 
     # use metrology to get more info
     metrology = load_metrology()
