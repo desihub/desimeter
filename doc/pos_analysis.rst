@@ -77,7 +77,7 @@ Positioners are tested using pre-defined lists of moves and setup parameters. Th
 	- Example syntax: ``get_posmoves --host beyonce.lbl.gov --port 5432 --password <password> --petal-ids 1 --with-calib --exposure-ids 2679 --pos-ids <optional comma-separated list> -o ~/<your_output_directory>``
 	- For numerous other options, see help: ``get_posmoves --help``
 	- Many files will be generated, one per positioners. You can restrict this by arguing only a specific list of posids to grab.
-	- Note as of 2020-09-10, we have had some issues with ports, when running requests from a computer other than beyonce. A workaround is to log into beyonce and run it like ``/software/products/desimeter-master/bin/get_posmoves``. You may need to first call ``setup desimeter``.
+	- Note as of 2020-09-10, we have had some issues with ports, when running requests from a computer other than beyonce. A workaround is to log into beyonce and run it like ``/software/products/desimeter-master/bin/get_posmoves``. You may need to first call ``prepare_desimeter``.
 
     #) Analyze the data.
         - Code location:  ``<desimeter>/bin``
