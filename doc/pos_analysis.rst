@@ -23,11 +23,13 @@ This happens outside of desimeter. The robots are always moved using ``PetalApp.
 
 ``<desi_svn>/code/focalplane/plate_control/<some_tag_or_branch>/petal/petal.py``
 
-Depending on the operational circumstance, there will be different high-level scripts which send the requests for which targets to go to, and when to trigger the FVC camera. These are in general the night time OCS script, or else for "xytests" and "arc calibrations", etc, the various PECS scripts.
+Depending on the operational circumstance, there will be different high-level scripts which send the requests for which targets to go to, and when to trigger the FVC camera. These are in general:
 
-``<desi_svn>/code/online/OCS/<some_tag_or_branch>/python/OCS/``
+Night time observations --> OCS script
+    ``<desi_svn>/code/online/OCS/<some_tag_or_branch>/python/OCS/``
 
-``<desi_svn>/code/focalplane/plate_control/<some_tag_or_branch>/pecs/``
+Scripted move sequences --> run_sequence.py
+    ``<desi_svn>/code/focalplane/plate_control/<some_tag_or_branch>/pecs/``
 
 For every move performed, numerous values get stored in the online database (posmovedb). These include:
 
