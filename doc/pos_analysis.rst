@@ -61,19 +61,45 @@ Positioners are tested using pre-defined lists of moves and setup parameters. Th
 	- As of 2020-09-10, information on hardware setup / operation is captured mostly in this google doc: https://docs.google.com/document/d/1auayJzVoZYV_LOhYA4mK8h_oTlYU4pC8JQJgvHVb8Us/edit?usp=sharing
 	
     #) Run the test.
+        - Code location: ``<desi_svn>/code/focalplane/plate_control/<some_tag_or_branch>/pecs/``
         - Typical syntax: ``python run_sequence.py -i seq_<SOME_TEST>.ecsv --num_corr 2 --prepark posintTP``
-	- For numerous other options, see help: ``python run_sequence.py --help``. These controls include:
-	    - anticollision mode
-	    - phi range limits
-	    - fvc match radius
-	    - auto-disabling of unmatched positioners
-	    - auto-updating of internally-tracked (theta, phi) based on fvc measurements
-	    - dry run (no actual movements of hardware)
-	    - cycle tiem between moves
-	    - number of fvc images per measurement
-	    - number of correction moves per target
-	    - number of best / worst positioners to list at stdout, for each measured target
-	    - whether to park the positioners at a standard location before / after the test
+	- For numerous other options\*, see help: ``python run_sequence.py --help``
+	- Review the test sequence (it will be displayed before anything happens, and you will have a chance to exit).
+	- Follow the interactive prompts to define which petals / buses / positioners should be operated.
+	- Throughout the test, data is stored in real time to the online DB, as soon as it is available.
+	- All output printed to stdout is saved into a log file on disk, verbatim.
+	- Between moves, there is a cool-down period (defined by cycle time option). If you need to quit the test midway through, it is *completely safe* to do CTRL-C in the terminal during this cool-down.
+	- After the test, note the exposure ID.
+
+    #) Get data from DB.
+        - Code location: ``<desimeter>/bin``
+	- Example syntax: ``get_posmoves --host beyonce.lbl.gov --port 5432 --password <password> --petal-ids 1 --with-calib --exposure-ids 2679 --pos-ids <optional comma-separated list> -o ~/<your_output_directory>``
+	- For numerous other options, see help: ``get_posmoves --help``
+	- Many files will be generated, one per positioners. You can restrict this by arguing only a specific list of posids to grab.
+	- Note as of 2020-09-10, we have had some issues with ports, when running requests from a computer other than beyonce. A workaround is to log into beyonce and run it like ``/software/products/desimeter-master/bin/get_posmoves``. You may need to first call ``setup desimeter``.
+
+    #) Analyze the data.
+        - Code location:  ``<desimeter>/bin``
+        - Calibrations
+	    - ``fit_posparams`` --> ``merge_posparams`` --> ``prepare_posparams_for_instr``
+	    - See descriptions below.
+	- Performance (e.g. "xy tests")
+	    - Example syntax: ``analyze_pos_performance -i M*.csv -o ~/<your_output_directory>``
+	    - Plots, histograms, and summary csv files will be produced.
+	    - This can be run really on any combination of data, not just an xy test. You could include night-time observations, for example. Just include the exposure-ids you want in the previous step, when you grabbed the data from the DB with ``get_posmoves``.
+	
+\* The run_sequence.py script has numerous options. These include:
+    - anticollision mode
+    - phi range limits
+    - fvc match radius
+    - auto-disabling of unmatched positioners
+    - auto-updating of internally-tracked (theta, phi) based on fvc measurements
+    - dry run (no actual movements of hardware)
+    - cycle tiem between moves
+    - number of fvc images per measurement
+    - number of correction moves per target
+    - number of best / worst positioners to list at stdout, for each measured target
+    - whether to park the positioners at a standard location before / after the test
 
 Re-analysis of fiber positions with desimeter
 ---------------------------------------------
@@ -121,6 +147,3 @@ As on overview of the role desimter plays in this process, those basic steps are
 4. ``prepare_posparams_for_instr`` ... validate parameters and generate modified table
 
 Finally after desimeter has prepared the new calibration parameters, we use ``pecs/set_calibrations.py`` (managed in DESI's svn repo, *not* desihub), which pushes data to the online DB.
-	
-Running tests with ``run_sequence.py``
---------------------------------------
