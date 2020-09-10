@@ -27,6 +27,7 @@ parser.add_argument('--table', type = str, default = None, required = True,
 parser.add_argument('--vmin', type = float , default = 0)
 parser.add_argument('--vmax', type = float , default = 5000)
 parser.add_argument('--posids', action = 'store_true', help='show posititioners IDs')
+parser.add_argument('--only', type = str, default=None , help='comma separated list of positioners to highlight')
 
 args  = parser.parse_args()
 spots = Table.read(args.table)
@@ -41,8 +42,17 @@ a=np.linspace(0,2*np.pi,40)
 rad=6./0.066
 xcircle=rad*np.cos(a)
 ycircle=rad*np.sin(a)
+
+if args.only is not None:
+    show_only=args.only.split(",")
+    print("will only show",show_only)
+else :
+    show_only=None
+
 for i in range(len(spots)) :
     color="C{}".format(i%10)
+    if show_only is not None :
+        if not spots["DEVICE_ID"][i] in show_only : continue
     plt.plot([spots["XPIX"][i],spots["XPIX_KNEE"][i],spots["XPIX_METRO"][i]],[spots["YPIX"][i],spots["YPIX_KNEE"][i],spots["YPIX_METRO"][i]],"-",color=color,lw=2)
     plt.plot(xcircle+spots["XPIX_METRO"][i],ycircle+spots["YPIX_METRO"][i],"-",color=color,lw=2)
     if args.posids :
