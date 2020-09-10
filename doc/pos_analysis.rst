@@ -19,20 +19,21 @@ Moving positioners + measuring
 ------------------------------
 This happens outside of desimeter. The robots are always moved using ``PetalApp.py``, which is an ICS wrapper around ``petal.py``.
 
-``<desi_svn>/code/online/Positioner/PetalApp/<some_tag_or_branch>/python/PetalApp/PetalApp.py``
-
-``<desi_svn>/code/focalplane/plate_control/<some_tag_or_branch>/petal/petal.py``
+    - ``<desi_svn>/code/online/Positioner/PetalApp/<some_tag_or_branch>/python/PetalApp/PetalApp.py``
+    - ``<desi_svn>/code/focalplane/plate_control/<some_tag_or_branch>/petal/petal.py``
 
 Depending on the operational circumstance, there will be different high-level scripts which send the requests for which targets to go to, and when to trigger the FVC camera. These are in general:
 
-Night time observations --> OCS script
-    ``<desi_svn>/code/online/OCS/<some_tag_or_branch>/python/OCS/``
+Night time observations
+    - OCS script
+    - ``<desi_svn>/code/online/OCS/<some_tag_or_branch>/python/OCS/``
 
-Scripted move sequences --> ``run_sequence.py``
-    ``<desi_svn>/code/focalplane/plate_control/<some_tag_or_branch>/pecs/``
+Scripted move sequences
+    - ``run_sequence.py``
+    - ``<desi_svn>/code/focalplane/plate_control/<some_tag_or_branch>/pecs/``
     
 Legacy test scripts (mostly replaced by ``run_sequence.py``)
-    ``arc_calibration.py``, ``grid_calibration.py``, ``xytest.py``, etc
+    - ``arc_calibration.py``, ``grid_calibration.py``, ``xytest.py``, etc
 
 For every move performed, numerous values get stored in the online database (posmovedb). These include:
 
@@ -48,8 +49,8 @@ For every move performed, numerous values get stored in the online database (pos
 
 Anytime a calibration value is changed (such as ``LENGTH_R1``, ``LENGTH_R2``, etc), or indeed any other change of positioner state data, that fact will be recorded in the online database.
 
-Typical test procedure:
------------------------
+Typical test procedure
+----------------------
 Positioners are tested using pre-defined lists of moves and setup parameters. These are executed by ``run_sequence.py``. Data goes straight into the online DB. Analysis is done offline at any time, using desimeter. The typical steps are:
 
     #) Locate the ``seq_*.ecsv`` file, defining the test sequence to be performed.
@@ -88,7 +89,7 @@ Positioners are tested using pre-defined lists of moves and setup parameters. Th
 	    - Plots, histograms, and summary csv files will be produced.
 	    - This can be run really on any combination of data, not just an xy test. You could include night-time observations, for example. Just include the exposure-ids you want in the previous step, when you grabbed the data from the DB with ``get_posmoves``.
 	
-\* The run_sequence.py script has numerous options. These include:
+\* ``run_sequence.py`` has numerous options. These include:
     - anticollision mode
     - phi range limits
     - fvc match radius
