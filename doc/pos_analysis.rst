@@ -63,7 +63,7 @@ Positioners are tested using pre-defined lists of moves and setup parameters. Th
 	
     #) Run the test.
         - Code location: ``<desi_svn>/code/focalplane/plate_control/<some_tag_or_branch>/pecs/``
-        - Typical syntax: ``python run_sequence.py -i seq_<SOME_TEST>.ecsv --num_corr 2 --prepark posintTP``
+        - Typical syntax: ``python run_sequence.py -i seq_<SOME_TEST>.ecsv --num_corr 2``
 	- For numerous other options\*, see help: ``python run_sequence.py --help``
 	- Review the test sequence (it will be displayed before anything happens, and you will have a chance to exit).
 	- Follow the interactive prompts to define which petals / buses / positioners should be operated.
