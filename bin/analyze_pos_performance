@@ -114,29 +114,33 @@ def read(path):
     data files for non-moving positioners --- they will be automatically skipped.
     
     INPUTS:  path ... must be a csv file, including move and calibration data
+    
     OUTPUT:  data ... dict with keys = posids and values = astropy tables
+             msg ... string with any messages to print at stdout
     '''
+    msg = ''
     data = {}
     if 'csv' not in path:
         return data  # i.e. skip non-data files
     table = Table.read(path)
     missing = required - set(table.columns)
     if any(missing):
-        print(f'Skipped data at {path} due to missing columns {missing}')
-        return data
+        msg += f'Skipped data at {path} due to missing columns {missing}'
+        return data, msg
     initial_posids = set(table['POS_ID'])
     table = remove_unused_columns(table)
     table = remove_nonmoving_rows(table)
     posids = set(table['POS_ID'])
     posids_removed = initial_posids - posids
     if any(posids_removed):
-        print(f'Skipped data for {posids_removed} which contained no moves in {path}')
+        msg += f'Skipped data for {posids_removed} which contained no moves in {path}'
     for posid in posids:
         selection = table['POS_ID'] == posid
         this = table[selection]
         data[posid] = this
-        print(f'Read data for {posid} at {path}')
-    return data
+        msg += '\n' if msg else msg
+        msg += f'Read data for {posid} at {path}'
+    return data, msg
 
 def identify_submoves(table):
     '''Searches LOG_NOTE field to identify submoves (i.e. correction moves).
@@ -652,38 +656,62 @@ def strip_final_return(string):
     '''Remove final carriage return if present.'''
     return string[:-1] if string[-1] == '\n' else string
 
-# read in the data files
+# containers / handlers for multiprocessed data
 input_data = {}
-for path in infiles:
-    this_data = read(path)
-    input_data.update(this_data)
-assert any(input_data), 'No data to analyze. Please check that input file args are correct.'
-
-# containers / handlers for multiprocessed analysis data
 moves_list = []
 stats_list = []
-def store_result(move, stat, msg):
-    if msg:
-        print(msg)
-    if result and stat:
-        moves_list.append(move)
-        stats_list.append(stat)
 
+# other multiprocess handlers
 single_process = args.n_processes_max == 1  # useful for debugging
+def mp_imap(func, data):
+    '''Wrapper for common pooled multiprocess imap'''
+    with multiprocessing.Pool(processes=args.n_processes_max) as pool:
+            pool_results = pool.imap(func, data)
+            pool.close()
+            pool.join()
+    return pool_results
+            
 if __name__ == '__main__':
+    # read all data
+    if single_process:
+        for path in infiles:
+            this_data, msg = read(path)
+            input_data.update(this_data)
+            if msg:
+                print(msg)
+    else:
+        results = mp_imap(read, infiles)
+        for result in results:
+            data, msg = result
+            input_data.update(data)
+            if msg:
+                print(msg)
+    assert any(input_data), 'No data to analyze. Please check that input file args are correct.'
+    
+    # analyze individual positioners
     if single_process:
         for table in input_data.values():
             result = analyze_one_pos(table)
-            store_result(*result)
+            move, stat, msg = result
+            if msg:
+                print(msg)
+            moves_list.append(move)
+            stats_list.append(stat)
     else:
-        with multiprocessing.Pool(processes=args.n_processes_max) as pool:
-            pool_results = pool.imap(analyze_one_pos, input_data.values())
-            pool.close()
-            pool.join()
-        for result in pool_results:
-            store_result(*result)
+        results = mp_imap(analyze_one_pos, input_data.values())
+        for result in results:
+            move, stat, msg = result
+            if msg:
+                print(msg)
+            if result and stat:
+                moves_list.append(move)
+                stats_list.append(stat)
+            
+    # merge results
     moves = vstack(moves_list)
     stats = vstack(stats_list)
+    
+    # bining, plotting, exporting
     moves = identify_quantiles(moves)
     summary = summarize_stats(moves)
     submoves = get_submove_ids(moves)
