@@ -512,9 +512,10 @@ def get_submove_description(table, submove):
     dates = {d.split(' ')[0] for d in table['DATE'][selection]}
     dates = sorted(dates)
     expids_str = get_expids_str(table[selection])
+    expids_str = expids_str.replace('-', ',')
     s = ''
     s += f'Submove: {submove}\n'
-    s += f'Exposure ID{"s" if "-" in expids_str else ""}: {expids_str}\n'
+    s += f'Exposure ID{"s" if "," in expids_str else ""}: {expids_str}\n'
     s += f'Date{"s" if len(dates) > 1 else ""} measured: {dates if len(dates) > 1 else dates[0]}\n'
     s += f'Date analyzed: {Time.now().iso.split(" ")[0]}'
     return s
