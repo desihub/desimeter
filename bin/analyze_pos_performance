@@ -189,7 +189,7 @@ def identify_submoves(table):
     new['SUBMOVE'] = submoves
     return new
 
-def get_submove_rows(table, submove):
+def get_submove_idxs(table, submove):
     '''Returns a list of idxs for rows associated with the argued submove.
     
     INPUT:  table ... astropy table including column 'SUBMOVE'
@@ -207,7 +207,6 @@ def get_submove_ids(table):
     OUTPUT: list
     '''
     return sorted(set(table['SUBMOVE']))
-    
 
 def calc_errors(table):
     '''Identifies measured and target values, then calculates errors.
@@ -317,7 +316,7 @@ def analyze_one_pos(table):
     stats_dict = {name:[] for name in stats_cols}
     submoves = get_submove_ids(new)
     for submove in submoves:
-        selection = get_submove_rows(new, submove)
+        selection = get_submove_idxs(new, submove)
         err_xy = new['ERR_XY'][selection].tolist()
         stats_dict['POS_ID'].append(posid)
         stats_dict['SUBMOVE'].append(submove)
@@ -327,18 +326,46 @@ def analyze_one_pos(table):
     stats = Table(stats_dict)
     return new, stats, msg
 
-def summarize_stats(table, sigmas=[1,2,3,4,5,math.inf], stat_names=stat_funcs.keys()):
-    '''Generate summary statistics for each submove, gathering positioners into
-    error quantiles at the specified "sigma" levels.
+def identify_quantiles(table, sigmas=[1,2,3,4,5,math.inf]):
+    '''Gathering positioners into error quantiles at the specified "sigma" levels.
+    Quantile assignments are done independently for each submove.
     
     INPUTS:  table ... astropy table with data for one or many positioners. The table
-                       must include columns for 'SUBMOVE', 'POS_ID', 'ERR_XY',
-                       'NUM_IMAGES', and 'TARGET_RADIUS'
+                       must include the columns 'ERR_XY' and 'SUBMOVE'
                        
              sigmas ... list of ints giving which sigma quantiles to gather the data
                         into. In other words, sigma=1 corresponds to 63.2% quantile,
                         sigma=2 corresponds to 86.5%, etc. A value math.inf or np.inf
                         acts like a "100%" quantile.
+                        
+    OUTPUTS: new ... copy of table, with additional columns 'SIGMA_GROUP' and
+                     'QUANTILE_GROUP'. These correspond to the lowest quantile
+                     group in which each error value resides.
+    '''
+    new = table.copy()
+    new['SIGMA_GROUP'] = math.inf
+    new['QUANTILE_GROUP'] = 1.0
+    submoves = get_submove_ids(new)
+    sigmas = sorted(sigmas, reverse=True)  # start with narrowest group (largest sigma), then broaden
+    quantiles = {s: 1 - math.exp(-s) for s in sigmas}
+    for submove in submoves:
+        submove_selection = new['SUBMOVE'] == submove
+        for sigma in sigmas:
+            quantile = quantiles[sigma]
+            cutoff = np.quantile(new['ERR_XY'][submove_selection], quantile, interpolation='midpoint')
+            within_cutoff = new['ERR_XY'] <= cutoff
+            quantile_selection = np.logical_and(within_cutoff, submove_selection)
+            new['SIGMA_GROUP'][quantile_selection] = sigma
+            new['QUANTILE_GROUP'][quantile_selection] = quantile
+    return new
+
+def summarize_stats(table, stat_names=stat_funcs.keys()):
+    '''Generate summary statistics for each submove.
+    
+    INPUTS:  table ... astropy table with data for one or many positioners. The table
+                       must include columns for 'SUBMOVE', 'POS_ID', 'ERR_XY',
+                       'NUM_IMAGES', 'TARGET_RADIUS', 'SUBMOVE_SIGMA_GROUP', and
+                       'SUBMOVE_QUANTILE_GROUP'
                         
              stat_names ... names of which stat_funcs results to perform the quantiles
                             on. Must be a subset of stat_funcs.
@@ -353,28 +380,27 @@ def summarize_stats(table, sigmas=[1,2,3,4,5,math.inf], stat_names=stat_funcs.ke
     submoves = get_submove_ids(table)
     new_columns = ['SUBMOVE', 'SIGMA', 'QUANTILE', 'N_TARGETS'] + list(uppercase_names.values())
     new_dict = {key:[] for key in new_columns}
-    quantiles = {s: 1 - math.exp(-s) for s in sigmas}
+    sigmas = sorted(set(table['SIGMA_GROUP']))
+    quantiles = {s: table['QUANTILE_GROUP'][table['SIGMA_GROUP'] == s][0] for s in sigmas}
     max_radius = -math.inf
     min_radius = math.inf
     for submove in submoves:
-        selection = get_submove_rows(table, submove)
-        err = table['ERR_XY'][selection].tolist()
-        err = np.sort(err)
-        radii = table['TARGET_RADIUS'][selection].tolist()
+        submove_selection = get_submove_idxs(table, submove)
+        radii = table['TARGET_RADIUS'][submove_selection].tolist()
         max_radius = max(max_radius, max(radii))
         min_radius = min(min_radius, min(radii))
         for sigma in sigmas:
             quantile = quantiles[sigma]
-            cutoff = np.quantile(err, quantile, interpolation='midpoint')
-            selection = err <= cutoff
-            these_err = err[selection]
+            within_quantile = table['QUANTILE_GROUP'] <= quantile
+            quantile_selection = np.logical_and(within_quantile, submove_selection)
+            err = table['ERR_XY'][quantile_selection]
             new_dict['SUBMOVE'].append(submove)
             new_dict['SIGMA'].append(sigma)
             new_dict['QUANTILE'].append(quantile)
-            new_dict['N_TARGETS'].append(len(these_err))
+            new_dict['N_TARGETS'].append(len(err))
             for name in stat_names:
                 func = stat_funcs[name]
-                stat_result = func(these_err)
+                stat_result = func(err)
                 key = uppercase_names[name]
                 new_dict[key].append(stat_result)    
     num_images = [n for n in table['NUM_IMAGES'] if n != null_num_images]
@@ -444,7 +470,7 @@ def get_summary_stats_str(table, submove='all'):
     for submove in submoves:
         prefix = f'SUBMOVE {submove} '
         for name in stat_names:
-            selection = get_submove_rows(table, submove)
+            selection = get_submove_idxs(table, submove)
             subtable = table[selection]
             selections = [subtable['SIGMA'] == sig for sig in sigmas]
             row_data = [subtable[name][sel][0] for sel in selections]
@@ -508,7 +534,7 @@ def get_submove_description(table, submove):
     INPUT:  table ... astropy tabel including 'DATE' and 'SUBMOVE' columns
     OUTPUT: string
     '''
-    selection = get_submove_rows(table, submove)
+    selection = get_submove_idxs(table, submove)
     dates = {d.split(' ')[0] for d in table['DATE'][selection]}
     dates = sorted(dates)
     expids_str = get_expids_str(table[selection])
@@ -658,12 +684,13 @@ if __name__ == '__main__':
             store_result(*result)
     moves = vstack(moves_list)
     stats = vstack(stats_list)
+    moves = identify_quantiles(moves)
     summary = summarize_stats(moves)
     submoves = get_submove_ids(moves)
     chart_limits = {}
     hist_limits = {}
     for submove in submoves:
-        selection = get_submove_rows(moves, submove)
+        selection = get_submove_idxs(moves, submove)
         table = moves[selection]
         note1 = get_submove_description(table, submove)
         note1 += '\n' + meta_str(summary)
