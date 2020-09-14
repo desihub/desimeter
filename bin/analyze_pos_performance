@@ -19,11 +19,6 @@ args = parser.parse_args()
 # proceed with bulk of imports
 import os
 import glob
-
-import multiprocessing, logging
-logger = multiprocessing.log_to_stderr()
-logger.setLevel(logging.INFO)
-
 import numpy as np
 import math
 from astropy.table import Table, vstack
@@ -33,6 +28,15 @@ from astropy.stats import knuth_bin_width
 import desimeter.transform.pos2ptl as pos2ptl
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
+import multiprocessing
+
+# set up logger
+import logging
+logger = multiprocessing.log_to_stderr()
+logger.setLevel(logging.INFO)
+
+# start runtime timer
+start_time = Time.now()
 
 # paths
 infiles = []
@@ -723,4 +727,7 @@ if __name__ == '__main__':
     csv_path = summary_path_base + '.csv'
     summary.write(csv_path, overwrite=True)
     print(f'Saved overall summary stats (no metadata) to {csv_path}')
+    runtime = (Time.now() - start_time).to_value('sec')
+    runtime_str = f'{runtime:.1f} sec' if runtime < 60 else f'{runtime/60:.1f} min'
+    print(f'Total run time: {runtime_str}')
     
