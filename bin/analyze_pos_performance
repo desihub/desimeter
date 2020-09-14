@@ -54,8 +54,8 @@ required = {'PETAL_ID', 'POS_ID', 'POS_MOVE_INDEX', 'POS_T', 'POS_P', 'PTL_X', '
 sequence_note_prefix = 'sequence: '
 
 # statistics functions for summarizing errors
-stat_funcs = {'max': max, 'min': min, 'mean': np.mean, 'median': np.median,
-              'std': np.std, 'rms': lambda X: (sum(x**2 for x in X)/len(X))**0.5}
+stat_funcs = {'max': np.max, 'min': np.min, 'mean': np.mean, 'median': np.median,
+              'std': np.std, 'rms': lambda X: np.sqrt(np.sum(np.power(X, 2))/len(X))}
 
 # function defs
 def nulls(*args):
