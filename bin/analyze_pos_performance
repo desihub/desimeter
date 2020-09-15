@@ -218,12 +218,30 @@ def get_submove_idxs(table, submove):
     sel_idxs = [selection[i] for i in range(len(table))]
     return sel_idxs
 
+def get_sigma_idxs(table, sigma):
+    '''Returns a list of idxs for data rows at or above a given sigma quantile.
+    
+    INPUT:  table ... astropy table including column 'SIGMA_GROUP'
+            sigma ... like 1, 2, 3, ... math.inf or np.inf are also valid
+            
+    OUTPUT: list of row index integers
+    '''
+    selection = table['SIGMA_GROUP'] <= sigma
+    sel_idxs = [selection[i] for i in range(len(table))]
+    return sel_idxs
+
 def get_submove_ids(table):
     '''Returns a sorted list of submove ids.
     INPUT:  table ... astropy table including column 'SUBMOVE'
     OUTPUT: list
     '''
     return sorted(set(table['SUBMOVE']))
+
+def get_sigmas(table):
+    '''Returns a dict with keys = 'SIGMA_GROUP' and values = corresponding 'QUANTILE_GROUP'
+    '''
+    sigmas = sorted(set(table['SIGMA_GROUP']))
+    return {s: table['QUANTILE_GROUP'][table['SIGMA_GROUP'] == s][0] for s in sigmas}    
 
 def calc_errors(table):
     '''Identifies measured and target values, then calculates errors.
@@ -395,8 +413,7 @@ def summarize_stats(table, stat_names=stat_funcs.keys()):
     submoves = get_submove_ids(table)
     new_columns = ['SUBMOVE', 'SIGMA', 'QUANTILE', 'N_TARGETS'] + list(uppercase_names.values())
     new_dict = {key:[] for key in new_columns}
-    sigmas = sorted(set(table['SIGMA_GROUP']))
-    quantiles = {s: table['QUANTILE_GROUP'][table['SIGMA_GROUP'] == s][0] for s in sigmas}
+    sigmas = get_sigmas(table)
     max_radius = -math.inf
     min_radius = math.inf
     for submove in submoves:
@@ -405,7 +422,7 @@ def summarize_stats(table, stat_names=stat_funcs.keys()):
         max_radius = max(max_radius, max(radii))
         min_radius = min(min_radius, min(radii))
         for sigma in sigmas:
-            quantile = quantiles[sigma]
+            quantile = sigmas[sigma]
             within_quantile = table['QUANTILE_GROUP'] <= quantile
             quantile_selection = np.logical_and(within_quantile, submove_selection)
             err = table['ERR_XY'][quantile_selection].tolist()
@@ -536,30 +553,82 @@ def get_span(table, prefix='PTL_X'):
     vec = table[f'{prefix}_TARG'].tolist() + table[f'{prefix}_MEAS'].tolist()
     return max(vec) - min(vec)
 
-def get_expids_str(table):
+def get_expids_str(table, for_filename=True):
     '''Returns a string representing the set of unique 'EXPOSURE_ID' in the astropy
-    table. Suitable for use in filenames.
+    table. Argument for_filename controls whether to return version for use in
+    filenames vs for use in plot labels, general printouts, etc.
     '''
     expids = sorted(set(table['EXPOSURE_ID']))
-    expids_str = '-'.join([str(x) for x in expids])
+    separator = '-' if for_filename else ','
+    expids_str = separator.join([str(x) for x in expids])
     return expids_str
 
-def get_submove_description(table, submove):
-    '''Returns a multiline string describing some general info about a submove.
-    INPUT:  table ... astropy tabel including 'DATE' and 'SUBMOVE' columns
+def get_submoves_str(table, for_filename=True):
+    '''Returns a string representing the set of unique 'SUBMOVE' in the astropy
+    table. Argument for_filename controls whether to return version for use in
+    filenames vs for use in plot labels, general printouts, etc.'''
+    submoves = get_submove_ids(table)
+    separator = '-' if for_filename else ', '
+    plural = 's' if len(submoves) > 1 else ''
+    valstr = str(submoves[0]) if len(submoves) > 1 else separator.join([str(s) for s in submoves])
+    if for_filename:
+        return valstr
+    return f'Submove{plural}: {valstr}'
+
+def get_sigma_str(table, for_filename=True):
+    '''Returns a string representing the largest (i.e. broadest) value of 'SIGMA_GROUP'
+    and 'QUANTILE_GROUP' in the astropy  table. Argument for_filename controls whether to
+    return version for use in filenames vs for use in plot labels, general printouts, etc.'''
+    sigmas = get_sigmas(table)
+    sigma = max(sigmas.keys())
+    quantile = sigmas[sigma]
+    if for_filename:
+        return f'{sigma:.1f}'
+    return f'Sigma: {sigma:.1f} ({quantile*100:.3g}%)'
+
+def get_exposure_description(table):
+    '''Returns a multiline string describing some general info about the exposure(s)
+    represented in the table data.
+    
+    INPUT:  table ... astropy tabel including 'DATE' and 'EXPOSURE_ID' columns
+    
     OUTPUT: string
     '''
-    selection = get_submove_idxs(table, submove)
-    dates = {d.split(' ')[0] for d in table['DATE'][selection]}
+    dates = {d.split(' ')[0] for d in table['DATE']}
     dates = sorted(dates)
-    expids_str = get_expids_str(table[selection])
-    expids_str = expids_str.replace('-', ',')
-    s = ''
-    s += f'Submove: {submove}\n'
-    s += f'Exposure ID{"s" if "," in expids_str else ""}: {expids_str}\n'
+    expids_str = get_expids_str(table, for_filename=False)
+    s = f'Exposure ID{"s" if "," in expids_str else ""}: {expids_str}\n'
     s += f'Date{"s" if len(dates) > 1 else ""} measured: {dates if len(dates) > 1 else dates[0]}\n'
     s += f'Date analyzed: {Time.now().iso.split(" ")[0]}'
     return s
+
+def get_description(table, column, value):
+    '''Returns a multiline string describign some general info about those rows
+    for which value in column matches val.
+    
+    INPUT:  table ... astropy table including column key
+            column ... 'SUBMOVE' or 'SIGMA_GROUP'
+            value ... single value or 'all' to describe all unique cases found in column
+            
+    OUTPUT: string
+    '''
+    if value == 'all':
+        selection = list(range(len(table)))
+    elif column == 'SUBMOVE':
+        selection = get_submove_idxs(table, value)
+    elif column == 'SIGMA_GROUP':
+        selection = get_sigma_idxs(table, value)
+    subtable = table[selection]
+    if column == 'SUBMOVE':
+        return get_submoves_str(subtable, for_filename=False)
+    elif column == 'SIGMA_GROUP':
+        return get_sigma_str(table, for_filename=False)
+        
+def get_submove_description(table, submove='all'):
+    return get_description(table, 'SUBMOVE', submove)
+
+def get_sigma_description(table, sigma='all'):
+    return get_description(table, 'SIGMA_GROUP', sigma)
 
 def place_notes(note1='', note2=''):
     '''Puts note strings on the current plot.
@@ -619,7 +688,7 @@ def bigchart(table, note1='', note2='', limits={}):
     place_notes(note1, note2)
     plt.legend(loc='upper left')
     plt.axis('equal')
-    expids_str = get_expids_str(table)
+    expids_str = get_expids_str(table, for_filename=True)
     path = os.path.join(save_dir, f'expid_{expids_str}_chart_submove_{submove}.' + img_format)
     limits = finalize_plot(path, limits)
     return path, limits
@@ -640,8 +709,6 @@ def histogram(table, note1='', note2='', limits={}):
     if not limits:
         limits = {'xfig': 9.5, 'yfig': 7, 'dpi': 200}
     init_plot(limits)
-    submoves = get_submove_ids(table)
-    submoves_str = f'SUBMOVE{"S " + str(submoves) if len(submoves) > 1 else " " + str(submoves[0])}'
     scale = 1000
     n_bins_min = 20
     data = table['ERR_XY'] * scale
@@ -650,7 +717,8 @@ def histogram(table, note1='', note2='', limits={}):
     else:
         bins = knuth_bin_width(data, return_bins=True)[1]
         bins = max(len(bins), n_bins_min)
-    _, bins, _ = hist(data, bins=bins, max_bins=1000, label=submoves_str)
+    label = get_sigma_str(table, for_filename=False)
+    _, bins, _ = hist(data, bins=bins, max_bins=1000, label=label)
     limits['bins'] = bins
     mean = np.mean(data)
     plt.plot([mean, mean], plt.ylim(), 'r--', label='mean')
@@ -658,8 +726,9 @@ def histogram(table, note1='', note2='', limits={}):
     plt.legend(loc='upper right')
     plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
     place_notes(note1, note2)    
-    expids_str = get_expids_str(table)
-    path = os.path.join(save_dir, f'expid_{expids_str}_hist_submove_{submove}.' + img_format)
+    expids_str = get_expids_str(table, for_filename=True)
+    sigma = get_sigma_str(table, for_filename=True)
+    path = os.path.join(save_dir, f'expid_{expids_str}_hist_sigma_{sigma}.' + img_format)
     limits = finalize_plot(path, limits)
     return path, limits
 
@@ -706,23 +775,39 @@ if __name__ == '__main__':
     moves = vstack(moves_list)
     stats = vstack(stats_list)
     
-    # bining, plotting, exporting
+    # binning
     moves = identify_quantiles(moves)
     summary = summarize_stats(moves)
-    submoves = get_submove_ids(moves)
+    
+    # plot big xy charts
     chart_limits = {}
-    hist_limits = {}
+    submoves = get_submove_ids(moves)
     for submove in submoves:
-        selection = get_submove_idxs(moves, submove)
-        table = moves[selection]
+        submove_selection = get_submove_idxs(moves, submove)
+        table = moves[submove_selection]
         note1 = get_submove_description(table, submove)
+        note1 += '\n' + get_exposure_description(table)
         note1 += '\n' + meta_str(summary)
         note2 = get_summary_stats_str(summary, submove)
         path, chart_limits = bigchart(table, note1, note2, chart_limits)
         log(f'Saved big chart for submove {submove} to {path}')
-        path, hist_limits = histogram(table, note1, note2, hist_limits)
-        log(f'Saved histogram for submove {submove} to {path}')
-    expids_str = 'expid_' + get_expids_str(moves)
+    
+    # plot histograms
+    hist_limits = {}
+    sigmas = get_sigmas(moves)
+    for sigma in sigmas:
+        sigma_selection = get_sigma_idxs(moves, sigma)
+        subtable = moves[sigma_selection]
+        note1 = get_sigma_description(subtable)
+        note1 += '\n' + get_submove_description(subtable)
+        note1 += '\n' + get_exposure_description(subtable)
+        note1 += '\n' + meta_str(summary)
+        note2 = ''
+        path, hist_limits = histogram(subtable, note1, note2, hist_limits)
+        log(f'Saved histogram for sigma={sigma} to {path}')
+        
+    # export tabular data
+    expids_str = 'expid_' + get_expids_str(moves, for_filename=True)
     moves_path = os.path.join(save_dir, f'{expids_str}_moves.csv')
     stats_path = os.path.join(save_dir, f'{expids_str}_stats_by_positioner.csv')
     summary_path_base = os.path.join(save_dir, f'{expids_str}_stats_summary')
