@@ -32,8 +32,16 @@ import multiprocessing
 
 # set up logger
 import logging
-logger = multiprocessing.log_to_stderr()
-logger.setLevel(logging.INFO)
+log_level = logging.INFO + 1
+log_handler = logging.StreamHandler()
+log_formatter = logging.Formatter('%(asctime)s | %(message)s', datefmt='%Y-%m-%d %I:%M:%S %p')
+log_handler.setFormatter(log_formatter)
+logger = multiprocessing.get_logger()
+logger.setLevel(log_level)
+for handler in logger.handlers:
+    logger.removeHandler(handler)
+logger.addHandler(log_handler)
+log = lambda msg, *args, **kwargs: logger.log(log_level, msg, *args, **kwargs)
 
 # start runtime timer
 start_time = Time.now()
@@ -131,7 +139,7 @@ def read(path):
     table = Table.read(path)
     missing = required - set(table.columns)
     if any(missing):
-        logger.info(f'Skipped data at {path} due to missing columns {missing}')
+        log(f'Skipped data at {path} due to missing columns {missing}')
         return data
     initial_posids = set(table['POS_ID'])
     table = remove_unused_columns(table)
@@ -139,12 +147,12 @@ def read(path):
     posids = set(table['POS_ID'])
     posids_removed = initial_posids - posids
     if any(posids_removed):
-        logger.info(f'Skipped data for {posids_removed} which contained no moves in {path}')
+        log(f'Skipped data for {posids_removed} which contained no moves in {path}')
     for posid in posids:
         selection = table['POS_ID'] == posid
         this = table[selection]
         data[posid] = this
-        logger.info(f'Read data for {posid} at {path}')
+        log(f'Read data for {posid} at {path}')
     return data
 
 def identify_submoves(table):
@@ -330,6 +338,7 @@ def analyze_one_pos(table):
         for name, func in stat_funcs.items():
             stats_dict[name].append(func(err_xy))
     stats = Table(stats_dict)
+    log(f'Analyzed {posid}: {len(new)} data rows, {len(submoves)} submoves')
     return new, stats
 
 def identify_quantiles(table, sigmas=[1,2,3,4,5,math.inf]):
@@ -710,24 +719,24 @@ if __name__ == '__main__':
         note1 += '\n' + meta_str(summary)
         note2 = get_summary_stats_str(summary, submove)
         path, chart_limits = bigchart(table, note1, note2, chart_limits)
-        print(f'Saved big chart for submove {submove} to {path}')
+        log(f'Saved big chart for submove {submove} to {path}')
         path, hist_limits = histogram(table, note1, note2, hist_limits)
-        print(f'Saved histogram for submove {submove} to {path}')
+        log(f'Saved histogram for submove {submove} to {path}')
     expids_str = 'expid_' + get_expids_str(moves)
     moves_path = os.path.join(save_dir, f'{expids_str}_moves.csv')
     stats_path = os.path.join(save_dir, f'{expids_str}_stats_by_positioner.csv')
     summary_path_base = os.path.join(save_dir, f'{expids_str}_stats_summary')
     moves.write(moves_path, overwrite=True)
-    print(f'Saved move-by-move data table to {moves_path}')
+    log(f'Saved move-by-move data table to {moves_path}')
     stats.write(stats_path, overwrite=True)
-    print(f'Saved positioner-by-positioner performance stats to {stats_path}')
+    log(f'Saved positioner-by-positioner performance stats to {stats_path}')
     ecsv_path = summary_path_base + '.ecsv'
     summary.write(ecsv_path, overwrite=True, delimiter=',')
-    print(f'Saved overall summary stats + metadata to {ecsv_path}')
+    log(f'Saved overall summary stats + metadata to {ecsv_path}')
     csv_path = summary_path_base + '.csv'
     summary.write(csv_path, overwrite=True)
-    print(f'Saved overall summary stats (no metadata) to {csv_path}')
+    log(f'Saved overall summary stats (no metadata) to {csv_path}')
     runtime = (Time.now() - start_time).to_value('sec')
     runtime_str = f'{runtime:.1f} sec' if runtime < 60 else f'{runtime/60:.1f} min'
-    print(f'Total run time: {runtime_str}')
+    log(f'Total run time: {runtime_str}')
     
