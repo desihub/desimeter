@@ -612,12 +612,6 @@ def get_description(table, submove, sigma='all'):
         return get_submoves_str(subtable, for_filename=False)
     else:
         return get_sigma_str(table, for_filename=False)
-        
-def get_submove_description(table, submove='all'):
-    return get_description(table, 'SUBMOVE', submove)
-
-def get_sigma_description(table, sigma='all'):
-    return get_description(table, 'SIGMA_GROUP', sigma)
 
 def place_notes(note1='', note2=''):
     '''Puts note strings on the current plot.
@@ -776,7 +770,7 @@ if __name__ == '__main__':
     for submove in submoves:
         submove_selection = get_idxs(moves, submove)
         table = moves[submove_selection]
-        note1 = get_submove_description(table, submove)
+        note1 = get_description(table, submove)
         note1 += '\n' + get_exposure_description(table)
         note1 += '\n' + meta_str(summary)
         note2 = get_summary_stats_str(summary, submove)
@@ -790,8 +784,8 @@ if __name__ == '__main__':
         for submove in submoves:
             selection = get_idxs(moves, submove, sigma)
             subtable = moves[selection]
-            note1 = get_sigma_description(subtable)
-            note1 += '\n' + get_submove_description(subtable)
+            note1 = get_description(subtable, submove, sigma)
+            note1 += '\n' + get_description(subtable, submove)  # too subtle, make more obvious
             note1 += '\n' + get_exposure_description(subtable)
             note1 += '\n' + meta_str(summary)
             note2 = ''
