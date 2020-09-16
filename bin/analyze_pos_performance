@@ -206,27 +206,18 @@ def identify_submoves(table):
     new['SUBMOVE'] = submoves
     return new
 
-def get_submove_idxs(table, submove):
+def get_idxs(table, submove, sigma=None):
     '''Returns a list of idxs for rows associated with the argued submove.
     
     INPUT:  table ... astropy table including column 'SUBMOVE'
             submove ... integer
+            sigma ... optional, like 1, 2, 3, ... math.inf or np.inf are also valid
             
     OUTPUT: list of row index integers
     '''
     selection = table['SUBMOVE'] == submove
-    sel_idxs = [i for i in range(len(table)) if selection[i]]
-    return sel_idxs
-
-def get_sigma_idxs(table, sigma):
-    '''Returns a list of idxs for data rows included within a given sigma quantile.
-    
-    INPUT:  table ... astropy table including column 'SIGMA_GROUP'
-            sigma ... like 1, 2, 3, ... math.inf or np.inf are also valid
-            
-    OUTPUT: list of row index integers
-    '''
-    selection = table['SIGMA_GROUP'] <= sigma
+    if sigma:
+        selection &= table['SIGMA_GROUP'] >= sigma
     sel_idxs = [i for i in range(len(table)) if selection[i]]
     return sel_idxs
 
@@ -348,7 +339,7 @@ def analyze_one_pos(table):
     stats_dict = {name:[] for name in stats_cols}
     submoves = get_submove_ids(new)
     for submove in submoves:
-        selection = get_submove_idxs(new, submove)
+        selection = get_idxs(new, submove)
         err_xy = new['ERR_XY'][selection].tolist()
         stats_dict['POS_ID'].append(posid)
         stats_dict['SUBMOVE'].append(submove)
@@ -502,7 +493,7 @@ def get_summary_stats_str(table, submove='all'):
     for submove in submoves:
         prefix = f'SUBMOVE {submove} '
         for name in stat_names:
-            selection = get_submove_idxs(table, submove)
+            selection = get_idxs(table, submove)
             subtable = table[selection]
             selections = [subtable['SIGMA'] == sig for sig in sigmas]
             row_data = [subtable[name][sel][0] for sel in selections]
@@ -602,26 +593,24 @@ def get_exposure_description(table):
     s += f'Date analyzed: {Time.now().iso.split(" ")[0]}'
     return s
 
-def get_description(table, column, value):
+def get_description(table, submove, sigma='all'):
     '''Returns a multiline string describign some general info about those rows
     for which value in column matches val.
     
     INPUT:  table ... astropy table including column key
-            column ... 'SUBMOVE' or 'SIGMA_GROUP'
-            value ... single value or 'all' to describe all unique cases found in column
+            submove ... integer
+            sigma ... single value or 'all' to describe all unique cases found in column
             
     OUTPUT: string
     '''
-    if value == 'all':
-        selection = list(range(len(table)))
-    elif column == 'SUBMOVE':
-        selection = get_submove_idxs(table, value)
-    elif column == 'SIGMA_GROUP':
-        selection = get_sigma_idxs(table, value)
+    if sigma == 'all':
+        selection = get_idxs(table, submove)
+    else:
+        selection = get_idxs(table, submove, sigma)
     subtable = table[selection]
-    if column == 'SUBMOVE':
+    if sigma == 'all':
         return get_submoves_str(subtable, for_filename=False)
-    elif column == 'SIGMA_GROUP':
+    else:
         return get_sigma_str(table, for_filename=False)
         
 def get_submove_description(table, submove='all'):
@@ -785,7 +774,7 @@ if __name__ == '__main__':
     chart_limits = {}
     submoves = get_submove_ids(moves)
     for submove in submoves:
-        submove_selection = get_submove_idxs(moves, submove)
+        submove_selection = get_idxs(moves, submove)
         table = moves[submove_selection]
         note1 = get_submove_description(table, submove)
         note1 += '\n' + get_exposure_description(table)
@@ -798,10 +787,8 @@ if __name__ == '__main__':
     hist_limits = {}
     sigmas = get_sigmas(moves)
     for sigma in sigmas:
-        sigma_selection = get_sigma_idxs(moves, sigma)
         for submove in submoves:
-            submove_selection = get_submove_idxs(moves, submove)
-            selection = sorted(set(sigma_selection) & set(submove_selection))
+            selection = get_idxs(moves, submove, sigma)
             subtable = moves[selection]
             note1 = get_sigma_description(subtable)
             note1 += '\n' + get_submove_description(subtable)
