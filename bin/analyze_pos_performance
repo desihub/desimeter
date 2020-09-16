@@ -215,11 +215,11 @@ def get_submove_idxs(table, submove):
     OUTPUT: list of row index integers
     '''
     selection = table['SUBMOVE'] == submove
-    sel_idxs = [selection[i] for i in range(len(table))]
+    sel_idxs = [i for i in range(len(table)) if selection[i]]
     return sel_idxs
 
 def get_sigma_idxs(table, sigma):
-    '''Returns a list of idxs for data rows at or above a given sigma quantile.
+    '''Returns a list of idxs for data rows included within a given sigma quantile.
     
     INPUT:  table ... astropy table including column 'SIGMA_GROUP'
             sigma ... like 1, 2, 3, ... math.inf or np.inf are also valid
@@ -227,7 +227,7 @@ def get_sigma_idxs(table, sigma):
     OUTPUT: list of row index integers
     '''
     selection = table['SIGMA_GROUP'] <= sigma
-    sel_idxs = [selection[i] for i in range(len(table))]
+    sel_idxs = [i for i in range(len(table)) if selection[i]]
     return sel_idxs
 
 def get_submove_ids(table):
@@ -417,7 +417,7 @@ def summarize_stats(table, stat_names=stat_funcs.keys()):
     max_radius = -math.inf
     min_radius = math.inf
     for submove in submoves:
-        submove_selection = get_submove_idxs(table, submove)
+        submove_selection = table['SUBMOVE'] == submove
         radii = table['TARGET_RADIUS'][submove_selection].tolist()
         max_radius = max(max_radius, max(radii))
         min_radius = min(min_radius, min(radii))
@@ -689,6 +689,7 @@ def bigchart(table, note1='', note2='', limits={}):
     plt.legend(loc='upper left')
     plt.axis('equal')
     expids_str = get_expids_str(table, for_filename=True)
+    submove = get_submoves_str(table, for_filename=True)
     path = os.path.join(save_dir, f'expid_{expids_str}_chart_submove_{submove}.' + img_format)
     limits = finalize_plot(path, limits)
     return path, limits
@@ -727,8 +728,9 @@ def histogram(table, note1='', note2='', limits={}):
     plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
     place_notes(note1, note2)    
     expids_str = get_expids_str(table, for_filename=True)
+    submove = get_submoves_str(table, for_filename=True)
     sigma = get_sigma_str(table, for_filename=True)
-    path = os.path.join(save_dir, f'expid_{expids_str}_hist_sigma_{sigma}.' + img_format)
+    path = os.path.join(save_dir, f'expid_{expids_str}_hist_submove_{submove}_sigma_{sigma}.' + img_format)
     limits = finalize_plot(path, limits)
     return path, limits
 
@@ -797,14 +799,17 @@ if __name__ == '__main__':
     sigmas = get_sigmas(moves)
     for sigma in sigmas:
         sigma_selection = get_sigma_idxs(moves, sigma)
-        subtable = moves[sigma_selection]
-        note1 = get_sigma_description(subtable)
-        note1 += '\n' + get_submove_description(subtable)
-        note1 += '\n' + get_exposure_description(subtable)
-        note1 += '\n' + meta_str(summary)
-        note2 = ''
-        path, hist_limits = histogram(subtable, note1, note2, hist_limits)
-        log(f'Saved histogram for sigma={sigma} to {path}')
+        for submove in submoves:
+            submove_selection = get_submove_idxs(moves, submove)
+            selection = sorted(set(sigma_selection) & set(submove_selection))
+            subtable = moves[selection]
+            note1 = get_sigma_description(subtable)
+            note1 += '\n' + get_submove_description(subtable)
+            note1 += '\n' + get_exposure_description(subtable)
+            note1 += '\n' + meta_str(summary)
+            note2 = ''
+            path, hist_limits = histogram(subtable, note1, note2, hist_limits)
+            log(f'Saved histogram for sigma={sigma} to {path}')
         
     # export tabular data
     expids_str = 'expid_' + get_expids_str(moves, for_filename=True)
