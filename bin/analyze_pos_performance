@@ -14,7 +14,8 @@ parser.add_argument('-i', '--infiles', type=str, required=True, nargs='*',
                          'that contains the files.')
 parser.add_argument('-o', '--outdir', type=str, required=True, help='Path to directory where to save output files.')
 parser.add_argument('-np', '--n_processes_max', type=int, default=None,  help='max number of processors to use')
-args = parser.parse_args()
+parser.add_argument('-d', '--debug_mode', action='store_true', help='turn on some helpful features for debugging')
+user_args = parser.parse_args()
 
 # proceed with bulk of imports
 import os
@@ -48,7 +49,7 @@ start_time = Time.now()
 
 # paths
 infiles = []
-for s in args.infiles:
+for s in user_args.infiles:
     these = glob.glob(s)
     for this in these:
         if os.path.isdir(this):
@@ -58,7 +59,7 @@ for s in args.infiles:
         else:
             infiles.append(this)
 infiles = [os.path.realpath(p) for p in infiles]
-save_dir = os.path.realpath(args.outdir)
+save_dir = os.path.realpath(user_args.outdir)
 if not os.path.isdir(save_dir):
     os.path.os.makedirs(save_dir)
 img_format = 'png'  # for plot outputs
@@ -507,14 +508,17 @@ def get_summary_stats_str(table, submove='all'):
     s = format(header, f'<{max(row_widths)}') + '\n' + s
     return s
 
-default_plot_limits = {'xfig': 10, 'yfig': 8, 'dpi': 150}  # xfig and yfig are in inches
+default_plot_limits = {'xfig': 10, 'yfig': 8, 'dpi': 150, 'tight_layout': False}  # xfig and yfig are in inches
 
 def init_plot(limits=default_plot_limits):
     '''Initialize a plot.
     INPUT:  limits ... dict with keys 'xfig', 'yfig', 'dpi'
     OUTPUT: Returns figure handle
     '''
-    plt.ioff()
+    if user_args.debug_mode:
+        plt.ion()
+    else:
+        plt.ioff()
     fig = plt.figure(figsize=(limits['xfig'], limits['yfig']), dpi=limits['dpi'])
     plt.clf()
     return fig
@@ -535,9 +539,9 @@ def finalize_plot(savepath, limits={}):
     if 'ylim' in limits:
         plt.ylim(limits['ylim'])
     limits['xlim'] = plt.xlim()
-    if 'bins' not in limits:  # i.e. skip this if it's a histogram
-        limits['ylim'] = plt.ylim()
-    fig.tight_layout()
+    should_tight_layout = limits['tight_layout'] if 'tight_layout' in limits else default_plot_limits['tight_layout']
+    if should_tight_layout:
+        fig.tight_layout()
     plt.savefig(savepath, bbox_inches='tight')
     plt.close(fig)
     return limits
@@ -558,10 +562,18 @@ def get_expids_str(table, for_filename=True):
     return expids_str
 
 def get_submoves_str(table, for_filename=True):
-    '''Returns a string representing the set of unique 'SUBMOVE' in the astropy
-    table. Argument for_filename controls whether to return version for use in
-    filenames vs for use in plot labels, general printouts, etc.'''
-    submoves = get_submove_ids(table)
+    '''Returns a string representing the set of unique submoves.
+    
+    INPUTS:  table ... astropy table containing columns 'SUBMOVE'
+                       alternately can just argue an integer that will be used
+             for_filename ... controls whether to return version for use in filenames vs
+                              for use in plot labels, general printouts, etc.
+    OUTPUT:  string
+    '''
+    if isinstance(table, (int, np.integer)):
+        submoves = [table]
+    else:
+        submoves = get_submove_ids(table)
     separator = '-' if for_filename else ', '
     plural = 's' if len(submoves) > 1 else ''
     valstr = str(submoves[0]) if len(submoves) > 1 else separator.join([str(s) for s in submoves])
@@ -570,15 +582,23 @@ def get_submoves_str(table, for_filename=True):
     return f'Submove{plural}: {valstr}'
 
 def get_sigma_str(table, for_filename=True):
-    '''Returns a string representing the largest (i.e. broadest) value of 'SIGMA_CEILING'
-    and 'QUANTILE_CEILING' in the astropy  table. Argument for_filename controls whether to
-    return version for use in filenames vs for use in plot labels, general printouts, etc.'''
-    sigmas = get_sigmas(table)
+    '''Returns a string representing the largest (i.e. broadest) value of sigma.
+    
+    INPUTS:  table ... astropy table containing columns 'SIGMA_CEILING' and 'QUANTILE_CEILING'
+                       alternately can just argue a number that will be used
+             for_filename ... controls whether to return version for use in filenames vs
+                              for use in plot labels, general printouts, etc.
+    OUTPUT:  string
+    '''
+    if isinstance(table, (int, np.integer, float, np.floating)):
+        sigmas = {table: sigma_to_quantile(table)}
+    else:
+        sigmas = get_sigmas(table)
     sigma = max(sigmas.keys())
     quantile = sigmas[sigma]
     if for_filename:
         return f'{sigma:.1f}'
-    return f'Sigma: {sigma:.1f} ({quantile*100:.3g}%)'
+    return f'sigma={sigma:.1f} ({quantile*100:.3g}% of targets)'
 
 def get_exposure_description(table):
     '''Returns a multiline string describing some general info about the exposure(s)
@@ -614,14 +634,19 @@ def get_description(table, submove, sigma='all'):
     if sigma == 'all':
         return get_submoves_str(subtable, for_filename=False)
     else:
-        return get_sigma_str(table, for_filename=False)
+        return get_sigma_str(subtable, for_filename=False)
 
-def place_notes(note1='', note2=''):
+def place_notes(note1='', note2='', level='axes'):
     '''Puts note strings on the current plot.
+    
+    INPUT:  note1 ... string for left side, multiple lines are ok
+            note2 ... string for right side, multiple lines are ok
+            level ... 'axes' or 'figure'
     '''
+    assert level in {'axes', 'figure'}
     note_fontsize = 'small'
     vert_space = ''.join(['\n']*5)
-    note_kwargs = {'xycoords': 'axes fraction', 'fontfamily': 'monospace',
+    note_kwargs = {'xycoords': f'{level} fraction', 'fontfamily': 'monospace',
                    'fontsize': note_fontsize, 'verticalalignment': 'top'}
     for note, special in {note1: {'xy': (0.00, 0.0), 'horizontalalignment': 'left'},
                           note2: {'xy': (0.99, 0.0), 'horizontalalignment': 'right'},
@@ -654,7 +679,7 @@ def bigchart(table, note1='', note2='', limits={}):
         fig_size_in = [mm * dots_per_mm / dpi for mm in data_span_mm]
         fig_size_in = [max(fig_size_in[i], min_plot_dims[i]) for i in [0,1]]
         fig_size_in[1] += 2
-        limits = {'xfig': fig_size_in[0], 'yfig': fig_size_in[1], 'dpi':dpi}
+        limits = {'xfig': fig_size_in[0], 'yfig': fig_size_in[1], 'dpi': dpi, 'tight_layout': True}
     init_plot(limits)
     for suffix, desc in {'TARG':'target', 'MEAS':'measured'}.items():
         shape = 'o' if suffix == 'TARG' else '+'
@@ -671,13 +696,13 @@ def bigchart(table, note1='', note2='', limits={}):
                      fontfamily='monospace', fontsize='small')
     plt.xlabel('PTL_X (mm)')
     plt.ylabel('PTL_Y (mm)')
-    place_notes(note1, note2)
+    place_notes(note1, note2, level='axes')
     plt.legend(loc='upper left')
     plt.axis('equal')
     expids_str = get_expids_str(table, for_filename=True)
     submove = get_submoves_str(table, for_filename=True)
     path = os.path.join(save_dir, f'expid_{expids_str}_chart_submove{submove}.' + img_format)
-    limits = finalize_plot(path, limits)
+    _ = finalize_plot(path, limits)
     return path, limits
 
 def choose_subplot_dims(n_subplots):
@@ -700,50 +725,67 @@ def histogram(table, sigma):
     OUTPUT: path ... path to output plot file
             limits ... dict of same format as described above
     '''
-    limits = {'xfig': 9.5, 'yfig': 7, 'dpi': 200}
-    init_plot(limits)
-    scale = 1000
     n_bins_min = 20
+    bins = None
+    unit_scale = 1000
     submoves = get_submove_ids(table)
-    n_rows, n_cols = choose_subplot_dims(len(submoves))
+    nrows, ncols = choose_subplot_dims(len(submoves))
+    limits = {'xfig': 9.5, 'yfig': 7, 'dpi': 200, 'tight_layout': False}
+    init_plot(limits)
+    ax = None
     for submove in submoves:
-        plt.subplot(n_rows, n_cols, submoves.index(submove), sharex=True)
-        sel1 = get_idxs(table, submove, sigma)
-        data = table['ERR_XY'] * scale
-        
-    if 'bins' in limits:
-        bins = limits['bins']
-    else:
-        bins = knuth_bin_width(data, return_bins=True)[1]
-        bins = max(len(bins), n_bins_min)
-    #quantile = 
-    label = get_sigma_str(table, for_filename=False).upper()
-    _, bins, _ = hist(data, bins=bins, max_bins=1000, label=label)
-    limits['bins'] = bins
-    mean = np.mean(data)
-    plt.plot([mean, mean], plt.ylim(), 'r--', label='mean')
-    plt.xlabel('XY ERROR (um)')
-    plt.legend(loc='upper right')
-    plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
-    note1 = get_description(subtable, submove, sigma)
-    note1 += '\n' + get_description(subtable, submove)  # too subtle, make more obvious
-    note1 += '\n' + get_exposure_description(subtable)
-    note1 += '\n' + meta_str(summary)
-    note2 = ''
-    place_notes(note1, note2)    
+        plot_idx =  submoves.index(submove) + 1
+        ax = plt.subplot(nrows, ncols, plot_idx, sharex=ax)
+        selection = get_idxs(table, submove, sigma)
+        data = table[selection]['ERR_XY'] * unit_scale
+        if bins is None:
+            bins = knuth_bin_width(data, return_bins=True)[1]
+            bins = max(len(bins), n_bins_min)
+        label = get_submoves_str(submove, for_filename=False)
+        _, bins, _ = hist(data, bins=bins, max_bins=1000, label=label)
+        mean = np.mean(data)
+        plt.plot([mean, mean], plt.ylim(), 'r--', label=f'mean={mean:.1f}')
+        plt.xlabel('XY ERROR (um)')
+        plt.legend(loc='upper right')
+        plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
+    note1 = get_exposure_description(table)
+    note2 = meta_str(summary)
+    title = get_sigma_str(sigma, for_filename=False)
+    plt.suptitle(title)
+
+    # place_notes(note1, note2, level='figure')
+    # 2020-09-17 [JHS] matplotlib bug, place_notes doesn't work for fig with subplots
+    # hack to get data into title string follows instead
+    note_lines = [title] + note1.strip().split('\n') + note2.strip().split('\n')
+    c1 = math.ceil(len(note_lines)/3)
+    c2 = 2 * c1
+    lefts = note_lines[:c1]
+    mids = note_lines[c1:c2]
+    rights = note_lines[c2:]
+    mids = mids + [' '] if len(mids) < len(lefts) else mids
+    rights = rights + [' '] if len(rights) < len(lefts) else rights
+    lefts_max = str(max([len(line) for line in lefts]))
+    mids_max = str(max([len(line) for line in mids]))
+    rights_max = str(max([len(line) for line in rights]))
+    alt_title = ''
+    for i in range(len(lefts)):
+        alt_title += f'\n{format(lefts[i], lefts_max)}  {format(mids[i], mids_max)}  {format(rights[i], rights_max)}'
+    plt.suptitle(alt_title, fontfamily='monospace', verticalalignment='top', fontsize='medium')
+    # end of notes hack
+    
     expids_str = get_expids_str(table, for_filename=True)
-    submove = get_submoves_str(table, for_filename=True)
-    sigma = get_sigma_str(table, for_filename=True)
-    path = os.path.join(save_dir, f'expid_{expids_str}_hist_submove{submove}_sigma{sigma}.' + img_format)
+    sigma_str = get_sigma_str(sigma, for_filename=True)
+    path = os.path.join(save_dir, f'expid_{expids_str}_hist_sigma_{sigma_str}.{img_format}')
     limits = finalize_plot(path, limits)
-    return path, limits
+    return path
 
 def strip_final_return(string):
     '''Remove final carriage return if present.'''
     return string[:-1] if string[-1] == '\n' else string
 
 # single/multiprocess switching
-single_process = args.n_processes_max == 1  # useful for debugging
+n_processes_max = 1 if user_args.debug_mode else user_args.n_processes_max
+single_process = n_processes_max == 1
 def imap(function, iterable_data):
     '''Common wrapper for pooled single or multiprocess imap'''
     if single_process:
@@ -752,7 +794,7 @@ def imap(function, iterable_data):
             result = function(data)
             results.append(result)
     else:
-        with multiprocessing.Pool(processes=args.n_processes_max) as pool:
+        with multiprocessing.Pool(processes=n_processes_max) as pool:
             results = pool.imap(function, iterable_data)
             pool.close()
             pool.join()
