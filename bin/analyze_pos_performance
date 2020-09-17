@@ -432,9 +432,11 @@ def summarize_stats(table, stat_names=stat_funcs.keys()):
                 new_dict[key].append(stat_result)    
     num_images = [n for n in table['NUM_IMAGES'] if n != null_num_images]
     mean_num_images = np.mean(num_images)
+    targs_per_submove = [len(np.argwhere(table['SUBMOVE'] == s)) for s in sorted(submoves)]
     new = Table(new_dict)
     new.meta['n_positioners'] = len(set(table['POS_ID']))
-    new.meta['n_targets'] = len([x for x in table['SUBMOVE'] == sorted(submoves)[0] if x])
+    new.meta['n_targets'] = targs_per_submove[0]
+    new.meta['mean_corr_moves'] = sum(targs_per_submove)/targs_per_submove[0] - 1
     new.meta['mean_num_images'] = mean_num_images
     new.meta['max_radius'] = max_radius
     new.meta['min_radius'] = min_radius
@@ -445,17 +447,18 @@ def meta_str(table):
     '''
     alts = {'n_positioners': 'Num positioners',
             'n_targets': 'Total num targets',
+            'mean_corr_moves': 'Mean corr per target',
             'mean_num_images': 'Mean num images per meas',
             'max_radius': 'Max target radius (mm)',
             'min_radius': 'Min target radius (mm)'}
-    formats = {'mean_num_images': '.1f', 'max_radius': '.3f', 'min_radius': '.3f'}
+    formats = {'mean_corr_moves': '.1f', 'mean_num_images': '.1f', 'max_radius': '.3f', 'min_radius': '.3f'}
     s = ''
     for key, val in table.meta.items():
         name = alts[key] if key in alts else key
         if key in formats:
             val = format(val, formats[key])
         s += f'{name}: {val}\n'
-    return s
+    return s.strip()
 
 def get_summary_stats_str(table, submove='all'):
     '''Produces a multi-line string representation of summary statistics
@@ -542,7 +545,7 @@ def finalize_plot(savepath, limits={}):
     should_tight_layout = limits['tight_layout'] if 'tight_layout' in limits else default_plot_limits['tight_layout']
     if should_tight_layout:
         fig.tight_layout()
-    plt.savefig(savepath, bbox_inches='tight')
+    plt.savefig(savepath)
     plt.close(fig)
     return limits
     
@@ -730,7 +733,7 @@ def histogram(table, sigma):
     unit_scale = 1000
     submoves = get_submove_ids(table)
     nrows, ncols = choose_subplot_dims(len(submoves))
-    limits = {'xfig': 9.5, 'yfig': 7, 'dpi': 200, 'tight_layout': False}
+    limits = {'xfig': 9.5, 'yfig': 7.0, 'dpi': 200, 'tight_layout': False}
     init_plot(limits)
     ax = None
     for submove in submoves:
@@ -741,12 +744,14 @@ def histogram(table, sigma):
         if bins is None:
             bins = knuth_bin_width(data, return_bins=True)[1]
             bins = max(len(bins), n_bins_min)
-        label = get_submoves_str(submove, for_filename=False)
-        _, bins, _ = hist(data, bins=bins, max_bins=1000, label=label)
+        _, bins, _ = hist(data, bins=bins, max_bins=1000, label=f'Submove:{submove:>3}')
         mean = np.mean(data)
-        plt.plot([mean, mean], plt.ylim(), 'r--', label=f'mean={mean:.1f}')
+        rms = stat_funcs['rms'](data)
+        vert_lims = plt.ylim()
+        plt.plot([mean, mean], vert_lims, 'r--', label=f'mean:{mean:6.1f}')
+        plt.plot([rms, rms], vert_lims, 'k--', label=f'rms:{rms:7.1f}')
         plt.xlabel('XY ERROR (um)')
-        plt.legend(loc='upper right')
+        plt.legend(loc='upper right', fontsize='x-small', prop={'family': 'monospace'})
         plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
     note1 = get_exposure_description(table)
     note2 = meta_str(summary)
@@ -756,18 +761,20 @@ def histogram(table, sigma):
     # place_notes(note1, note2, level='figure')
     # 2020-09-17 [JHS] matplotlib bug, place_notes doesn't work for fig with subplots
     # hack to get data into title string follows instead
-    note_lines = [title] + note1.strip().split('\n') + note2.strip().split('\n')
+    note_lines = note1.strip().split('\n') + note2.strip().split('\n')
     c1 = math.ceil(len(note_lines)/3)
-    c2 = 2 * c1
+    c2 = math.ceil(len(note_lines)/3 * 2)
     lefts = note_lines[:c1]
     mids = note_lines[c1:c2]
     rights = note_lines[c2:]
-    mids = mids + [' '] if len(mids) < len(lefts) else mids
-    rights = rights + [' '] if len(rights) < len(lefts) else rights
+    while len(mids) < len(lefts):
+        mids += [' ']
+    while len(rights) < len(lefts):
+        rights += [' ']
     lefts_max = str(max([len(line) for line in lefts]))
     mids_max = str(max([len(line) for line in mids]))
     rights_max = str(max([len(line) for line in rights]))
-    alt_title = ''
+    alt_title = title
     for i in range(len(lefts)):
         alt_title += f'\n{format(lefts[i], lefts_max)}  {format(mids[i], mids_max)}  {format(rights[i], rights_max)}'
     plt.suptitle(alt_title, fontfamily='monospace', verticalalignment='top', fontsize='medium')
