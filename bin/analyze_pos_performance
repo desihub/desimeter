@@ -65,10 +65,9 @@ if not os.path.isdir(save_dir):
 img_format = 'png'  # for plot outputs
 
 # data identifiers and keywords
-required = {'PETAL_ID', 'BUS_ID', 'POS_ID', 'POS_MOVE_INDEX', 'POS_T', 'POS_P', 'PTL_X', 'PTL_Y',
+required = {'POS_ID', 'POS_MOVE_INDEX', 'POS_T', 'POS_P', 'PTL_X', 'PTL_Y',
             'LENGTH_R1', 'LENGTH_R2', 'OFFSET_X', 'OFFSET_Y', 'OFFSET_T', 'OFFSET_P',
-            'MOVE_CMD', 'MOVE_VAL1', 'MOVE_VAL2', 'EXPOSURE_ID', 'EXPOSURE_ITER',
-            'DEVICE_LOC', 'DATE', 'LOG_NOTE', 'FLAGS'}
+            'MOVE_CMD', 'EXPOSURE_ID', 'EXPOSURE_ITER', 'DEVICE_LOC', 'DATE', 'LOG_NOTE'}
 sequence_note_prefix = 'sequence: '
 
 # statistics functions for summarizing errors
@@ -144,7 +143,7 @@ def read(path):
         log(f'Skipped data at {path} due to missing columns {missing}')
         return data
     initial_posids = set(table['POS_ID'])
-    table = remove_unused_columns(table)
+    # table = remove_unused_columns(table)
     table = remove_nonmoving_rows(table)
     posids = set(table['POS_ID'])
     posids_removed = initial_posids - posids
