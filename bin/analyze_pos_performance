@@ -474,9 +474,7 @@ def get_summary_stats_str(table, submove='all'):
         assert submove in submoves
         submoves = [submove]
     sigmas = int_list('SIGMA')
-    sigma_associates_list = lambda key: [table[key][table['SIGMA'] == s][0] for s in sigmas]
-    quantiles = sigma_associates_list('QUANTILE')
-    sigma_n_targs = sigma_associates_list('N_TARGETS')
+    quantiles = [sigma_to_quantile(s) for s in sigmas]
     stat_names = [key for key in table.columns if key.lower() in stat_funcs]
     tab = '  '
     space = ' '
@@ -496,8 +494,11 @@ def get_summary_stats_str(table, submove='all'):
     left_cell = lambda string: f'{tab}{string:>13}:'
     s += left_cell('sigma') + row_str(sigmas)
     s += left_cell('% of targets') + row_str(quantiles, scale=100, suffix='%')
-    s += left_cell('num targets') + row_str(sigma_n_targs)
     for submove in submoves:
+        subtable = table[table['SUBMOVE'] == submove]
+        subtable.sort('SIGMA')
+        sigma_n_targs = subtable['N_TARGETS']
+        s += left_cell('num selected') + row_str(sigma_n_targs)
         prefix = f'SUBMOVE {submove} '
         for name in stat_names:
             selection = get_idxs(table, submove)
@@ -754,8 +755,8 @@ def histogram(table, sigma):
             plt.xlabel('XY ERROR (um)')
         plt.legend(loc='upper right', prop={'family': 'monospace', 'size': 'x-small'})
         subtitle = f'SUBMOVE: {submove}'
-        subtitle += f'\nnum targeted: {len(selection)}'
-        subtitle += f'\nwithin sigma: {len(get_idxs(table, submove))}'
+        subtitle += f'\ntotal targets: {len(get_idxs(table, submove))}'
+        subtitle += f'\n num selected: {len(selection)}'
         plt.annotate(subtitle, xy=(0.01, 0.99), xycoords='axes fraction', fontsize='small',
                      fontfamily='monospace', verticalalignment='top', horizontalalignment='left')
         plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
