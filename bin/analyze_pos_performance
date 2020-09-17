@@ -67,7 +67,8 @@ img_format = 'png'  # for plot outputs
 # data identifiers and keywords
 required = {'PETAL_ID', 'POS_ID', 'POS_MOVE_INDEX', 'POS_T', 'POS_P', 'PTL_X', 'PTL_Y',
             'LENGTH_R1', 'LENGTH_R2', 'OFFSET_X', 'OFFSET_Y', 'OFFSET_T', 'OFFSET_P',
-            'MOVE_CMD', 'EXPOSURE_ID', 'EXPOSURE_ITER', 'DEVICE_LOC', 'DATE', 'LOG_NOTE'}
+            'MOVE_CMD', 'MOVE_VAL1', 'MOVE_VAL2', 'EXPOSURE_ID', 'EXPOSURE_ITER',
+            'DEVICE_LOC', 'DATE', 'LOG_NOTE', 'FLAGS'}
 sequence_note_prefix = 'sequence: '
 
 # statistics functions for summarizing errors
