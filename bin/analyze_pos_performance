@@ -759,22 +759,18 @@ def histogram(table, sigma):
         plt.annotate(subtitle, xy=(0.01, 0.99), xycoords='axes fraction', fontsize='small',
                      fontfamily='monospace', verticalalignment='top', horizontalalignment='left')
         plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
-    title = get_sigma_str(sigma, for_filename=False)
-    note_lines = get_exposure_description(table).strip().split('\n')
-    c1 = math.ceil(len(note_lines)/3)
-    c2 = math.ceil(len(note_lines)/3 * 2)
-    lefts = note_lines[:c1]
-    mids = note_lines[c1:c2]
-    rights = note_lines[c2:]
-    while len(mids) < len(lefts):
-        mids += [' ']
-    while len(rights) < len(lefts):
-        rights += [' ']
+        
+    # hacky, getting meta info into title string, but works for now
+    note_lines = [get_sigma_str(sigma, for_filename=False)]
+    note_lines += get_exposure_description(table).strip().split('\n')
+    lefts = [note_lines[i] for i in [0, 3]]
+    rights = [note_lines[i] for i in [1, 2]]
     lefts_max = str(max([len(line) for line in lefts]))
-    mids_max = str(max([len(line) for line in mids]))
     rights_max = str(max([len(line) for line in rights]))
+    title = ''
     for i in range(len(lefts)):
-        title += f'\n{format(lefts[i], lefts_max)}  {format(mids[i], mids_max)}  {format(rights[i], rights_max)}'
+        title += f'\n{format(lefts[i], lefts_max)}{" ":8}{format(rights[i], rights_max)}'
+        
     plt.suptitle(title, fontfamily='monospace', verticalalignment='top', fontsize='medium')    
     expids_str = get_expids_str(table, for_filename=True)
     sigma_str = get_sigma_str(sigma, for_filename=True)
