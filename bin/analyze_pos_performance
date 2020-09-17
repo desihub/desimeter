@@ -217,8 +217,8 @@ def get_idxs(table, submove, sigma=None):
     '''
     selection = table['SUBMOVE'] == submove
     if sigma:
-        selection &= table['SUBMOVE_SIGMA_GROUP'] >= sigma
-    sel_idxs = [i for i in range(len(table)) if selection[i]]
+        selection &= table['SIGMA_CEILING'] <= sigma
+    sel_idxs = np.where(selection)[0].tolist()
     return sel_idxs
 
 def get_submove_ids(table):
@@ -229,10 +229,10 @@ def get_submove_ids(table):
     return sorted(set(table['SUBMOVE']))
 
 def get_sigmas(table):
-    '''Returns a dict with keys = 'SUBMOVE_SIGMA_GROUP' and values = corresponding 'SUBMOVE_QUANTILE_GROUP'
+    '''Returns a dict with keys = 'SIGMA_CEILING' and values = corresponding 'QUANTILE_CEILING'
     '''
-    sigmas = sorted(set(table['SUBMOVE_SIGMA_GROUP']))
-    return {s: table['SUBMOVE_QUANTILE_GROUP'][table['SUBMOVE_SIGMA_GROUP'] == s][0] for s in sigmas}    
+    sigmas = sorted(set(table['SIGMA_CEILING']))
+    return {s: table['QUANTILE_CEILING'][table['SIGMA_CEILING'] == s][0] for s in sigmas}    
 
 def calc_errors(table):
     '''Identifies measured and target values, then calculates errors.
@@ -365,13 +365,13 @@ def identify_quantiles(table, sigmas=[1,2,3,4,5,math.inf]):
                         sigma=2 corresponds to 86.5%, etc. A value math.inf or np.inf
                         acts like a "100%" quantile.
                         
-    OUTPUTS: new ... copy of table, with additional columns 'SUBMOVE_SIGMA_GROUP' and
-                     'SUBMOVE_QUANTILE_GROUP'. These correspond to the lowest quantile
+    OUTPUTS: new ... copy of table, with additional columns 'SIGMA_CEILING' and
+                     'QUANTILE_CEILING'. These correspond to the lowest quantile
                      group in which each error value resides.
     '''
     new = table.copy()
-    new['SUBMOVE_SIGMA_GROUP'] = math.inf
-    new['SUBMOVE_QUANTILE_GROUP'] = 1.0
+    new['SIGMA_CEILING'] = math.inf
+    new['QUANTILE_CEILING'] = 1.0
     submoves = get_submove_ids(new)
     sigmas = sorted(sigmas, reverse=True)  # start with narrowest group (largest sigma), then broaden
     quantiles = {s: sigma_to_quantile(s)  for s in sigmas}
@@ -382,8 +382,8 @@ def identify_quantiles(table, sigmas=[1,2,3,4,5,math.inf]):
             cutoff = np.quantile(new['ERR_XY'][submove_selection], quantile, interpolation='midpoint')
             within_cutoff = new['ERR_XY'] <= cutoff
             quantile_selection = np.logical_and(within_cutoff, submove_selection)
-            new['SUBMOVE_SIGMA_GROUP'][quantile_selection] = sigma
-            new['SUBMOVE_QUANTILE_GROUP'][quantile_selection] = quantile
+            new['SIGMA_CEILING'][quantile_selection] = sigma
+            new['QUANTILE_CEILING'][quantile_selection] = quantile
     return new
 
 def summarize_stats(table, stat_names=stat_funcs.keys()):
@@ -391,8 +391,8 @@ def summarize_stats(table, stat_names=stat_funcs.keys()):
     
     INPUTS:  table ... astropy table with data for one or many positioners. The table
                        must include columns for 'SUBMOVE', 'POS_ID', 'ERR_XY',
-                       'NUM_IMAGES', 'TARGET_RADIUS', 'SUBMOVE_SIGMA_GROUP', and
-                       'SUBMOVE_QUANTILE_GROUP'
+                       'NUM_IMAGES', 'TARGET_RADIUS', 'SIGMA_CEILING', and
+                       'QUANTILE_CEILING'
                         
              stat_names ... names of which stat_funcs results to perform the quantiles
                             on. Must be a subset of stat_funcs.
@@ -417,7 +417,7 @@ def summarize_stats(table, stat_names=stat_funcs.keys()):
         min_radius = min(min_radius, min(radii))
         for sigma in sigmas:
             quantile = sigmas[sigma]
-            within_quantile = table['SUBMOVE_QUANTILE_GROUP'] <= quantile
+            within_quantile = table['QUANTILE_CEILING'] <= quantile
             quantile_selection = np.logical_and(within_quantile, submove_selection)
             err = table['ERR_XY'][quantile_selection].tolist()
             new_dict['SUBMOVE'].append(submove)
@@ -570,8 +570,8 @@ def get_submoves_str(table, for_filename=True):
     return f'Submove{plural}: {valstr}'
 
 def get_sigma_str(table, for_filename=True):
-    '''Returns a string representing the largest (i.e. broadest) value of 'SUBMOVE_SIGMA_GROUP'
-    and 'SUBMOVE_QUANTILE_GROUP' in the astropy  table. Argument for_filename controls whether to
+    '''Returns a string representing the largest (i.e. broadest) value of 'SIGMA_CEILING'
+    and 'QUANTILE_CEILING' in the astropy  table. Argument for_filename controls whether to
     return version for use in filenames vs for use in plot labels, general printouts, etc.'''
     sigmas = get_sigmas(table)
     sigma = max(sigmas.keys())
@@ -676,7 +676,7 @@ def bigchart(table, note1='', note2='', limits={}):
     plt.axis('equal')
     expids_str = get_expids_str(table, for_filename=True)
     submove = get_submoves_str(table, for_filename=True)
-    path = os.path.join(save_dir, f'expid_{expids_str}_chart_submove_{submove}.' + img_format)
+    path = os.path.join(save_dir, f'expid_{expids_str}_chart_submove{submove}.' + img_format)
     limits = finalize_plot(path, limits)
     return path, limits
 
@@ -717,7 +717,7 @@ def histogram(table, note1, note2, limits={}):
     expids_str = get_expids_str(table, for_filename=True)
     submove = get_submoves_str(table, for_filename=True)
     sigma = get_sigma_str(table, for_filename=True)
-    path = os.path.join(save_dir, f'expid_{expids_str}_hist_submove_{submove}_sigma_{sigma}.' + img_format)
+    path = os.path.join(save_dir, f'expid_{expids_str}_hist_submove{submove}_sigma{sigma}.' + img_format)
     limits = finalize_plot(path, limits)
     return path, limits
 
