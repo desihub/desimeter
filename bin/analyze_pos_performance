@@ -685,10 +685,20 @@ def bigchart(table, note1='', note2='', limits={}):
         fig_size_in[1] += 2
         limits = {'xfig': fig_size_in[0], 'yfig': fig_size_in[1], 'dpi': dpi, 'tight_layout': True}
     init_plot(limits)
+    posids = set(table['POS_ID'])
+    n_circ = 30
+    cos = np.cos(np.linspace(0, 2*np.pi, n_circ))
+    sin = np.sin(np.linspace(0, 2*np.pi, n_circ))
+    for posid in posids:
+        one_row = table[table['POS_ID'] == posid][0]
+        ptl_x0, ptl_y0 = pos2ptl.flat2ptl(one_row['OFFSET_X'], one_row['OFFSET_Y'])
+        max_reach = one_row['LENGTH_R1'] + one_row['LENGTH_R2']
+        circ_x = max_reach * cos + ptl_x0
+        circ_y = max_reach * sin + ptl_y0
+        plt.plot(circ_x, circ_y, '--', color='0.8', linewidth=0.5)
     for suffix, desc in {'TARG':'target', 'MEAS':'measured'}.items():
         shape = 'o' if suffix == 'TARG' else '+'
         plt.plot(table[f'PTL_X_{suffix}'], table[f'PTL_Y_{suffix}'], shape, label=desc)
-    posids = set(table['POS_ID'])
     for posid in posids:
         selection = table['POS_ID'] == posid
         label_x = np.mean(table['PTL_X_TARG'][selection])
