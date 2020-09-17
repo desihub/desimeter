@@ -744,24 +744,23 @@ def histogram(table, sigma):
         if bins is None:
             bins = knuth_bin_width(data, return_bins=True)[1]
             bins = max(len(bins), n_bins_min)
-        _, bins, _ = hist(data, bins=bins, max_bins=1000, label=f'Submove:{submove:>3}')
+        _, bins, _ = hist(data, bins=bins, max_bins=1000)
         mean = np.mean(data)
         rms = stat_funcs['rms'](data)
         vert_lims = plt.ylim()
         plt.plot([mean, mean], vert_lims, 'r--', label=f'mean:{mean:6.1f}')
         plt.plot([rms, rms], vert_lims, 'k--', label=f'rms:{rms:7.1f}')
-        plt.xlabel('XY ERROR (um)')
-        plt.legend(loc='upper right', fontsize='x-small', prop={'family': 'monospace'})
+        if plot_idx > (nrows - 1) * ncols:  # i.e. bottom row
+            plt.xlabel('XY ERROR (um)')
+        plt.legend(loc='upper right', prop={'family': 'monospace', 'size': 'x-small'})
+        subtitle = f'SUBMOVE: {submove}'
+        subtitle += f'\nnum targeted: {len(selection)}'
+        subtitle += f'\nwithin sigma: {len(get_idxs(table, submove))}'
+        plt.annotate(subtitle, xy=(0.01, 0.99), xycoords='axes fraction', fontsize='small',
+                     fontfamily='monospace', verticalalignment='top', horizontalalignment='left')
         plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
-    note1 = get_exposure_description(table)
-    note2 = meta_str(summary)
     title = get_sigma_str(sigma, for_filename=False)
-    plt.suptitle(title)
-
-    # place_notes(note1, note2, level='figure')
-    # 2020-09-17 [JHS] matplotlib bug, place_notes doesn't work for fig with subplots
-    # hack to get data into title string follows instead
-    note_lines = note1.strip().split('\n') + note2.strip().split('\n')
+    note_lines = get_exposure_description(table).strip().split('\n')
     c1 = math.ceil(len(note_lines)/3)
     c2 = math.ceil(len(note_lines)/3 * 2)
     lefts = note_lines[:c1]
@@ -774,12 +773,9 @@ def histogram(table, sigma):
     lefts_max = str(max([len(line) for line in lefts]))
     mids_max = str(max([len(line) for line in mids]))
     rights_max = str(max([len(line) for line in rights]))
-    alt_title = title
     for i in range(len(lefts)):
-        alt_title += f'\n{format(lefts[i], lefts_max)}  {format(mids[i], mids_max)}  {format(rights[i], rights_max)}'
-    plt.suptitle(alt_title, fontfamily='monospace', verticalalignment='top', fontsize='medium')
-    # end of notes hack
-    
+        title += f'\n{format(lefts[i], lefts_max)}  {format(mids[i], mids_max)}  {format(rights[i], rights_max)}'
+    plt.suptitle(title, fontfamily='monospace', verticalalignment='top', fontsize='medium')    
     expids_str = get_expids_str(table, for_filename=True)
     sigma_str = get_sigma_str(sigma, for_filename=True)
     path = os.path.join(save_dir, f'expid_{expids_str}_hist_sigma_{sigma_str}.{img_format}')
