@@ -680,10 +680,17 @@ def bigchart(table, note1='', note2='', limits={}):
     limits = finalize_plot(path, limits)
     return path, limits
 
-def histogram(table, note1, note2, limits={}):
+def choose_subplot_dims(n_subplots):
+    '''Returns tuple (n_rows, n_cols) to fit n_subplots in one plot window.'''
+    max_col = 3
+    n_rows = math.ceil(n_subplots / max_col)
+    n_cols = math.ceil(n_subplots / n_rows)
+    return (n_rows, n_cols)
+
+def histogram(table, sigma):
     '''Make a histogram of positioning errors.
     
-    INPUT:  table ... astropy table including 'ERR_XY' and 'SUBMOVE'
+    INPUT:  table ... astropy table including 'ERR_XY', 'SUBMOVE', and 'S'
             note1 ... optional multi-line string, to be printed at bottom of chart
             note2 ... optional multi-line string, to be printed at bottom of chart
             limits ... optionally can force plot limits (e.g. to homogenize plots
@@ -693,12 +700,17 @@ def histogram(table, note1, note2, limits={}):
     OUTPUT: path ... path to output plot file
             limits ... dict of same format as described above
     '''
-    if not limits:
-        limits = {'xfig': 9.5, 'yfig': 7, 'dpi': 200}
+    limits = {'xfig': 9.5, 'yfig': 7, 'dpi': 200}
     init_plot(limits)
     scale = 1000
     n_bins_min = 20
-    data = table['ERR_XY'] * scale
+    submoves = get_submove_ids(table)
+    n_rows, n_cols = choose_subplot_dims(len(submoves))
+    for submove in submoves:
+        plt.subplot(n_rows, n_cols, submoves.index(submove), sharex=True)
+        sel1 = get_idxs(table, submove, sigma)
+        data = table['ERR_XY'] * scale
+        
     if 'bins' in limits:
         bins = limits['bins']
     else:
@@ -713,6 +725,11 @@ def histogram(table, note1, note2, limits={}):
     plt.xlabel('XY ERROR (um)')
     plt.legend(loc='upper right')
     plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
+    note1 = get_description(subtable, submove, sigma)
+    note1 += '\n' + get_description(subtable, submove)  # too subtle, make more obvious
+    note1 += '\n' + get_exposure_description(subtable)
+    note1 += '\n' + meta_str(summary)
+    note2 = ''
     place_notes(note1, note2)    
     expids_str = get_expids_str(table, for_filename=True)
     submove = get_submoves_str(table, for_filename=True)
@@ -782,20 +799,11 @@ if __name__ == '__main__':
         log(f'Saved big chart for submove {submove} to {path}')
     
     # plot histograms
-    hist_limits = {}
     sigmas = get_sigmas(moves)
     for sigma in sigmas:
-        for submove in submoves:
-            selection = get_idxs(moves, submove, sigma)
-            subtable = moves[selection]
-            note1 = get_description(subtable, submove, sigma)
-            note1 += '\n' + get_description(subtable, submove)  # too subtle, make more obvious
-            note1 += '\n' + get_exposure_description(subtable)
-            note1 += '\n' + meta_str(summary)
-            note2 = ''            
-            path, hist_limits = histogram(subtable, note1, note2, hist_limits)
-            log(f'Saved histogram for sigma={sigma} to {path}')
-        
+        path = histogram(moves, sigma)
+        log(f'Saved histogram for sigma={sigma} to {path}')
+
     # export tabular data
     expids_str = 'expid_' + get_expids_str(moves, for_filename=True)
     moves_path = os.path.join(save_dir, f'{expids_str}_moves.csv')
