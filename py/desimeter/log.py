@@ -6,7 +6,7 @@ import logging
 _loggers = dict()
 def get_logger(level=None, path=None, timestamps=False):
     '''Returns a logger, which can be used like logger.info('some message') etc.
-
+    
     INPUTS: level ... None --> use environment variable
                       otherwise string like 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'FATAL', 'CRITICAL'
                       
