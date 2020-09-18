@@ -9,7 +9,7 @@ def get_logger(level=None, path=None, timestamps=False):
     
     INPUTS: level ... None --> use environment variable
                       otherwise string like 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'FATAL', 'CRITICAL'
-                      
+
             path  ... None --> do not log to disk
                       otherwise string of where to save all log messages (identical console printouts will also happen)
                       
