@@ -11,22 +11,33 @@ from desimeter.transform.fvc2fp import FVC2FP
 from desimeter.match import match_same_system,match_arbitrary_translation_dilatation
 from desimeter.simplecorr import SimpleCorr
 
-metrology_pinholes_table = None
-metrology_fiducials_table = None
+metrology_table_cached = None
 
 
-def findfiducials(spots,input_transform=None,pinhole_max_separation_mm=1.5) :
 
-    global metrology_pinholes_table
-    global metrology_fiducials_table
+def findfiducials(spots,
+                  input_transform=None,
+                  input_transform_func=None,
+                  metrology=None,
+                  pinhole_max_separation_mm=1.5,
+                  ):
+    '''
+    input_transform: FILENAME of FVC2FP transformation file to read.
+    input_transform_func: actual FVC2FP transformation object to use.
+    metrology: metrology table to use (default: read from disk)
+    '''
+
+    global metrology_table_cached
     log = get_logger()
 
     log.debug("load input tranformation we will use to go from FP to FVC pixels")
-    if input_transform is None :
-        input_transform = fvc2fp_filename()
-
-    log.info("loading input tranform from {}".format(input_transform))
-    input_tx = FVC2FP.read_jsonfile(input_transform)
+    if input_transform_func is None:
+        if input_transform is None :
+            input_transform = fvc2fp_filename()
+        log.info("loading input tranform from {}".format(input_transform))
+        input_tx = FVC2FP.read_jsonfile(input_transform)
+    else:
+        input_tx = input_transform_func
 
     xpix=np.array([2000.,]) ; ypix=np.array([0.,])
     xfp1,yfp1=input_tx.fvc2fp(xpix,ypix)
@@ -35,26 +46,28 @@ def findfiducials(spots,input_transform=None,pinhole_max_separation_mm=1.5) :
     pinhole_max_separation_pixels = pinhole_max_separation_mm/pixel2fp
     log.info("with pixel2fp = {:4.3f} mm, pinhole max separation = {:4.3f} pixels ".format(pixel2fp,pinhole_max_separation_pixels))
 
-    if metrology_pinholes_table is None :
-        metrology_table = load_metrology()
+    if metrology is None:
+        if metrology_table_cached is None:
+            metrology_table_cached = load_metrology()
+        metrology = metrology_table_cached
 
-        log.debug("keep only the pinholes")
-        metrology_pinholes_table = metrology_table[:][(metrology_table["DEVICE_TYPE"]=="FIF")|(metrology_table["DEVICE_TYPE"]=="GIF")]
+    log.debug("keep only the pinholes")
+    metrology_pinholes_table = metrology[:][(metrology["DEVICE_TYPE"]=="FIF")|(metrology["DEVICE_TYPE"]=="GIF")]
 
-        # use input transform to convert X_FP,Y_FP to XPIX,YPIX
-        xpix,ypix = input_tx.fp2fvc(metrology_pinholes_table["X_FP"],metrology_pinholes_table["Y_FP"])
-        metrology_pinholes_table["XPIX"]=xpix
-        metrology_pinholes_table["YPIX"]=ypix
+    # use input transform to convert X_FP,Y_FP to XPIX,YPIX
+    xpix,ypix = input_tx.fp2fvc(metrology_pinholes_table["X_FP"],metrology_pinholes_table["Y_FP"])
+    metrology_pinholes_table["XPIX"]=xpix
+    metrology_pinholes_table["YPIX"]=ypix
 
-        log.debug("define fiducial location as the most central dot")
-        central_pinholes=[]
-        for loc in np.unique(metrology_pinholes_table["LOCATION"]) :
-            ii=np.where(metrology_pinholes_table["LOCATION"]==loc)[0]
-            mx=np.mean(metrology_pinholes_table["XPIX"][ii])
-            my=np.mean(metrology_pinholes_table["YPIX"][ii])
-            k=np.argmin((metrology_pinholes_table["XPIX"][ii]-mx)**2+(metrology_pinholes_table["YPIX"][ii]-my)**2)
-            central_pinholes.append(ii[k])
-        metrology_fiducials_table = metrology_pinholes_table[:][central_pinholes]
+    log.debug("define fiducial location as the most central dot")
+    central_pinholes=[]
+    for loc in np.unique(metrology_pinholes_table["LOCATION"]) :
+        ii=np.where(metrology_pinholes_table["LOCATION"]==loc)[0]
+        mx=np.mean(metrology_pinholes_table["XPIX"][ii])
+        my=np.mean(metrology_pinholes_table["YPIX"][ii])
+        k=np.argmin((metrology_pinholes_table["XPIX"][ii]-mx)**2+(metrology_pinholes_table["YPIX"][ii]-my)**2)
+        central_pinholes.append(ii[k])
+    metrology_fiducials_table = metrology_pinholes_table[:][central_pinholes]
 
     # find fiducials candidates
     log.info("select spots with at least two close neighbors (in pixel units)")
