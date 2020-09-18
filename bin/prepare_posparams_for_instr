@@ -56,7 +56,7 @@ input_table = Table.read(args.infile)
 # import other modules
 import numpy as np
 import os
-import logging
+from desimeter.log import get_logger
 import desimeter.posparams.fitter as fitter
 import desimeter.io
 import desimeter.transform.pos2ptl as pos2ptl
@@ -77,22 +77,21 @@ keys_out_to_in = {val:key for key,val in keys_in_to_out.items()}
 new_table = input_table.copy()
 for key_in, key_out in keys_in_to_out.items():
     new_table[key_out] = new_table[key_in]
-
+    
+# cast any boolean strings to true bools, where necessary
+commit_prefix = 'COMMIT_'
+possible_bools = {'True', 'true', 'TRUE', True, 1, 'Yes', 'yes', 'YES'}
+for key in new_table.columns:
+    is_boolean = commit_prefix in key
+    if is_boolean:
+        new = [True if x in possible_bools else False for x in new_table[key]]
+        new_table[key] = new
+        
 # set up a log file
 script_name = os.path.basename(__file__)
 out_dir = os.path.dirname(args.infile)
 log_path = os.path.join(out_dir, log_name)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-[logger.removeHandler(h) for h in logger.handlers]
-fh = logging.FileHandler(filename=log_path, mode='a', encoding='utf-8')
-sh = logging.StreamHandler()
-formatter = logging.Formatter(fmt='%(asctime)s %(levelname)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S %z')
-formatter.converter = time.gmtime
-fh.setFormatter(formatter)
-sh.setFormatter(formatter)
-logger.addHandler(fh)
-logger.addHandler(sh)
+logger = get_logger(level=None, path=log_path, timestamps=True)
 logger.info(f'Running {script_name} to prepare positioner calibration parameters for use on instrument.')
 logger.info(f'Input file is: {args.infile}')
 logger.info(f'Table contains {len(input_table)} rows')
@@ -106,6 +105,8 @@ def input2(message):
         user_input = '(no entry)'
     logger.info(f'USER ENTERED >>> {user_input}')
     return user_input
+
+blank_responses = {'', '(no entry)'}
 
 def yesnohelp(message):
     '''Wrapper for user input which cleans up human-entered values and returns
@@ -337,7 +338,7 @@ def check_uniqueness(table):
                 retry = False
     new_unique_posids = set(new['POS_ID'])
     new_listed_posids = list(new['POS_ID'])
-    assert len(new_unique_posids) == len(new_listed_posids), f'error, not all conflicts resolved by check_uniqueness'
+    assert len(new_unique_posids) == len(new_listed_posids), 'error, not all conflicts resolved by check_uniqueness'
     return new
 
 class Check(object):
@@ -367,7 +368,7 @@ class Check(object):
         if n_deleted:
             done_note += f'{n_deleted} rows deleted'
         else:
-            done_note += f'All rows ok'
+            done_note += 'All rows ok'
         logger.info(f'{done_note}, {len(output)} remaining')
         return output
     
@@ -388,7 +389,7 @@ class Check(object):
             old_kwargs = self.kwargs.copy()
             while True:
                 response = input2(f'Enter new {key} value (currently {val}), or blank to skip:')
-                if response == '':
+                if response in blank_responses:
                     break
                 number = str2float(response)
                 if number != None:
@@ -430,7 +431,6 @@ logger.info('All checks complete')
 #   demonstrate anticollision safety).
 valid_keys = ['LENGTH_R1', 'LENGTH_R2', 'OFFSET_T', 'OFFSET_P', 'OFFSET_X', 'OFFSET_Y',
               'SCALE_T', 'SCALE_P', 'PHYSICAL_RANGE_T', 'PHYSICAL_RANGE_P']
-commit_prefix = 'COMMIT_'
 commit_keys = {key: commit_prefix + key for key in valid_keys}
 
 # currently unused params (as of 2020-06-16), included for completeness of interface
@@ -482,4 +482,5 @@ logger.info(f'Final list of the {len(posids_to_commit)} positioner(s) with any c
 import os
 path = os.path.join(out_dir, output_name)
 new_table.write(path)
-logger.info(f'Saved output posparams to {path}.')
+logger.info(f'Saved output posparams to {path}')
+logger.info(f'Saved log file to {log_path}')

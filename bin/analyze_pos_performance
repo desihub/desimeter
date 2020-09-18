@@ -32,17 +32,8 @@ from matplotlib.ticker import FormatStrFormatter
 import multiprocessing
 
 # set up logger
-import logging
-log_level = logging.INFO + 1
-log_handler = logging.StreamHandler()
-log_formatter = logging.Formatter('%(asctime)s | %(message)s', datefmt='%Y-%m-%d %I:%M:%S %p')
-log_handler.setFormatter(log_formatter)
-logger = multiprocessing.get_logger()
-logger.setLevel(log_level)
-for handler in logger.handlers:
-    logger.removeHandler(handler)
-logger.addHandler(log_handler)
-log = lambda msg, *args, **kwargs: logger.log(log_level, msg, *args, **kwargs)
+from desimeter.log import get_logger
+log = get_logger(level=None, path=None, timestamps=True)  # None defaults to value in env variable "DESI_LOGLEVEL"
 
 # start runtime timer
 start_time = Time.now()
@@ -140,7 +131,7 @@ def read(path):
     table = Table.read(path)
     missing = required - set(table.columns)
     if any(missing):
-        log(f'Skipped data at {path} due to missing columns {missing}')
+        log.warning(f'Skipped data at {path} due to missing columns {missing}')
         return data
     initial_posids = set(table['POS_ID'])
     # table = remove_unused_columns(table)
@@ -148,12 +139,12 @@ def read(path):
     posids = set(table['POS_ID'])
     posids_removed = initial_posids - posids
     if any(posids_removed):
-        log(f'Skipped data for {posids_removed} which contained no moves in {path}')
+        log.warning(f'Skipped data for {posids_removed} which contained no moves in {path}')
     for posid in posids:
         selection = table['POS_ID'] == posid
         this = table[selection]
         data[posid] = this
-        log(f'Read data for {posid} at {path}')
+        log.info(f'Read data for {posid} at {path}')
     return data
 
 def identify_submoves(table):
@@ -348,7 +339,7 @@ def analyze_one_pos(table):
         for name, func in stat_funcs.items():
             stats_dict[name].append(func(err_xy))
     stats = Table(stats_dict)
-    log(f'Analyzed {posid}: {len(new)} data rows, {len(submoves)} submoves')
+    log.info(f'Analyzed {posid}: {len(new)} data rows, {len(submoves)} submoves')
     return new, stats
 
 sigma_to_quantile = lambda s: 1 - math.exp(-s)
@@ -811,6 +802,8 @@ def imap(function, iterable_data):
     return results
             
 if __name__ == '__main__':
+    log.info(f'{len(infiles)} input files found')
+    log.info(f'Output directory set to {save_dir}')
     
     # read data
     input_data = {}
@@ -848,13 +841,13 @@ if __name__ == '__main__':
         note1 += '\n' + meta_str(summary)
         note2 = get_summary_stats_str(summary, submove)
         path, chart_limits = bigchart(table, note1, note2, chart_limits)
-        log(f'Saved big chart for submove {submove} to {path}')
+        log.info(f'Saved big chart for submove {submove} to {path}')
     
     # plot histograms
     sigmas = get_sigmas(moves)
     for sigma in sigmas:
         path = histogram(moves, sigma)
-        log(f'Saved histogram for sigma={sigma} to {path}')
+        log.info(f'Saved histogram for sigma={sigma} to {path}')
 
     # export tabular data
     expids_str = 'expid_' + get_expids_str(moves, for_filename=True)
@@ -862,16 +855,16 @@ if __name__ == '__main__':
     stats_path = os.path.join(save_dir, f'{expids_str}_stats_by_positioner.csv')
     summary_path_base = os.path.join(save_dir, f'{expids_str}_stats_summary')
     moves.write(moves_path, overwrite=True)
-    log(f'Saved move-by-move data table to {moves_path}')
+    log.info(f'Saved move-by-move data table to {moves_path}')
     stats.write(stats_path, overwrite=True)
-    log(f'Saved positioner-by-positioner performance stats to {stats_path}')
+    log.info(f'Saved positioner-by-positioner performance stats to {stats_path}')
     ecsv_path = summary_path_base + '.ecsv'
     summary.write(ecsv_path, overwrite=True, delimiter=',')
-    log(f'Saved overall summary stats + metadata to {ecsv_path}')
+    log.info(f'Saved overall summary stats + metadata to {ecsv_path}')
     csv_path = summary_path_base + '.csv'
     summary.write(csv_path, overwrite=True)
-    log(f'Saved overall summary stats (no metadata) to {csv_path}')
+    log.info(f'Saved overall summary stats (no metadata) to {csv_path}')
     runtime = (Time.now() - start_time).to_value('sec')
     runtime_str = f'{runtime:.1f} sec' if runtime < 60 else f'{runtime/60:.1f} min'
-    log(f'Total run time: {runtime_str}')
+    log.info(f'Total run time: {runtime_str}')
     

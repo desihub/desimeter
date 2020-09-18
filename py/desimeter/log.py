@@ -4,8 +4,19 @@ import logging
 #- subset of desiutil.log.get_logger, to avoid desiutil dependency
 
 _loggers = dict()
-def get_logger(level=None):
+def get_logger(level=None, path=None, timestamps=False):
+    '''Returns a logger, which can be used like logger.info('some message') etc.
 
+    INPUTS: level ... None --> use environment variable
+                      otherwise string like 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'FATAL', 'CRITICAL'
+
+            path  ... None --> do not log to disk
+                      otherwise string of where to save all log messages (identical console printouts will also happen)
+
+            timestamps ... boolean, to turn on inclusion of timestamps in log messages
+
+    OUTPUTS: logger instance
+    '''
     if level is None:
         level = os.getenv('DESI_LOGLEVEL', 'INFO').upper()
 
@@ -33,14 +44,29 @@ def get_logger(level=None):
         ch = logging.StreamHandler()
         ch.setLevel(loglevel)
 
+        # optionally create file handler, similarly
+        if path:
+            fh = logging.FileHandler(filename=path, mode='a', encoding='utf-8')
+            fh.setLevel(loglevel)
+        else:
+            fh = None
+
         # create formatter
-        formatter = logging.Formatter('%(levelname)s:%(filename)s:%(lineno)s:%(funcName)s:%(message)s')
+        kwargs = {'fmt': '%(levelname)s:%(filename)s:%(lineno)s:%(funcName)s:%(message)s'}
+        if timestamps:
+            kwargs['fmt'] = '%(asctime)s:' + kwargs['fmt']
+            kwargs['datefmt'] = '%Y%m%dT%H%M%S%z'
+        formatter = logging.Formatter(**kwargs)
 
         # add formatter to ch
         ch.setFormatter(formatter)
+        if fh:
+            fh.setFormatter(formatter)
 
-        # add ch to logger
+        # add handlers to logger
         logger.addHandler(ch)
+        if fh:
+            logger.addHandler(fh)
 
         _loggers[level] = logger
 
