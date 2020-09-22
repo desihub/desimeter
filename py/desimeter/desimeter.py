@@ -8,6 +8,7 @@ from desimeter.match import match_same_system
 from desimeter.circles import fit_circle
 from desimeter.transform.xy2qs import xy2uv, uv2xy
 from desimeter.io import desimeter_data_dir
+from desimeter.transform.zhaoburge import fit_scale_rotation_offset
 
 from astropy.table import Table
 
@@ -62,13 +63,13 @@ class Desimeter(object):
         F = fitsio.read(infn, ext='F%04i' % frame)
 
         spots = detectspots(F, nsig=7, psf_sigma=1.)
-        #threshold=500., 
+        #threshold=500.,
         spots = findfiducials(spots,
                               input_transform_func=self.fvc2fp,
                               metrology=self.metro,
                               pinhole_max_separation_mm=1.5)
         print(spots.info)
-    
+
         self.fvc2fp.fit(spots, update_spots=True, zbfit=True, fixed_scale=False, fixed_rotation=False)
         print(spots.info)
 
@@ -99,7 +100,7 @@ class Desimeter(object):
         spots["X_FP_EXP"][selection]=spots["X_FP_METRO"][selection]
         selection = (spots["Y_FP_METRO"]!=0)
         spots["Y_FP_EXP"][selection]=spots["Y_FP_METRO"][selection]
-    
+
         # Lots of those with poor matches are bad spots -- eg cosmic rays or something
         #dist = np.hypot(spots['X_FP_EXP'] - spots['X_FP'], spots['Y_FP_EXP'] - spots['Y_FP'])
         #bad = np.flatnonzero(dist > 50)
@@ -123,7 +124,7 @@ class Desimeter(object):
                     yexp[loc] = float(t["Y_FP_EXP"][location_and_pinhole==loc][0])
                     #print(loc,xexp[loc],yexp[loc])
                 first=False
-        
+
             for loc in location_and_pinhole[selection] :
                 ii = np.where(location_and_pinhole==loc)[0]
                 if ii.size > 1 :
@@ -137,7 +138,7 @@ class Desimeter(object):
                     yexp[loc] = float(t["Y_FP_EXP"][location_and_pinhole==loc][0])
                 x[loc].append(float(t["X_FP"][i]))
                 y[loc].append(float(t["Y_FP"][i]))
-        
+
         location_and_pinhole=np.array(list(x.keys()),dtype=int)
         location=location_and_pinhole//10
         pinhole=location_and_pinhole%10
@@ -162,10 +163,10 @@ class Desimeter(object):
                 # this is a non-moving positioner, I don't use this
                 continue
             count += 1
-            
+
             xc=np.median(x[loc])
             yc=np.median(y[loc])
-        
+
             if pinhole[iloc] == 0 : # it's a positioner
                 # here is the fit
                 try:
@@ -178,11 +179,11 @@ class Desimeter(object):
                 except ValueError:
                     print("fit circle failed for loc={} x={} y={}".format(loc,xc,yc))
                     continue
-        
+
                 if iloc%100==0 :
                     print("{}/{} loc={} x={} y={} r={}".format(iloc,len(x),loc,xc,yc,r))
                 if r<0.1 : continue
-        
+
                 if do_plot and count<nmaxplot :
                     plt.figure("circles")
                     plt.plot(x[loc],y[loc],"o")
@@ -199,7 +200,49 @@ class Desimeter(object):
         dr=np.sqrt(dx**2+dy**2)
         print("median offset = %4.1f um" % (np.median(dr[dr!=0])*1000.));
         ii=np.where((xfp_metro!=0)&(dr<3.))[0]
-        
+
         # make a table out of that
         t2=Table([location[ii],pinhole[ii],xfp_metro[ii],yfp_metro[ii],xfp_meas[ii],yfp_meas[ii]],names=["LOCATION","PINHOLE_ID","X_FP_METRO","Y_FP_METRO","X_FP","Y_FP"],dtype=[int,int,float,float,float,float])
         return t2
+
+    def refit_zb(self, x1, y1, x2, y2, zbpolids):
+        '''
+        x1,y1: measured {X,Y}_FP
+        x2,y2: metrology {X,Y}_FP
+        zbpolids: list of integers of Zhao-Burge polynomial numbers
+        '''
+        transfo = self.fvc2fp
+
+        # apply transfo back to FVC pixels
+        xpix,ypix = transfo.fp2fvc(x1,y1)
+
+        # set polynomial ids
+        transfo.zbpolids = zbpolids
+        # and redo the fit, now globally
+        rxpix, rypix = transfo._reduce_xyfvc(xpix,ypix)
+        rxfp, ryfp = transfo._reduce_xyfp(x2,y2)
+        scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = fit_scale_rotation_offset(
+            rxpix, rypix, rxfp, ryfp,
+            fitzb=True, zbpolids=transfo.zbpolids, zbcoeffs=transfo.zbcoeffs)
+        transfo.scale = scale
+        transfo.rotation = rotation
+        transfo.offset_x = offset_x
+        transfo.offset_y = offset_y
+        transfo.zbpolids = zbpolids
+        transfo.zbcoeffs = zbcoeffs
+        # and apply it now
+        x1b,y1b = transfo.fvc2fp(xpix,ypix)
+        dist=np.sqrt((x1b-x2)**2+(y1b-y2)**2)
+        ok=(dist<0.08)
+
+        scale, rotation, offset_x, offset_y, zbpolids, zbcoeffs = fit_scale_rotation_offset(rxpix[ok], rypix[ok], rxfp[ok], ryfp[ok], fitzb=True, zbpolids=transfo.zbpolids, zbcoeffs=transfo.zbcoeffs)
+        transfo.scale = scale
+        transfo.rotation = rotation
+        transfo.offset_x = offset_x
+        transfo.offset_y = offset_y
+        transfo.zbpolids = zbpolids
+        transfo.zbcoeffs = zbcoeffs
+        # and apply it now
+        x1b,y1b = transfo.fvc2fp(xpix,ypix)
+
+        return x1b, y1b
