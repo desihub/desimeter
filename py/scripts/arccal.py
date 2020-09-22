@@ -97,5 +97,21 @@ def main():
     report_result(x1d,y1d, x2,y2, pinhole, 'After second Z-B',
                   'quiver4.png')
 
+def plot_zb_terms():
+    from desimeter.transform import zhaoburge as zb
+    xx,yy = np.meshgrid(np.linspace(-1, 1, 20),
+                        np.linspace(-1, 1, 20))
+    rr = xx**2 + yy**2
+    I = np.flatnonzero(rr < 1)
+    xx = xx.flat[I]
+    yy = yy.flat[I]
+    for i in range(zb.NCOEFS):
+        zbx,zby,label = zb.getZhaoBurgeTerm(i, xx, yy)
+        plt.clf()
+        plt.quiver(xx, yy, zbx, zby, pivot='middle')
+        plt.axis('equal')
+        plt.title('Zhao-Burge term %i: %s' % (i, label))
+        plt.savefig('zb-%02i.png' % i)
+    
 if __name__ == '__main__':
     main()
