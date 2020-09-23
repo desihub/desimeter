@@ -226,6 +226,25 @@ def get_sigmas(table):
     sigmas = sorted(set(table['SIGMA_CEILING']))
     return {s: table['QUANTILE_CEILING'][table['SIGMA_CEILING'] == s][0] for s in sigmas}    
 
+def identify_requests(table):
+    '''Searches LOG_NOTE field to identify original requested targets. These
+    differ from posintTP (internally-tracked) targets.
+    
+    INPUTS:  table ... astropy table containing 'LOG_NOTE', 'EXPOSURE_ID', and 'SUBMOVE'
+    OUTPUT:  copy of table, with new columns 
+             
+    Note that 'MOVE' values may not be unique, if the dataset includes multiple
+    tests. In such cases, uniqueness can be determined by inspecting also the
+    EXPOSURE_ID field --- within which MOVE *will* be unique.
+    
+    Additionally, note that 'MOVE' integers may not correspond 1:1 with those
+    given in the LOG_NOTE fields, again due to handling of uniqueness corner
+    cases. However, 'SUBMOVE' ids *will* correspond exactly to those in LOG_NOTE.
+    '''
+    new = table.copy()
+    new.sort('POS_MOVE_INDEX')
+    return new
+
 def calc_errors(table):
     '''Identifies measured and target values, then calculates errors.
     
@@ -323,6 +342,7 @@ def analyze_one_pos(table):
     assert len(posids) == 1, f'error: input to analyze should be a table with only one posid, not {posids}'
     posid = posids.pop()
     new = identify_submoves(new)
+    new = identify_requests(new)
     new = calc_errors(new)
     new = calc_loc(new)
     new = calc_target_radii(new)
