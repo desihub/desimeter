@@ -17,6 +17,7 @@ from desimeter.transform.xy2qs import qs2xy
 from desimeter.fieldmodel import FieldModel
 from desimeter.io import load_metrology,fvc2fp_filename,fvc_bias_filename
 from desimeter.spotmatch import spotmatch
+from desimeter.turbulence import correct
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""FVC image processing""")
@@ -70,6 +71,8 @@ parser.add_argument('--no-bias', action = 'store_true',
                     help = 'do not apply a bias correction (by default, use $DESIMETER_DATA/bias.fits if exist')
 parser.add_argument('--use-spotmatch', action = 'store_true',
                     help = 'use spotmatch instead of desimeter code for matching positioners and fiducials (requires the program match_positions installed and in the PATH)')
+parser.add_argument('--turbulence-correction', action = 'store_true',
+                    help = 'correct for turbulence assuming offsets between measured and expected coordinates are not spatially correlated. Only used in conjunction with option --expected-positions.')
 
 args  = parser.parse_args()
 log   = get_logger()
@@ -197,7 +200,7 @@ for seqid,spots in enumerate(spots_list) :
     if args.expected_positions is not None :
         log.info("reading expected positions in {}".format(args.expected_positions))
         expected_pos = Table.read(args.expected_positions) # auto-magically guess format
-        if not "X_FP_EXP" in expected_pos.keys() :
+        if not "X_FP" in expected_pos.keys() :
             if "EXP_Q_0" in  expected_pos.keys() :
                 log.info("EXP_Q_0,EXP_S_0 -> X_FP,Y_FP")
                 x,y = qs2xy(q=expected_pos["EXP_Q_0"],s=expected_pos["EXP_S_0"])
@@ -246,6 +249,19 @@ for seqid,spots in enumerate(spots_list) :
                 else :
                     spots[k] = np.zeros(len(spots))
             spots[k][selection]=expected_pos[k][indices_of_expected_pos]
+
+    if args.expected_positions is not None and args.turbulence_correction :
+        log.info("Turbulence correction ...")
+        selection=(spots["LOCATION"]>=0)&(spots["X_FP_EXP"]!=0)&(spots["Y_FP_EXP"]!=0) # matched
+        new_x,new_y = correct(spots["X_FP"][selection],spots["Y_FP"][selection],spots["X_FP_EXP"][selection],spots["Y_FP_EXP"][selection])
+        rms_before = np.sqrt(np.mean((spots["X_FP"][selection]-spots["X_FP_EXP"][selection])**2+(spots["Y_FP"][selection]-spots["Y_FP_EXP"][selection])**2))
+        rms_after  = np.sqrt(np.mean((new_x-spots["X_FP_EXP"][selection])**2+(new_y-spots["Y_FP_EXP"][selection])**2))
+        log.info("rms(measured-expected)={:5.4f}mm rms(corrected-expected)={:5.4f}mm ".format(rms_before,rms_after))
+        if rms_before < rms_after :
+            log.warning("turbulence correction does not reduce the rms?")
+            # apply it anyway because there might be a good reason for this
+        spots["X_FP"][selection] = new_x
+        spots["Y_FP"][selection] = new_y
 
     # for spots with metrology X_FP_EXP=X_FP_METRO
     selection = (spots["X_FP_METRO"]!=0)
