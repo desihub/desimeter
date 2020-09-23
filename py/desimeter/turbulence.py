@@ -4,7 +4,131 @@ from scipy import optimize
 import scipy.linalg
 from desimeter.match_positioners import match
 from desimeter.log import get_logger
+import scipy.spatial
 
+# =================================================================
+# from Sergey : correction using local polynomial fit
+# =================================================================
+
+def getpoly(x, y, ndeg=2):
+    """
+    Get the 2D polynomial design matrix
+    """
+    N = len(x)
+    polys = np.zeros((((ndeg + 1) * (ndeg + 2)) // 2 - 1, N * 2))  # []
+    cnt = 0
+    for deg in range(1, ndeg + 1):
+        for j in range(deg + 1):
+            i1, i2 = j, deg - j
+            # notice the i1==0 i2==0 are there to prevent 0**(-1)
+            # these are dF/dx dF/dy of the polynomial
+            polys[cnt, :N] = i1 * x**(i1 - 1 + (i1 == 0)) * y**i2
+            polys[cnt, N:] = i2 * x**i1 * y**(i2 - 1 + (i2 == 0))
+            cnt += 1
+    return polys
+
+
+def predictor(curx, cury, curdx, curdy, tofit, ndeg=2, polys=None):
+    """
+    Fit the offsets by a polynomial f-n
+    return the model predictions and
+    the cross-validated norm
+    """
+    ncv = 3
+    if polys is None:
+        polys = getpoly(curx, cury, ndeg=ndeg)
+    else:
+        polys = polys[:((ndeg + 1) * (ndeg + 2)) // 2 - 1]
+    cvid = np.arange(2 * len(curx)) % ncv
+    norm = 0
+    dxy = np.concatenate((curdx, curdy))
+    tofit2 = np.concatenate((tofit, tofit))
+    for i in range(ncv):
+        cursub = tofit2 & (cvid != i)
+        cursub1 = tofit2 & (cvid == i)
+        xcoeff = scipy.linalg.basic.lstsq(polys[:, cursub].T,
+                                          dxy[cursub],
+                                          check_finite=False)[0]
+        xpred = np.dot(polys.T, xcoeff)[cursub1]
+        norm += np.sum((xpred - dxy[cursub1])**2)
+    xcoeff = scipy.linalg.basic.lstsq(polys[:, tofit2].T, dxy[tofit2])[0]
+    xpred, ypred = np.dot(polys.T, xcoeff)[~tofit2]
+    return xpred, ypred, norm, polys
+
+
+def correct_with_pol(x, y, x0, y0, win=50):
+    """
+    Parameters
+    ----------
+    x: ndarray
+        Measured x
+    y: ndarray
+        Measured y
+    x0: ndarray
+        Expected x
+    y0: ndarray
+        Expected y
+
+    Returns
+    -------
+    xy: tuple of ndarray
+        Tuple of corrected arrays
+
+    """
+    maxndeg = 4
+    # offsets wrt reference
+    dx = x - x0
+    dy = y - y0
+
+    X0 = np.array([x0, y0]).T
+    X = np.array([x, y]).T
+
+    T0 = scipy.spatial.cKDTree(X0)
+    N = len(x)
+
+    # predicted offset
+    dxpred = np.zeros(N)
+    dypred = np.zeros(N)
+    bestdegs = np.zeros(N)
+
+    for i in range(N):
+        # go over each point
+        # query the neighborhood
+        xids = T0.query_ball_point(X[i], win)
+        xids = np.array(xids)
+
+        curxcen, curycen = x[i], y[i]
+        curx = x[xids] - curxcen
+        cury = y[xids] - curycen
+        tofit = xids != i
+        curdx = dx[xids]
+        curdy = dy[xids]
+        bestnorm = 1e9
+        # try polynomials of different degrees
+        # selecting by cross-validate norm
+        polys = None
+        for ndeg in range(maxndeg, 0, -1):
+            xpred, ypred, norm, polys = predictor(curx,
+                                                  cury,
+                                                  curdx,
+                                                  curdy,
+                                                  tofit,
+                                                  ndeg=ndeg,
+                                                  polys=polys)
+            if norm < bestnorm:
+                bestnorm = norm
+                lastx, lasty = xpred, ypred
+                bestdeg = ndeg
+        dxpred[i] = lastx
+        dypred[i] = lasty
+        bestdegs[i] = bestdeg
+    return x - dxpred, y - dypred
+# ===============================================================
+
+
+# ===============================================================
+# From Eddie : correction using gaussian processes
+# ===============================================================
 
 def make_covar_gradwavefront(data, param, rq=False):
     """Make derivative-of-Gaussian covariance matrix for data given param.
