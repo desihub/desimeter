@@ -4,10 +4,7 @@ from scipy import optimize
 import scipy.linalg
 from desimeter.match_positioners import match
 from desimeter.log import get_logger
-
-import astropy.table as atpy
 import scipy.spatial
-import numpy as np
 
 # =================================================================
 # from Sergey : correction using local polynomial fit
