@@ -8,6 +8,7 @@ import fitsio
 from desimeter.log import get_logger
 from desimeter.fieldmodel import fieldrot,dfieldrotdt
 from desimeter.time import mjd2lst
+from desimeter.io import read_hexrot_deg
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Predict the field rotation. Need an input fits header or ra,dec,lst,mjd or ra,dec,ha,mjd or ra,dec,mjd (with decimal mjd to guess the lst)""")
@@ -19,7 +20,7 @@ parser.add_argument('--dec', type = float, default = None, required = False,
 parser.add_argument('--lst', type = float, default = None, required = False,
                     help = 'LST=HA+RA in deg')
 parser.add_argument('--ha', type = float, default = None, required = False,
-                    help = 'HA=LST-RA in deg')		    
+                    help = 'HA=LST-RA in deg')
 parser.add_argument('--mjd', type = float, default = None, required = False,
                     help = 'MJD in days')
 parser.add_argument('--hexrot-arcsec', type = float, default = 0., required = False,
@@ -45,7 +46,7 @@ if args.fits_header is not None :
         if not "TARGTRA" in header :
             log.error("no TARGTRA in headers of HDU 0 or 1 of file {}".format(args.fits_header))
             sys.exit(12)
-    
+
     ra  = header["TARGTRA"]
     dec = header["TARGTDEC"]
     mjd = header["MJD-OBS"]
@@ -59,8 +60,8 @@ if args.fits_header is not None :
         lst = mjd2lst(mjd)
 
     if "HEXPOS" in header :
-         hexrot_deg = float(header["FOCUS"][5])/3600.
-        
+         hexrot_deg = read_hexrot_deg(header)
+
 else :
     ra  = args.ra
     dec = args.dec
@@ -73,13 +74,10 @@ else :
         lst = mjd2lst(mjd)
     if args.hexrot_arcsec != 0 :
         hexrot_deg = args.hexrot_arcsec/3600.
-    
+
 if ra is None or dec is None or mjd is None or lst is None :
     print("missing argument(s), try --help")
     sys.exit(12)
 
 print("FIELDROT    = {:4.3f} deg".format( fieldrot(ra=ra,dec=dec,lst_deg=lst,mjd=mjd,hexrot_deg=hexrot_deg)))
 print("DFIELDROTDT = {:4.3f} arcsec/min".format( dfieldrotdt(ra=ra,dec=dec,lst_deg=lst,mjd=mjd)))
-
-
-        
