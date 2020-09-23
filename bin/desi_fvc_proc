@@ -72,9 +72,9 @@ parser.add_argument('--no-bias', action = 'store_true',
 parser.add_argument('--use-spotmatch', action = 'store_true',
                     help = 'use spotmatch instead of desimeter code for matching positioners and fiducials (requires the program match_positions installed and in the PATH)')
 parser.add_argument('--turbulence-correction', action = 'store_true',
-                    help = 'correct for turbulence assuming offsets between measured and expected coordinates are not spatially correlated. Only used in conjunction with option --expected-positions.')
+                    help = 'turbulence correction assuming offsets between measured and expected coordinates are not spatially correlated. Only used in conjunction with option --expected-positions.')
 parser.add_argument('--turbulence-correction-with-pol', action = 'store_true',
-                    help = 'correct for turbulence assuming offsets between measured and expected coordinates are not spatially correlated. Only used in conjunction with options --expected-positions, uses polynomial method instead of Gaussian processes ')
+                    help = 'turbulence correction using local polynomial fit instead of Gaussian processes.')
 
 args  = parser.parse_args()
 log   = get_logger()
