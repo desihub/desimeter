@@ -6,6 +6,16 @@ from desimeter.match_positioners import match
 
 
 def make_covar_gradwavefront(data, param, rq=False):
+    """Make derivative-of-Gaussian covariance matrix for data given param.
+
+    Args:
+        data : ndarray containing x, y, dx, dy for each positioner
+        param : array_like(float) giving [sigma, amplitude, length scale]
+            for Gaussian covariance
+
+    Returns:
+        covar : covariance matrix (n*len(data)*2, n*len(data)*2) for [dx, dy]
+    """
     sigma, aa, ll = param
     xdist = (data['x'][None, :] - data['x'][:, None])/ll
     ydist = (data['y'][None, :] - data['y'][:, None])/ll
@@ -21,6 +31,17 @@ def make_covar_gradwavefront(data, param, rq=False):
 
 
 def loss_gradwavefront(data, param, rq=False):
+    """Loss function for data using derivative-of-Gaussian covariance matrix.
+
+    Args:
+        data : ndarray containing x, y, dx, dy for each positioner
+        param : array_like(float) giving [sigma, amplitude, length scale]
+            for Gaussian covariance
+
+    Returns:
+        loss : -0.5 * log(marginal likelihood) of data coming from the given
+           covariance matrix
+    """
     covar = make_covar_gradwavefront(data, param, rq=rq)
     chol, low = scipy.linalg.cho_factor(covar, check_finite=False,
                                         overwrite_a=True)
@@ -33,6 +54,17 @@ def loss_gradwavefront(data, param, rq=False):
 
 
 def make_covar_independent(data, param, rq=False):
+    """Gaussian covariance matrix for data given param.
+
+    Args:
+        data : ndarray containing x, y, dx, dy for each positioner
+        param : array_like(float) giving [sigma, amplitude, length scale]
+            for Gaussian covariance
+        rq : bool, use rational quadratic covariance instead of Gaussian
+
+    Returns:
+        covar : covariance matrix for dx (equivalently, dy)
+    """
     # might be good to have more large-scale coherence
     # "rational quadratic" seems like the next obvious choice.
     if not rq:
@@ -51,6 +83,17 @@ def make_covar_independent(data, param, rq=False):
 
 
 def loss_independent(data, param, rq=False):
+    """Loss function for data given param describing covariance matrix.
+
+    Args:
+        data : ndarray containing x, y, dx, dy for each positioner
+        param : array_like(float) giving [sigma, amplitude, length scale]
+            for Gaussian covariance
+
+    Returns:
+        loss : -0.5 * log(marginal likelihood) of data coming from the given
+           covariance matrix
+    """
     covar = make_covar_independent(data, param, rq=rq)
     # chol = np.linalg.cholesky(covar)
     chol, low = scipy.linalg.cho_factor(covar, check_finite=False,
@@ -67,6 +110,18 @@ def loss_independent(data, param, rq=False):
 
 
 def make_data(expect, measure):
+    """Convert expected and measured desimeter data structures to data array.
+
+    Args:
+        expect : desimeter data structure giving expected locations of
+            positioners.
+        measure : desimeter data structure giving measured locations of
+            positioners.
+
+    Returns:
+        ndarray containing (location, x, y, dx, dy) for positioners in
+            expect and measure.
+    """
     mex, mme = match(expect['LOCATION'], measure['LOCATION'])
     data = np.zeros(len(mex), dtype=[
         ('location', 'i4'), ('x', 'f8'), ('y', 'f8'),
@@ -80,6 +135,21 @@ def make_data(expect, measure):
 
 
 def solve_covar(data, lossfun, covarfun, rq=False, nuse=500, **kw):
+    """Find covariance matrix best explaining data.
+
+    Args:
+        lossfun : function taking data & param, returning -0.5 log(likelihood)
+        covarfun : function taking data & param, returning covariance matrix
+        rq : bool, use rational quadratic covariance matrix rather than
+            Gaussian
+        nuse : int, use only central nuse fibers when optimizing covariance
+            matrix
+        **kwargs : additional arguments passed to scipy.optimize.minimize
+
+    Returns:
+        covar : ndarray, best fit covariance matrix
+        res : output of scipy.optimize.minimize
+    """
     if nuse > 0:
         rr2 = data['x']**2+data['y']**2
         s = np.argsort(rr2)
@@ -100,6 +170,23 @@ def solve_covar(data, lossfun, covarfun, rq=False, nuse=500, **kw):
 
 
 def solve_files(expectedfn, measuredfn, mode='independent', **kw):
+    """Find turbulent contribution to measured positions of fibers.
+
+    Args:
+        expectedfn : file name containing expected locations of positioners
+        measuredfn : file name containing measured locations of positioners
+        mode : 'independent' or 'gradwavefront
+            models turbulent offset correlations as either a Gaussian process
+            with a Gaussian correlation function or a derivative-of-Gaussian
+            correlation function (appropriate if the turbulent contributions
+            can be modeled as the derivative of a Gaussian-correlated wavefront
+            offset)
+        **kw : additional keywords passed to solve_{independent, gradwavefront}
+
+    Returns:
+        loss : -0.5 * log(marginal likelihood) of data coming from the given
+           covariance matrix
+    """
     expect = astropy.io.ascii.read(expectedfn)
     measure = astropy.io.ascii.read(measuredfn)
     data = make_data(expect, measure)
@@ -122,6 +209,34 @@ def solve_files(expectedfn, measuredfn, mode='independent', **kw):
 
 
 def correct(x, y, x0, y0, dx=None, dy=None):
+    """Remove correlated turbulent signals from measured locations of fibers.
+
+    Residuals x-x0, y-y0 are modeled as a Gaussian process.  The
+    covariance of this Gaussian process is fit as with a covariance
+    matrix with the following components:
+    - a diagonal measurement error and positioner movement error term
+    - a spatially correlated turbulent term
+
+    The spatially correlated turbulent term is modeled with a Gaussian
+    covariance matrix whose parameters are fit using the inner 500 positioners.
+    The covariance is assumed to be isotropic in x & y, but the best fit
+    turbulence is applied independently to x & y.
+
+    dx & dy are placeholders for future code that includes different
+    uncertainties for different fibers.
+
+    Args:
+        x : array_like(n), measured x positions of fibers
+        y : array_like(n), measured y positions of fibers
+        x0 : array_like(n), expected x positions of fibers
+        y0 : array_like(n), expected y positions of fibers
+        dx: array_like(n), uncertainty in x.  Not currently used.
+        dy: array_like(n), uncertainty in y.  Not currently used.
+
+    Returns:
+        x : array_like(n), turbulence-corrected x positions of fibers
+        y : array_like(n), turbulence-corrected y positions of fibers
+    """
     data = np.zeros(len(x), dtype=[
         ('x', 'f8'), ('y', 'f8'),
         ('dx', 'f8'), ('dy', 'f8')])
@@ -134,6 +249,25 @@ def correct(x, y, x0, y0, dx=None, dy=None):
 
 
 def solve_independent(data, excludeself=False, **kw):
+    """Find turbulent contributions to measured fiber positions.
+
+    Assumes that the covariance matrix should be the same for x & y,
+    but that otherwise the x & y directions are independent.
+
+    Args:
+        data : ndarray containing measured positions and residuals
+            from expected locations
+        excludeself : bool
+            do not use this fiber when computing the turbulence
+            affecting this fiber.
+        **kw : additional keywords passed to solve_covar
+
+    Returns:
+        xturb : turbulent contributions in x direction
+        yturb : turbulent contributions in y direction
+        res : output from scipy.optimize.minimize describing best fit
+            covariance matrix
+    """
     covar, res = solve_covar(data, lossfun=loss_independent,
                              covarfun=make_covar_independent, **kw)
 
@@ -152,6 +286,25 @@ def solve_independent(data, excludeself=False, **kw):
 
 
 def solve_gradwavefront(data, excludeself=False, **kw):
+    """Find turbulent contributions to measured fiber positions.
+
+    Assumes that the turbulent contributions can be modeled as the
+    gradient of a wavefront error.  i.e., they are curl free.
+
+    Args:
+        data : ndarray containing measured positions and residuals
+            from expected locations
+        excludeself : bool
+            do not use this fiber when computing the turbulence
+            affecting this fiber.
+        **kw : additional keywords passed to solve_covar
+
+    Returns:
+        xturb : turbulent contributions in x direction
+        yturb : turbulent contributions in y direction
+        res : output from scipy.optimize.minimize describing best fit
+            covariance matrix
+    """
     covar, res = solve_covar(data, lossfun=loss_gradwavefront,
                              covarfun=make_covar_gradwavefront, **kw)
 
@@ -170,6 +323,7 @@ def solve_gradwavefront(data, excludeself=False, **kw):
 
 
 def empirical_covariance(data, bins=10, edges=None):
+    """Compute empirical covariance of the data."""
     dist = np.sqrt((data['x'][None, :] - data['x'][:, None])**2 +
                    (data['y'][None, :] - data['y'][:, None])**2).ravel()
     # meandx = np.mean(data['dx'])
@@ -194,6 +348,7 @@ def empirical_covariance(data, bins=10, edges=None):
 
 
 def turbulence_gallery(fn, expectfn):
+    """Make some plots of the turbulence in measured data from desimeter."""
     from matplotlib import pyplot as p
     p.clf()
     expect = astropy.io.ascii.read(expectfn)
