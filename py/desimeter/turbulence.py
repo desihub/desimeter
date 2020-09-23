@@ -1,21 +1,8 @@
 import numpy as np
-from astropy.io import ascii
+import astropy.io.ascii
 from scipy import optimize
 import scipy.linalg
-
-
-def match(a, b):
-    sa = np.argsort(a)
-    sb = np.argsort(b)
-    _, ua = np.unique(a[sa], return_index=True)
-    _, ub = np.unique(b[sb], return_index=True)
-    if len(ua) != len(a):
-        raise ValueError('All keys in a must be unique.')
-    ind = np.searchsorted(a[sa], b)
-    m = (ind >= 0) & (ind < len(a))
-    matches = a[sa[ind[m]]] == b[m]
-    m[m] &= matches
-    return sa[ind[m]], np.flatnonzero(m)
+from desimeter.match_positioners import match
 
 
 def make_covar_gradwavefront(data, param, rq=False):
@@ -34,7 +21,6 @@ def make_covar_gradwavefront(data, param, rq=False):
 
 
 def loss_gradwavefront(data, param, rq=False):
-    sigma, aa, ll = param
     covar = make_covar_gradwavefront(data, param, rq=rq)
     chol, low = scipy.linalg.cho_factor(covar, check_finite=False,
                                         overwrite_a=True)
@@ -114,8 +100,8 @@ def solve_covar(data, lossfun, covarfun, rq=False, nuse=500, **kw):
 
 
 def solve_files(expectedfn, measuredfn, mode='independent', **kw):
-    expect = ascii.read(expectedfn)
-    measure = ascii.read(measuredfn)
+    expect = astropy.io.ascii.read(expectedfn)
+    measure = astropy.io.ascii.read(measuredfn)
     data = make_data(expect, measure)
     if mode == 'independent':
         xturb, yturb, res = solve_independent(data, **kw)
@@ -143,7 +129,7 @@ def correct(x, y, x0, y0, dx=None, dy=None):
     data['y'] = y
     data['dx'] = x-x0
     data['dy'] = y-y0
-    xturb, yturb, res = solve_independent(data, nuse=500, excludeself=True)
+    xturb, yturb, _ = solve_independent(data, nuse=500, excludeself=True)
     return x-xturb, y-yturb
 
 
@@ -210,30 +196,24 @@ def empirical_covariance(data, bins=10, edges=None):
 def turbulence_gallery(fn, expectfn):
     from matplotlib import pyplot as p
     p.clf()
-    expect = ascii.read(expectfn)
+    expect = astropy.io.ascii.read(expectfn)
     p.subplots_adjust(hspace=0., wspace=0.)
     for i, fn0 in enumerate(fn):
-        measure = ascii.read(fn0)
+        measure = astropy.io.ascii.read(fn0)
         data = make_data(expect, measure)
         covar, res = solve_covar(data, lossfun=loss_independent,
                                  covarfun=make_covar_independent)
         print(res.x)
-        uu, ss, vv = np.linalg.svd(covar)
+        uu, ss, _ = np.linalg.svd(covar)
         xvec = np.dot(uu, np.random.randn(len(ss))*np.sqrt(ss))
         yvec = np.dot(uu, np.random.randn(len(ss))*np.sqrt(ss))
-        p.subplot(2, 3, 2*i+1)
-        p.quiver(data['x'], data['y'], data['dx'], data['dy'],
-                 units='x', scale=0.001)
-        p.gca().xaxis.set_ticklabels('')
-        p.gca().yaxis.set_ticklabels('')
-        p.gca().xaxis.set_ticks([])
-        p.gca().yaxis.set_ticks([])
-        p.gca().set_aspect('equal')
-        p.subplot(2, 3, 2*i+2)
-        p.quiver(data['x'], data['y'], xvec, yvec, units='x',
-                 scale=0.001)
-        p.gca().set_aspect('equal')
-        p.gca().xaxis.set_ticklabels('')
-        p.gca().yaxis.set_ticklabels('')
-        p.gca().xaxis.set_ticks([])
-        p.gca().yaxis.set_ticks([])
+        for k, (dx, dy) in enumerate([
+                [data['dx'], data['dy']], [xvec, yvec]]):
+            p.subplot(2, 3, 2*i+k+1)
+            p.quiver(data['x'], data['y'], dx, dy,
+                     units='x', scale=0.001)
+            p.gca().xaxis.set_ticklabels('')
+            p.gca().yaxis.set_ticklabels('')
+            p.gca().xaxis.set_ticks([])
+            p.gca().yaxis.set_ticks([])
+            p.gca().set_aspect('equal')
