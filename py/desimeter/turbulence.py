@@ -3,6 +3,7 @@ import astropy.io.ascii
 from scipy import optimize
 import scipy.linalg
 from desimeter.match_positioners import match
+from desimeter.log import get_logger
 
 
 def make_covar_gradwavefront(data, param, rq=False):
@@ -237,6 +238,9 @@ def correct(x, y, x0, y0, dx=None, dy=None):
         x : array_like(n), turbulence-corrected x positions of fibers
         y : array_like(n), turbulence-corrected y positions of fibers
     """
+    if (dx is not None) or (dy is not None):
+        log = get_logger()
+        log.warning('Uncertainties in x & y are currently ignored.')
     data = np.zeros(len(x), dtype=[
         ('x', 'f8'), ('y', 'f8'),
         ('dx', 'f8'), ('dy', 'f8')])
