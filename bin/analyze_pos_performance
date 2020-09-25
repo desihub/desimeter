@@ -60,6 +60,9 @@ required = {'POS_ID', 'POS_MOVE_INDEX', 'POS_T', 'POS_P', 'PTL_X', 'PTL_Y',
             'LENGTH_R1', 'LENGTH_R2', 'OFFSET_X', 'OFFSET_Y', 'OFFSET_T', 'OFFSET_P',
             'MOVE_CMD', 'EXPOSURE_ID', 'EXPOSURE_ITER', 'DEVICE_LOC', 'DATE', 'LOG_NOTE'}
 sequence_note_prefix = 'sequence: '
+abs_move_coords = {'QS', 'obsXY', 'poslocXY', 'ptlXY', 'posintTP', 'poslocTP'}
+rel_move_coords = {'dQdS', 'obsdXdY', 'poslocdXdY', 'dTdP'}
+all_move_coords = abs_move_coords | rel_move_coords
 
 # statistics functions for summarizing errors
 stat_funcs = {'max': np.max, 'min': np.min, 'mean': np.mean, 'median': np.median,
@@ -227,10 +230,12 @@ def get_sigmas(table):
     return {s: table['QUANTILE_CEILING'][table['SIGMA_CEILING'] == s][0] for s in sigmas}    
 
 def identify_requests(table):
-    '''Searches LOG_NOTE field to identify original requested targets. These
-    differ from posintTP (internally-tracked) targets.
+    '''Searches MOVE_CMD fields to identify original requested targets.
+    These differ from posintTP (internally-tracked) targets.
     
-    INPUTS:  table ... astropy table containing 'LOG_NOTE', 'EXPOSURE_ID', and 'SUBMOVE'
+    INPUTS:  table ... astropy table containing 'POS_MOVE_INDEX', 'MOVE_CMD',
+                      'EXPOSURE_ID', 'MOVE', and 'SUBMOVE'
+                      
     OUTPUT:  copy of table, with new columns 
              
     Note that 'MOVE' values may not be unique, if the dataset includes multiple
@@ -243,6 +248,41 @@ def identify_requests(table):
     '''
     new = table.copy()
     new.sort('POS_MOVE_INDEX')
+    
+    # temporary, since code below is non-functional yet
+    return new
+    
+    n = len(new)
+    submove0 = new['SUBMOVE'] == 0
+    possible_requests = [s.split(';')[0] for s in new['MOVE_CMD']]
+    possible_coords = [s.split('=')[0] for s in possible_requests]
+    is_move = [s in all_move_coords for s in possible_coords]
+    requests = [possible_requests[i] if is_move[i] else '' for i in range(n)]
+    coords = [possible_coords[i] if is_move[i] else '' for i in range(n)]
+    val_strs = [requests[i].split('=')[1] if is_move[i] else '' for i in range(n)]
+    val_str_lists = [s.strip('[').strip(']').split(',') for s in val_strs]
+    vals0 = [float(val_str_lists[i][0]) if is_move[i] else None for i in range(n)]
+    vals1 = [float(val_str_lists[i][1]) if is_move[i] else None for i in range(n)]    
+    is_abs = [coord in abs_move_coords for coord in coords]    
+    coord, uv, u, v = tuple([[None]*len(new)]*4)
+    #selection = np.logical_and(submove0, is_abs_cmd)
+    
+    for coord in set(coords) & set(abs_move_coords):
+        if coord == 'QS':
+            func = None
+        elif coord == 'obsXY':
+            func = None
+        elif coord == 'poslocXY':
+            func = None
+        elif coord == 'ptlXY':
+            func = None
+        elif coord == 'posintTP':
+            func = None
+        elif coord == 'poslocTP':
+            func = None
+        else:
+            assert False, f'command coordinates {coord} not recognized'
+        
     return new
 
 def calc_errors(table):
@@ -251,7 +291,7 @@ def calc_errors(table):
     INPUTS:  table ... astropy table containing 'PTL_X', 'PTL_Y', 'POS_T', 'POS_P',
                        'LENGTH_R1', 'LENGTH_R2', 'OFFSET_T', 'OFFSET_P', 'OFFSET_X',
                        'OFFSET_Y', 'SUBMOVE', and 'POS_MOVE_INDEX'
-    OUTPUT:  copy of table, where measured data columns will have _MEAS  appended to
+    OUTPUT:  copy of table, where measured data columns will have _MEAS appended to
              their names (for clarity) and new columns will be added with _TARG suffix,
              as well as new columns with ERR_ prefix
     '''
@@ -849,6 +889,10 @@ if __name__ == '__main__':
     # binning
     moves = identify_quantiles(moves)
     summary = summarize_stats(moves)
+    
+    
+    # DO VERSIONS WHERE WE HAVE "TARGETS" BE TRACKED VERSUS REQUESTED
+    
     
     # plot big xy charts
     chart_limits = {}
