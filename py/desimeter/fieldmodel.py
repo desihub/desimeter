@@ -12,6 +12,7 @@ from desimeter.trig import cosd, arctan2d, rot2deg
 
 from desimeter.log import get_logger
 from astropy.table import Table
+from astropy.time import Time
 
 class FieldModel(object):
 
@@ -92,12 +93,36 @@ class FieldModel(object):
         # here we could do some conversion of column names
         catalog = Table.read(filename)
 
+        if "mjd_obs" in catalog.dtype.names :
+            self.mjd = np.mean(catalog["mjd_obs"])
+            log.info("use mjd={} from catalog['mjd_obs']".format(self.mjd))
+
         if ( not  "xcentroid" in catalog.dtype.names ) or ( not "ra_gaia" in catalog.dtype.names ) :
             log.error("I can only deal with Aaron's catalogs with columns xcentroid,ycentroid,ra_gaia,dec_gaia, sorry")
             raise RuntimeError("I can only deal with Aaron's catalogs with columns xcentroid,ycentroid,ra_gaia,dec_gaia, sorry")
 
         max_sep_arcsec = 2.
         log.info("selection stars for which we have a good match (< {} arcsec)".format(max_sep_arcsec))
+        ra_gaia = catalog['ra_gaia']
+        dec_gaia = catalog['dec_gaia']
+        if all([_ in catalog.columns for _ in ['pmra', 'pmdec', 'ref_epoch']]):
+
+            if self.mjd is None :
+                log.warning("HAVE TO IGNORE PROPER MOTION BECAUSE MJD=NONE")
+            else :
+                # if proper motions and reference epochs are there
+                pmra = catalog['pmra']
+                pmdec = catalog['pmdec']
+                # if unknown, zero out the pms
+                pmra[~np.isfinite(pmra)] = 0
+                pmdec[~np.isfinite(pmdec)] = 0
+                cur_year = Time(self.mjd, format='mjd').to_value(format='jyear')
+                # observation time in decimal years (like 2020.3)
+                ref_epoch = catalog['ref_epoch']
+                dra  = (cur_year - ref_epoch) * pmra / 3600e3 / cosd(dec_gaia)
+                ddec = (cur_year - ref_epoch) * pmdec / 3600e3
+                ra_gaia = ra_gaia + dra
+                dec_gaia = dec_gaia + ddec
 
         dra  = (catalog["ra"]-catalog["ra_gaia"])*cosd(catalog["dec_gaia"]) * 3600. # arcsec
         ddec = (catalog["dec"]-catalog["dec_gaia"]) * 3600. # arcsec
@@ -121,14 +146,15 @@ class FieldModel(object):
         if mjd is not None :
             self.mjd = mjd
             log.info("Use argument MJD={}".format(self.mjd))
-        elif "mjd_obs" in catalog.keys():
-            self.mjd    = np.mean(catalog["mjd_obs"])
-            log.info("Use 'mjd_obs' in catalog, MJD={}".format(self.mjd))
-        elif self.mjd is None :
-            log.error("mjd is None")
-            raise RuntimeError("mjd is None")
-        else :
-            log.info("Use MJD={}".format(self.mjd))
+        if self.mjd is None :
+            if "mjd_obs" in catalog.keys():
+                self.mjd    = np.mean(catalog["mjd_obs"])
+                log.info("Use 'mjd_obs' in catalog, MJD={}".format(self.mjd))
+            else :
+                log.error("mjd is None")
+                raise RuntimeError("mjd is None")
+
+        log.info("Use MJD={}".format(self.mjd))
 
         if hexrot_deg is not None :
             self.hexrot_deg = hexrot_deg
