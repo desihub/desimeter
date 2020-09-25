@@ -13,6 +13,7 @@ from desimeter.trig import cosd, arctan2d, rot2deg
 
 from desimeter.log import get_logger
 from astropy.table import Table
+from astropy.time import Time
 
 
 class FieldModel(object):
@@ -108,9 +109,24 @@ class FieldModel(object):
             "selection stars for which we have a good match (< {} arcsec)".
             format(max_sep_arcsec))
 
-        dra = (catalog["ra"] - catalog["ra_gaia"]) * cosd(
-            catalog["dec_gaia"]) * 3600.  # arcsec
-        ddec = (catalog["dec"] - catalog["dec_gaia"]) * 3600.  # arcsec
+        ra_gaia = catalog['ra_gaia']
+        dec_gaia = catalog['dec_gaia']
+        if all([_ in catalog.columns for _ in ['pmra', 'pmdec', 'ref_epoch']]):
+            # if proper motions and reference epochs are there
+            pmra = catalog['pmra_gaia']
+            pmdec = catalog['pmdec_gaia']
+            # if unknown, zero out the pms
+            pmra[~np.isfinite(pmra)] = 0
+            pmdec[~np.isfinite(pmdec)] = 0
+            cur_year = Time(self.mjd, format='mjd').to_value(format='jyear')
+            # observation time in decimal years (like 2020.3)
+            ref_epoch = catalog['ref_epoch']
+            ra_gaia = ra_gaia + (cur_year -
+                                 ref_epoch) * pmra / 3600e3 / cosd(dec_gaia)
+            dec_gaia = dec_gaia + (cur_year - ref_epoch) * pmdec / 3600e3
+
+        dra = (catalog["ra"] - ra_gaia) * cosd(dec_gaia) * 3600.  # arcsec
+        ddec = (catalog["dec"] - dec_gaia) * 3600.  # arcsec
         dr = np.hypot(dra, ddec)
         selection = (dr < max_sep_arcsec)  # arcsec
         if np.sum(selection) == 0:
