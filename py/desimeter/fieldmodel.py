@@ -127,16 +127,16 @@ class FieldModel(object):
             catalog['dec_gaia'] += ddec
             catalog.rename_column('ra_gaia','ra_gaia_with_pm')
             catalog.rename_column('dec_gaia','dec_gaia_with_pm')
-
-            match_dra  = (catalog["ra"]-catalog['ra_gaia_with_pm'])*cosd(catalog['dec_gaia_with_pm']) * 3600. # arcsec
-            match_ddec = (catalog["dec"]-catalog['dec_gaia_with_pm']) * 3600. # arcsec
+            ra_column = 'ra_gaia_with_pm'
+            dec_column = 'dec_gaia_with_pm'
 
         else :
-
+            ra_column = 'ra_gaia'
+            dec_column = 'dec_gaia'
             log.warning("No proper motion info in catalog")
-            match_dra  = (catalog["ra"]-catalog['ra_gaia'])*cosd(catalog['dec_gaia']) * 3600. # arcsec
-            match_ddec = (catalog["dec"]-catalog['dec_gaia']) * 3600. # arcsec
 
+        match_dra  = (catalog["ra"]-catalog[ra_column])*cosd(catalog[dec_column]) * 3600. # arcsec
+        match_ddec = (catalog["dec"]-catalog[dec_column]) * 3600. # arcsec
 
         dr = np.hypot(match_dra, match_ddec)
         selection = (dr<max_sep_arcsec) # arcsec
