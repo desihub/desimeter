@@ -12,6 +12,7 @@ from desimeter.trig import cosd, arctan2d, rot2deg
 
 from desimeter.log import get_logger
 from astropy.table import Table
+from astropy.time import Time
 
 class FieldModel(object):
 
@@ -92,17 +93,53 @@ class FieldModel(object):
         # here we could do some conversion of column names
         catalog = Table.read(filename)
 
+        if "mjd_obs" in catalog.dtype.names :
+            self.mjd = np.mean(catalog["mjd_obs"])
+            log.info("use mjd={} from catalog['mjd_obs']".format(self.mjd))
+
         if ( not  "xcentroid" in catalog.dtype.names ) or ( not "ra_gaia" in catalog.dtype.names ) :
             log.error("I can only deal with Aaron's catalogs with columns xcentroid,ycentroid,ra_gaia,dec_gaia, sorry")
             raise RuntimeError("I can only deal with Aaron's catalogs with columns xcentroid,ycentroid,ra_gaia,dec_gaia, sorry")
 
-        max_sep_arcsec = 2.
         log.info("selection stars for which we have a good match (< {} arcsec)".format(max_sep_arcsec))
 
-        dra  = (catalog["ra"]-catalog["ra_gaia"])*cosd(catalog["dec_gaia"]) * 3600. # arcsec
-        ddec = (catalog["dec"]-catalog["dec_gaia"]) * 3600. # arcsec
-        dr = np.hypot(dra, ddec)
-        selection = (dr<2) # arcsec
+        if all([_ in catalog.columns for _ in ['pmra', 'pmdec', 'ref_epoch']]):
+
+            if self.mjd is None :
+                log.error("Cannot compute proper motion correction because mjd=None")
+                raise RuntimeError("Cannot compute proper motion correction because mjd=None")
+
+            # if proper motions and reference epochs are there
+            pmra = catalog['pmra']
+            pmdec = catalog['pmdec']
+            # if unknown, zero out the pms
+            pmra[~np.isfinite(pmra)] = 0
+            pmdec[~np.isfinite(pmdec)] = 0
+
+            cur_year = Time(self.mjd, format='mjd').to_value(format='jyear')
+            # observation time in decimal years (like 2020.3)
+            ref_epoch = catalog['ref_epoch']
+            dra  = (cur_year - ref_epoch) * pmra / 3600e3 / cosd(catalog['dec_gaia'])
+            ddec = (cur_year - ref_epoch) * pmdec / 3600e3
+
+            # add pm and rename columns
+            catalog['ra_gaia'] += dra
+            catalog['dec_gaia'] += ddec
+            catalog.rename_column('ra_gaia','ra_gaia_with_pm')
+            catalog.rename_column('dec_gaia','dec_gaia_with_pm')
+            ra_column = 'ra_gaia_with_pm'
+            dec_column = 'dec_gaia_with_pm'
+
+        else :
+            ra_column = 'ra_gaia'
+            dec_column = 'dec_gaia'
+            log.warning("No proper motion info in catalog")
+
+        match_dra  = (catalog["ra"]-catalog[ra_column])*cosd(catalog[dec_column]) * 3600. # arcsec
+        match_ddec = (catalog["dec"]-catalog[dec_column]) * 3600. # arcsec
+
+        dr = np.hypot(match_dra, match_ddec)
+        selection = (dr<max_sep_arcsec) # arcsec
         if np.sum(selection)==0 :
             log.error("no star is matched with sufficient precision!")
             raise RuntimeError("no star is matched with sufficient precision!")
@@ -114,21 +151,26 @@ class FieldModel(object):
 
         x_gfa  = catalog["xcentroid"]
         y_gfa  = catalog["ycentroid"]
-        ra_gaia  = catalog["ra_gaia"]
-        dec_gaia = catalog["dec_gaia"]
+        if 'ra_gaia_with_pm' in catalog.dtype.names :
+            ra_gaia  = catalog["ra_gaia_with_pm"]
+            dec_gaia = catalog["dec_gaia_with_pm"]
+        else :
+            ra_gaia  = catalog["ra_gaia"]
+            dec_gaia = catalog["dec_gaia"]
 
         # mjd,hexprot_deg,lst could have been set before
         if mjd is not None :
             self.mjd = mjd
             log.info("Use argument MJD={}".format(self.mjd))
-        elif "mjd_obs" in catalog.keys():
-            self.mjd    = np.mean(catalog["mjd_obs"])
-            log.info("Use 'mjd_obs' in catalog, MJD={}".format(self.mjd))
-        elif self.mjd is None :
-            log.error("mjd is None")
-            raise RuntimeError("mjd is None")
-        else :
-            log.info("Use MJD={}".format(self.mjd))
+        if self.mjd is None :
+            if "mjd_obs" in catalog.keys():
+                self.mjd    = np.mean(catalog["mjd_obs"])
+                log.info("Use 'mjd_obs' in catalog, MJD={}".format(self.mjd))
+            else :
+                log.error("mjd is None")
+                raise RuntimeError("mjd is None")
+
+        log.info("Use MJD={}".format(self.mjd))
 
         if hexrot_deg is not None :
             self.hexrot_deg = hexrot_deg

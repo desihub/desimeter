@@ -41,12 +41,14 @@ fm.hexrot_deg = read_hexrot_deg(header)
 
 fm.adc1 = header["ADC1PHI"]
 fm.adc2 = header["ADC2PHI"]
+for k in ["MJD-OBS","TCSMJD"] :
+    if k in header :
+        fm.mjd = float(header[k])
+        log.info("read mjd={} in header['{}']".format(fm.mjd,k))
+        break
 
 catalog = fm.read_guide_stars_catalog(args.infile)
-
-# MJD and LST are needed for sky transform
-fm.mjd    = np.mean(catalog["mjd_obs"])
-fm.lst    = mjd2lst(fm.mjd)
+fm.lst  = mjd2lst(fm.mjd) # mjd is set when reading catalog or above
 
 fm.fit_tancorr(catalog)
 
