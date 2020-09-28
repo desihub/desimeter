@@ -256,7 +256,6 @@ def identify_requests(table):
     return new
     
     n = len(new)
-    submove0 = new['SUBMOVE'] == 0
     possible_requests = [s.split(';')[0] for s in new['MOVE_CMD']]
     possible_coords = [s.split('=')[0] for s in possible_requests]
     is_move = [s in all_move_coords for s in possible_coords]
@@ -266,84 +265,103 @@ def identify_requests(table):
     val_str_lists = [s.strip('[').strip(']').split(',') for s in val_strs]
     vals0 = [float(val_str_lists[i][0]) if is_move[i] else None for i in range(n)]
     vals1 = [float(val_str_lists[i][1]) if is_move[i] else None for i in range(n)]    
-    is_abs = [coord in abs_move_coords for coord in coords]
     abs_coords_found = set(coords) & set(abs_move_coords)
     for coord in abs_coords_found:
-        if coord in {'QS', 'obsXY'}:
-            x_ptl, y_ptl = [], []
-            ptl_locs = list(new['PETAL_LOC'])
-            for i in range(n):
-                if coord == 'QS':
-                    x_fp, y_fp = xy2qs.qs2xy(vals0[i], vals1[i])
-                else:
-                    x_fp, y_fp = vals0[i], vals1[i]
-                this_x_ptl, this_y_ptl = ptl2fp.fp2ptl(ptl_locs[i], x_fp, y_fp)
-                x_ptl.append(this_x_ptl)
-                y_ptl.append(this_y_ptl)
-                x_flat, y_flat = pos2ptl.ptl2flat(x_ptl, y_ptl)
-        elif coord == 'poslocXY':
-            x_flat = pos2ptl.loc2flat(vals0, new['OFFSET_X'])
-            y_flat = pos2ptl.loc2flat(vals1, new['OFFSET_Y'])
-        elif coord == 'ptlXY':
-            func = None
-        elif coord == 'posintTP':
-            func = None
-        elif coord == 'poslocTP':
-            func = None
+        if coord in {'QS', 'obsXY', 'ptlXY'}:
+            if coord == 'ptlXY':
+                x_ptl, y_ptl = vals0, vals1
+            else:
+                x_ptl, y_ptl = [], []
+                ptl_locs = list(new['PETAL_LOC'])
+                for i in range(n):
+                    if coord == 'QS':
+                        x_fp, y_fp = xy2qs.qs2xy(vals0[i], vals1[i])
+                    else:
+                        x_fp, y_fp = vals0[i], vals1[i]
+                    this_x_ptl, this_y_ptl = ptl2fp.fp2ptl(ptl_locs[i], x_fp, y_fp)
+                    x_ptl.append(this_x_ptl)
+                    y_ptl.append(this_y_ptl)
+            x_flat, y_flat = pos2ptl.ptl2flat(x_ptl, y_ptl)
+        elif coord in {'poslocXY', 'posintTP', 'poslocTP'}:
+            if coord == 'poslocXY':
+                x_loc, y_loc = vals0, vals1
+            elif coord == 'posintTP':
+                x_loc, y_loc = pos2ptl.int2loc(t_int=vals0,
+                                               p_int=vals0,
+                                               r1=new['LENGTH_R1'],
+                                               r2=new['LENGTH_R2'],
+                                               t_offset=new['OFFSET_P'],
+                                               p_offset=new['OFFSET_P'])
+            elif coord == 'poslocTP':
+                t_ext = pos2ptl.int2ext(vals0, new['OFFSET_T'])
+                p_ext = pos2ptl.int2ext(vals1, new['OFFSET_P'])
+                x_loc, y_loc = pos2ptl.ext2loc(t_ext=t_ext,
+                                               p_ext=p_ext,
+                                               r1=new['LENGTH_R1'],
+                                               r2=new['LENGTH_R2'])
+            else:
+                assert False, f'command coordinates {coord} not recognized'
+            x_flat = pos2ptl.loc2flat(x_loc, new['OFFSET_X'])
+            y_flat = pos2ptl.loc2flat(y_loc, new['OFFSET_Y'])
         else:
             assert False, f'command coordinates {coord} not recognized'
-        
+    submove0 = new['SUBMOVE'] == 0
+    is_abs = [coord in abs_move_coords for coord in coords]
+    for i in range(n):
+        is_request = submove0[i] and is_abs[i]
+        if not is_request:
+            x_flat[i] = x_flat[i-1]
+            y_flat[i] = y_flat[i-1]
+    new['FLAT_X_REQUEST'] = x_flat
+    new['FLAT_Y_REQUEST'] = y_flat
     return new
 
-def calc_errors(table, use_requested=False):
+def calc_errors(table, ref='TRACKED'):
     '''Identifies measured and target values, then calculates errors.
     
-    INPUTS:  table ... astropy table containing 'PTL_X', 'PTL_Y', 'POS_T', 'POS_P',
-                       'LENGTH_R1', 'LENGTH_R2', 'OFFSET_T', 'OFFSET_P', 'OFFSET_X',
-                       'OFFSET_Y', 'SUBMOVE', and 'POS_MOVE_INDEX'
+    Note: any existing measured / target columns are *not* recalculated or replaced.
+    This makes the function more efficient when calling multiple times in a row,
+    e.g. with ref='TRACKED', then later with ref='REQUEST'.
+    
+    INPUTS:  table ... astropy table containing 'PTL_X', 'PTL_Y', 'LENGTH_R1',
+                       'LENGTH_R2', 'OFFSET_T', 'OFFSET_P', 'OFFSET_X', 'OFFSET_Y',
+                       'SUBMOVE', 'POS_MOVE_INDEX', and either ...
+                         ... ref='TRACKED' --> 'POS_T', 'POS_P'
+                         ... or ref='REQUEST' --> 'FLAT_X_REQUEST', 'FLAT_Y_REQUEST' 
                        
-             use_requested ... boolean, if True then errors are calculated with respect
-                               to requested targets, rather than internally-tracked
-                               (theta, phi). Only works on a table for which requests
-                               have already been "identified", c.f. identify_requests()
+             ref ... str, specifying which values are the reference for error calcs:
+                     'TRACKED' ... internally-tracked theta and phi
+                     'REQUEST' ... user-requested targets (only works on a table for
+                                   which requests  have already been "identified",
+                                   c.f. identify_requests()
              
     OUTPUT:  copy of table, where measured data columns will have _MEAS appended to
-             their names (for clarity) and new columns will be added with _TARG suffix,
-             as well as new columns with ERR_ prefix
+             their names (for clarity) and new columns will be added with suffix of
+             either 'TRACKED' or 'REQUEST', as well as new columns with ERR_ prefix
     '''
     new = table.copy()
     new.sort('POS_MOVE_INDEX')
-    meas_x, meas_y = pos2ptl.ptl2flat(new['PTL_X'],  new['PTL_Y'])
-    if use_requested:
-        pass
-        # targ_x_ptl, targ_y_ptl = pos2ptl.
-    else:
+    if any(name not in new.columns for name in {'FLAT_X_MEAS', 'FLAT_Y_MEAS'}):
+        new['FLAT_X_MEAS'], new['FLAT_Y_MEAS'] = pos2ptl.ptl2flat(new['PTL_X'],  new['PTL_Y'])
+    if ref == 'TRACKED':
         targ_x_ptl, targ_y_ptl = pos2ptl.int2ptl(
                                      t_int=new['POS_T'], p_int=new['POS_P'],
                                      r1=new['LENGTH_R1'], r2=new['LENGTH_R2'],
                                      t_offset=new['OFFSET_T'], p_offset=new['OFFSET_P'],
                                      x_offset=new['OFFSET_X'], y_offset=new['OFFSET_Y'],
                                      )
-    targ_x, targ_y = pos2ptl.ptl2flat(targ_x_ptl, targ_y_ptl)
-    is_submove0 = new['SUBMOVE'] == 0
-    
-    # future --- deprecate in favor of identified requests...
-    targ_xy = [targ_x, targ_y]
-    for i in [0, 1]:
-        last_targ0 = targ_xy[i][0]
-        for j in range(len(targ_xy[i])):
-            if is_submove0[j]:
-                last_targ0 = targ_xy[i][j]
-            else:
-                targ_xy[i][j] = last_targ0
-    
-    new['FLAT_X_MEAS'] = meas_x
-    new['FLAT_Y_MEAS'] = meas_y
-    new['FLAT_X_TARG'] = targ_x
-    new['FLAT_Y_TARG'] = targ_y
-    new['ERR_X'] = meas_x - targ_x
-    new['ERR_Y'] = meas_y - targ_y
-    new['ERR_XY'] = np.hypot(new['ERR_X'], new['ERR_Y'])
+        targ_x, targ_y = pos2ptl.ptl2flat(targ_x_ptl, targ_y_ptl)
+    elif ref == 'REQUEST':
+        targ_x, targ_y = new['FLAT_X_REQUEST'], new['FLAT_Y_REQUEST']
+    else:
+        assert False, f'unrecognized ref={ref}'
+    err_x = new['FLAT_X_MEAS'] - targ_x
+    err_y = new['FLAT_Y_MEAS'] - targ_y
+    new[f'FLAT_X_{ref}'] = targ_x
+    new[f'FLAT_Y_{ref}'] = targ_y
+    new[f'ERR_X_WRT_{ref}'] = err_x
+    new[f'ERR_Y_WRT_{ref}'] = err_y
+    new[f'ERR_XY_WRT_{ref}'] = np.hypot(err_x, err_y)
     return new
 
 def calc_alt_coords(table):
@@ -422,12 +440,15 @@ def analyze_one_pos(table):
     submoves = get_submove_ids(new)
     for submove in submoves:
         selection = get_idxs(new, submove)
-        err_xy = new['ERR_XY'][selection].tolist()
+        err_xy_tracked = new['ERR_XY_WRT_TRACKED'][selection].tolist()
+        err_xy_request = new['ERR_XY_WRT_REQUEST'][selection].tolist()
         stats_dict['POS_ID'].append(posid)
         stats_dict['SUBMOVE'].append(submove)
-        stats_dict['N_TARGETS'].append(len(err_xy))
+        stats_dict['N_TARGETS_TRACKED'].append(len(err_xy_tracked))
+        stats_dict['N_TARGETS_REQUEST'].append(len(err_xy_request))
         for name, func in stat_funcs.items():
-            stats_dict[name].append(func(err_xy))
+            stats_dict[name + 'TRACKED'].append(func(err_xy_tracked))
+            stats_dict[name + 'REQUEST'].append(func(err_xy_request))
     stats = Table(stats_dict)
     log.info(f'Analyzed {posid}: {len(new)} data rows, {len(submoves)} submoves')
     return new, stats
