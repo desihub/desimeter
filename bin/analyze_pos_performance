@@ -67,6 +67,35 @@ abs_move_coords = {'QS', 'obsXY', 'poslocXY', 'ptlXY', 'posintTP', 'poslocTP'}
 rel_move_coords = {'dQdS', 'obsdXdY', 'poslocdXdY', 'dTdP'}
 all_move_coords = abs_move_coords | rel_move_coords
 
+# tagging of different position value types
+TRACKED = 'TRACKED'  # refers to internally-tracked angles 'POS_T', 'POS_P'
+REQUESTED = 'REQUESTED'  # refers to user-requested target positions
+MEASURED = 'MEASURED'  # refers to measured values
+TAGS = [TRACKED, REQUESTED, MEASURED]
+tag_separator = '_'
+def add_tag(tag_str, other_str):
+    '''Return a tagged string with standard format.'''
+    assert tag_str in TAGS
+    return f'{tag_str}{tag_separator}{other_str}'
+
+def is_tagged(tagged_string):
+    '''Returns boolean.'''
+    prefix = tagged_string.split(tag_separator)[0]
+    return prefix in TAGS
+    
+def strip_tag(tagged_string):
+    '''Get the non-tag part of string.'''
+    split = tagged_string.split(tag_separator)
+    assert split[0] in TAGS
+    suffix = tag_separator.join(split[1:])
+    return suffix
+    
+def get_tag(tagged_string):
+    '''Get the tag part of string.'''
+    prefix = tagged_string.split(tag_separator)[0]
+    assert prefix in TAGS
+    return prefix
+    
 # statistics functions for summarizing errors
 stat_funcs = {'max': np.max, 'min': np.min, 'mean': np.mean, 'median': np.median,
               'std': np.std, 'rms': lambda X: np.sqrt(np.sum(np.power(X, 2))/len(X))}
@@ -250,11 +279,7 @@ def identify_requests(table):
     cases. However, 'SUBMOVE' ids *will* correspond exactly to those in LOG_NOTE.
     '''
     new = table.copy()
-    new.sort('POS_MOVE_INDEX')
-    
-    # temporary, since code below is non-functional yet
-    return new
-    
+    new.sort('POS_MOVE_INDEX')    
     n = len(new)
     possible_requests = [s.split(';')[0] for s in new['MOVE_CMD']]
     possible_coords = [s.split('=')[0] for s in possible_requests]
@@ -312,71 +337,71 @@ def identify_requests(table):
         if not is_request:
             x_flat[i] = x_flat[i-1]
             y_flat[i] = y_flat[i-1]
-    new['FLAT_X_REQUEST'] = x_flat
-    new['FLAT_Y_REQUEST'] = y_flat
+    new[add_tag(REQUESTED, 'FLAT_X')] = x_flat
+    new[add_tag(REQUESTED, 'FLAT_Y')] = y_flat
     return new
 
-def calc_errors(table, ref='TRACKED'):
+def calc_errors(table, tag=TRACKED):
     '''Identifies measured and target values, then calculates errors.
     
     Note: any existing measured / target columns are *not* recalculated or replaced.
     This makes the function more efficient when calling multiple times in a row,
-    e.g. with ref='TRACKED', then later with ref='REQUEST'.
+    e.g. with tag=TRACKED, then later with tag=REQUESTED.
     
     INPUTS:  table ... astropy table containing 'PTL_X', 'PTL_Y', 'LENGTH_R1',
                        'LENGTH_R2', 'OFFSET_T', 'OFFSET_P', 'OFFSET_X', 'OFFSET_Y',
                        'SUBMOVE', 'POS_MOVE_INDEX', and either ...
-                         ... ref='TRACKED' --> 'POS_T', 'POS_P'
-                         ... or ref='REQUEST' --> 'FLAT_X_REQUEST', 'FLAT_Y_REQUEST' 
+                              ... tag=TRACKED --> 'POS_T', 'POS_P'
+                         ... or tag=REQUESTED --> similarly-tagged 'FLAT_X', 'FLAT_Y'
                        
-             ref ... str, specifying which values are the reference for error calcs:
-                     'TRACKED' ... internally-tracked theta and phi
-                     'REQUEST' ... user-requested targets (only works on a table for
-                                   which requests  have already been "identified",
-                                   c.f. identify_requests()
+             tag ... str, c.f. TAGS
              
     OUTPUT:  copy of table, where measured data columns will have _MEAS appended to
-             their names (for clarity) and new columns will be added with suffix of
-             either 'TRACKED' or 'REQUEST', as well as new columns with ERR_ prefix
+             their names (for clarity) and new columns will be added with prefixes
+             of f'{ref}_' and 'ERR_'.
     '''
     new = table.copy()
     new.sort('POS_MOVE_INDEX')
-    if any(name not in new.columns for name in {'FLAT_X_MEAS', 'FLAT_Y_MEAS'}):
-        new['FLAT_X_MEAS'], new['FLAT_Y_MEAS'] = pos2ptl.ptl2flat(new['PTL_X'],  new['PTL_Y'])
-    if ref == 'TRACKED':
+    assert tag in TAGS
+    x_meas_name = add_tag(MEASURED, 'FLAT_X')
+    y_meas_name = add_tag(MEASURED, 'FLAT_Y')
+    x_targ_name = add_tag(tag, 'FLAT_X')
+    y_targ_name = add_tag(tag, 'FLAT_Y')
+    if any(name not in new.columns for name in {x_meas_name, y_meas_name}):
+        new[x_meas_name], new[y_meas_name] = pos2ptl.ptl2flat(new['PTL_X'],  new['PTL_Y'])
+    if tag == TRACKED:
         targ_x_ptl, targ_y_ptl = pos2ptl.int2ptl(
                                      t_int=new['POS_T'], p_int=new['POS_P'],
                                      r1=new['LENGTH_R1'], r2=new['LENGTH_R2'],
                                      t_offset=new['OFFSET_T'], p_offset=new['OFFSET_P'],
-                                     x_offset=new['OFFSET_X'], y_offset=new['OFFSET_Y'],
-                                     )
+                                     x_offset=new['OFFSET_X'], y_offset=new['OFFSET_Y'])
         targ_x, targ_y = pos2ptl.ptl2flat(targ_x_ptl, targ_y_ptl)
-    elif ref == 'REQUEST':
-        targ_x, targ_y = new['FLAT_X_REQUEST'], new['FLAT_Y_REQUEST']
+        new[x_targ_name] = targ_x
+        new[y_targ_name] = targ_y
     else:
-        assert False, f'unrecognized ref={ref}'
-    err_x = new['FLAT_X_MEAS'] - targ_x
-    err_y = new['FLAT_Y_MEAS'] - targ_y
-    new[f'FLAT_X_{ref}'] = targ_x
-    new[f'FLAT_Y_{ref}'] = targ_y
-    new[f'ERR_X_WRT_{ref}'] = err_x
-    new[f'ERR_Y_WRT_{ref}'] = err_y
-    new[f'ERR_XY_WRT_{ref}'] = np.hypot(err_x, err_y)
+        targ_x = new[x_targ_name]
+        targ_y = new[y_targ_name]
+    err_x = new[x_meas_name] - targ_x
+    err_y = new[y_meas_name] - targ_y
+    new[add_tag(tag, 'ERR_X')] = err_x
+    new[add_tag(tag, 'ERR_Y')] = err_y
+    new[add_tag(tag, 'ERR_XY')] = np.hypot(err_x, err_y)
     return new
 
 def calc_alt_coords(table):
-    '''Adds columns for "PTL" and "LOC" coordinates, matching any prefixed with "FLAT".
+    '''Adds columns for "PTL" and "LOC" coordinates, matching any cases where the
+    detagged name starts with "FLAT".
     '''
     new = table.copy()
-    suffixes = [col.split('FLAT_X')[1] for col in table.columns if col.find('FLAT_X') == 0]
-    for suffix in suffixes:
-        x_flat = new['FLAT_X' + suffix]
-        y_flat = new['FLAT_Y' + suffix]
+    tags = {get_tag(x) for x in table.columns if is_tagged(x) and 'FLAT' in strip_tag(x)}                
+    for tag in tags:
+        x_flat = new[add_tag(tag, 'FLAT_X')]
+        y_flat = new[add_tag(tag, 'FLAT_Y')]
         x_ptl, y_ptl = pos2ptl.flat2ptl(x_flat, y_flat)
-        converted = {f'PTL_X{suffix}': x_ptl,
-                     f'PTL_Y{suffix}': y_ptl,
-                     f'LOC_X{suffix}': pos2ptl.flat2loc(x_flat, new['OFFSET_X']),
-                     f'LOC_Y{suffix}': pos2ptl.flat2loc(y_flat, new['OFFSET_Y']),
+        converted = {add_tag(tag, 'PTL_X'): x_ptl,
+                     add_tag(tag, 'PTL_Y'): y_ptl,
+                     add_tag(tag, 'LOC_X'): pos2ptl.flat2loc(x_flat, new['OFFSET_X']),
+                     add_tag(tag, 'LOC_Y'): pos2ptl.flat2loc(y_flat, new['OFFSET_Y']),
                      }
         for name, values in converted.items():
             assert name not in new.columns, f'column {name} already exists'
@@ -400,16 +425,20 @@ def detect_num_fvc_images(table):
     new['NUM_IMAGES'][zeroth_exp_iters] = null_num_images
     return new
 
-def calc_target_radii(table):
-    '''Calculates local radius of each target from its positioner's center.
+def calc_radii(table, tag=TRACKED):
+    '''Calculates local radius of each point from its positioner's center.
     
-    INPUT:  table ... astropy table including columns 'LOC_X_TARG' and 'LOC_Y_TARG'
+    INPUT:  table ... astropy table including tagged columns for 'LOC_X' and 'LOC_Y'
+            tag ... str, c.f. TAGS
     
-    OUTPUT: copy of table, adding column 'TARGET_RADIUS'
+    OUTPUT: copy of table, adding tagged 'RADIUS' column
     '''
     new = table.copy()
-    radii = np.hypot(table['LOC_X_TARG'], table['LOC_Y_TARG'])
-    new['TARGET_RADIUS'] = radii
+    assert tag in TAGS
+    loc_x = table[add_tag(tag, 'LOC_X')],
+    loc_y = table[add_tag(tag, 'LOC_T')],
+    radii = np.hypot(loc_x, loc_y)
+    new[add_tag(tag, 'RADIUS')] = radii
     return new
     
 def analyze_one_pos(table):
@@ -431,24 +460,31 @@ def analyze_one_pos(table):
     posid = posids.pop()
     new = identify_submoves(new)
     new = identify_requests(new)
-    new = calc_errors(new)
+    new = calc_errors(new, tag=TRACKED)
+    new = calc_errors(new, tag=REQUESTED)
     new = calc_alt_coords(new)
-    new = calc_target_radii(new)
+    new = calc_radii(new, tag=TRACKED)
+    new = calc_radii(new, tag=REQUESTED)
     new = detect_num_fvc_images(new)
-    stats_cols = ['POS_ID', 'SUBMOVE', 'N_TARGETS'] + list(stat_funcs)
+    stats_cols = ['POS_ID', 'SUBMOVE']
+    stats_cols += [add_tag(tag, 'N_TARGETS') for tag in [TRACKED, REQUESTED]]
+    tagged_funcs = {add_tag(tag, name): func for name, func in stat_funcs.items() for tag in [TRACKED, REQUESTED]}
+    stats_cols += list(tagged_funcs)
     stats_dict = {name:[] for name in stats_cols}
     submoves = get_submove_ids(new)
     for submove in submoves:
         selection = get_idxs(new, submove)
-        err_xy_tracked = new['ERR_XY_WRT_TRACKED'][selection].tolist()
-        err_xy_request = new['ERR_XY_WRT_REQUEST'][selection].tolist()
+        err_xy_tracked = new[add_tag(TRACKED, 'ERR_XY')][selection].tolist()
+        err_xy_request = new[add_tag(REQUESTED, 'ERR_XY')][selection].tolist()
         stats_dict['POS_ID'].append(posid)
         stats_dict['SUBMOVE'].append(submove)
-        stats_dict['N_TARGETS_TRACKED'].append(len(err_xy_tracked))
-        stats_dict['N_TARGETS_REQUEST'].append(len(err_xy_request))
-        for name, func in stat_funcs.items():
-            stats_dict[name + 'TRACKED'].append(func(err_xy_tracked))
-            stats_dict[name + 'REQUEST'].append(func(err_xy_request))
+        stats_dict[add_tag(TRACKED, 'N_TARGETS')].append(len(err_xy_tracked))
+        stats_dict[add_tag(REQUESTED, 'N_TARGETS')].append(len(err_xy_request))
+        for name, func in tagged_funcs.items():
+            if get_tag(name) == TRACKED:
+                stats_dict[name].append(func(err_xy_tracked))
+            else:
+                stats_dict[name].append(func(err_xy_request))
     stats = Table(stats_dict)
     log.info(f'Analyzed {posid}: {len(new)} data rows, {len(submoves)} submoves')
     return new, stats
