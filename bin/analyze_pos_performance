@@ -293,53 +293,63 @@ def identify_requests(table):
     val_str_lists = [s.strip('[').strip(']').split(',') for s in val_strs]
     vals0 = [float(val_str_lists[i][0]) if is_move[i] else None for i in range(n)]
     vals1 = [float(val_str_lists[i][1]) if is_move[i] else None for i in range(n)]    
-    abs_coords_found = set(coords) & set(abs_move_coords)
-    for coord in abs_coords_found:
-        if coord in {'QS', 'obsXY', 'ptlXY'}:
-            if coord == 'ptlXY':
-                x_ptl, y_ptl = vals0, vals1
-            else:
-                x_ptl, y_ptl = [], []
-                ptl_locs = list(new['PETAL_LOC'])
-                for i in range(n):
+    last_known_request_idx = -1
+    x_flat = [None]*len(new)
+    y_flat = [None]*len(new)
+    for i in range(n):
+        coord = coords[i]
+        if not(coord):
+            # This occurs, for example, with auto-generated neighbor collision avoidance moves.
+            # Resolve ambiguity by treating "requested" position as equal to internally-tracked.
+            coord = 'posintTP'
+            vals0[i] = new['POS_T'][i]
+            vals1[i] = new['POS_P'][i]
+        submove0 = new['SUBMOVE'][i] == 0
+        is_abs = coord in abs_move_coords
+        is_request = submove0 and is_abs
+        if is_request:
+            if coord in {'QS', 'obsXY', 'ptlXY'}:
+                if coord == 'ptlXY':
+                    x_ptl, y_ptl = vals0[i], vals1[i]
+                else:
+                    ptl_loc = new['PETAL_LOC'][i]
                     if coord == 'QS':
                         x_fp, y_fp = xy2qs.qs2xy(vals0[i], vals1[i])
                     else:
                         x_fp, y_fp = vals0[i], vals1[i]
-                    this_x_ptl, this_y_ptl = ptl2fp.fp2ptl(ptl_locs[i], x_fp, y_fp)
-                    x_ptl.append(this_x_ptl)
-                    y_ptl.append(this_y_ptl)
-            x_flat, y_flat = pos2ptl.ptl2flat(x_ptl, y_ptl)
-        elif coord in {'poslocXY', 'posintTP', 'poslocTP'}:
-            if coord == 'poslocXY':
-                x_loc, y_loc = vals0, vals1
-            elif coord == 'posintTP':
-                x_loc, y_loc = pos2ptl.int2loc(t_int=vals0,
-                                               p_int=vals0,
-                                               r1=new['LENGTH_R1'],
-                                               r2=new['LENGTH_R2'],
-                                               t_offset=new['OFFSET_P'],
-                                               p_offset=new['OFFSET_P'])
-            elif coord == 'poslocTP':
-                t_ext = pos2ptl.int2ext(vals0, new['OFFSET_T'])
-                p_ext = pos2ptl.int2ext(vals1, new['OFFSET_P'])
-                x_loc, y_loc = pos2ptl.ext2loc(t_ext=t_ext,
-                                               p_ext=p_ext,
-                                               r1=new['LENGTH_R1'],
-                                               r2=new['LENGTH_R2'])
-            else:
-                assert False, f'command coordinates {coord} not recognized'
-            x_flat = pos2ptl.loc2flat(x_loc, new['OFFSET_X'])
-            y_flat = pos2ptl.loc2flat(y_loc, new['OFFSET_Y'])
+                    x_ptl, y_ptl, z_ptl = ptl2fp.fp2ptl(ptl_loc, x_fp, y_fp)
+                x_flat[i], y_flat[i] = pos2ptl.ptl2flat(x_ptl, y_ptl)
+            elif coord in {'poslocXY', 'posintTP', 'poslocTP'}:
+                if coord == 'poslocXY':
+                    x_loc, y_loc = vals0[i], vals1[i]
+                elif coord == 'posintTP':
+                    x_loc, y_loc = pos2ptl.int2loc(t_int=vals0[i],
+                                                   p_int=vals1[i],
+                                                   r1=new['LENGTH_R1'][i],
+                                                   r2=new['LENGTH_R2'][i],
+                                                   t_offset=new['OFFSET_T'][i],
+                                                   p_offset=new['OFFSET_P'][i])
+                elif coord == 'poslocTP':
+                    t_ext = pos2ptl.int2ext(vals0[i], new['OFFSET_T'][i])
+                    p_ext = pos2ptl.int2ext(vals1[i], new['OFFSET_P'][i])
+                    x_loc, y_loc = pos2ptl.ext2loc(t_ext=t_ext,
+                                                   p_ext=p_ext,
+                                                   r1=new['LENGTH_R1'][i],
+                                                   r2=new['LENGTH_R2'][i])
+                else:
+                    assert False, f'command coordinates {coord} not recognized'
+                x_flat[i] = pos2ptl.loc2flat(x_loc, new['OFFSET_X'][i])
+                y_flat[i] = pos2ptl.loc2flat(y_loc, new['OFFSET_Y'][i])
+            last_known_request_idx = i
+        elif not submove0:
+            x_flat[i] = x_flat[last_known_request_idx]
+            y_flat[i] = y_flat[last_known_request_idx]
         else:
-            assert False, f'command coordinates {coord} not recognized'
-    submove0 = new['SUBMOVE'] == 0
-    is_abs = [coord in abs_move_coords for coord in coords]
-    for i in range(n):
-        is_request = submove0[i] and is_abs[i]
-        if not is_request:
-            x_flat[i] = x_flat[i-1]
-            y_flat[i] = y_flat[i-1]
+            assert False, f'Unexpected case for {new["POS_ID"][i]} at row {i}. Not handled right in identify_requests(), needs debugging.'
+    for vec in [x_flat, y_flat]:
+        assert not any([x == None for x in vec]), f'Unexpected case for {new["POS_ID"][i]}. Not handled right in identify_requests(), needs debugging.'
+    x_flat = [float(x) for x in x_flat]  # avoid screwy numpy ambiguous dimensions
+    y_flat = [float(y) for y in y_flat]  # avoid screwy numpy ambiguous dimensions
     new[add_tag(REQUESTED, 'FLAT_X')] = x_flat
     new[add_tag(REQUESTED, 'FLAT_Y')] = y_flat
     return new
@@ -610,11 +620,12 @@ def meta_str(table):
         s += f'{name}: {val}\n'
     return s.strip()
 
-def get_summary_stats_str(table, submove='all'):
+def get_summary_stats_str(table, submove='all', tag=None):
     '''Produces a multi-line string representation of summary statistics
     
     INPUT:  table ... astropy table as-generated by summarize_stats()
             submove ... 'all' or integer
+            tag ... str, c.f. TAGS
     
     OUTPUT: string
     '''
@@ -658,7 +669,8 @@ def get_summary_stats_str(table, submove='all'):
             s += left_cell(prefix + name) + row_str(row_data, scale=1000)
             prefix = '... '
     row_widths = [len(x) for x in s.split('\n')]
-    header = f'Positioning errors summary (distance units = {unit}):'
+    tag_str = tag.title() if tag in TAGS else 'Positioning'
+    header = f'{tag_str} errors summary (distance units = {unit}):'
     s = format(header, f'<{max(row_widths)}') + '\n' + s
     return s
 
@@ -1006,7 +1018,7 @@ if __name__ == '__main__':
         # 2020-09-28 [JHS] only printing out TRACKED here, perhaps figure out
         # formatting to include REQUESTED as a future enhancement
         note1 += '\n' + meta_str(summaries[TRACKED])
-        note2 = get_summary_stats_str(summaries[TRACKED], submove)
+        note2 = get_summary_stats_str(summaries[TRACKED], submove=submove, tag=TRACKED)
         
         path, chart_limits = bigchart(table, note1, note2, chart_limits)
         log.info(f'Saved big chart for submove {submove} to {path}')
