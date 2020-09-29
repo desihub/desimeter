@@ -4,6 +4,21 @@
 retrieved using the "get_posmoves --with-calib" tool.
 """
 
+# TRACKED vs REQUESTED targets:
+# -----------------------------
+#
+#     TRACKED ... These are errors calculated with respect to POS_T, POS_P. They
+#                 show whether we have control over the robots.
+#
+#   REQUESTED ... Due to anticollision, travel limits, and enabled/disabled state,
+#                 the petal has the right to refuse some targets. Hence REQUESTED
+#                 will vary from TRACKED in these cases. Errors calculated with
+#                 respect to REQUESTED show us how well we are getting fibers to
+#                 desired locations / whether our desired locations are possible.
+#
+# See "TAGS" implementation below, for how I've handled labeling to differentiate.
+
+
 # command line argument parsing
 import argparse
 parser = argparse.ArgumentParser(description=__doc__)
