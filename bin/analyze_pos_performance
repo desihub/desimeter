@@ -76,25 +76,25 @@ tag_separator = '_'
 def add_tag(tag_str, other_str):
     '''Return a tagged string with standard format.'''
     assert tag_str in TAGS
-    return f'{tag_str}{tag_separator}{other_str}'
+    return f'{other_str}{tag_separator}{tag_str}'
 
 def is_tagged(tagged_string):
     '''Returns boolean.'''
-    prefix = tagged_string.split(tag_separator)[0]
-    return prefix in TAGS
+    suffix = tagged_string.split(tag_separator)[-1]
+    return suffix in TAGS
     
 def strip_tag(tagged_string):
     '''Get the non-tag part of string.'''
     split = tagged_string.split(tag_separator)
-    assert split[0] in TAGS
-    suffix = tag_separator.join(split[1:])
-    return suffix
+    assert split[-1] in TAGS
+    prefix = tag_separator.join(split[:-2])
+    return prefix
     
 def get_tag(tagged_string):
     '''Get the tag part of string.'''
-    prefix = tagged_string.split(tag_separator)[0]
-    assert prefix in TAGS
-    return prefix
+    suffix = tagged_string.split(tag_separator)[-1]
+    assert suffix in TAGS
+    return suffix
     
 # statistics functions for summarizing errors
 stat_funcs = {'max': np.max, 'min': np.min, 'mean': np.mean, 'median': np.median,
@@ -233,18 +233,19 @@ def identify_submoves(table):
     new['SUBMOVE'] = submoves
     return new
 
-def get_idxs(table, submove, sigma=None):
+def get_idxs(table, submove, sigma=None, tag=TRACKED):
     '''Returns a list of idxs for rows associated with the argued submove.
     
     INPUT:  table ... astropy table including column 'SUBMOVE'
             submove ... integer
             sigma ... optional, like 1, 2, 3, ... math.inf or np.inf are also valid
+            tag ... str, c.f. TAGS, only needed when arguing sigma
             
     OUTPUT: list of row index integers
     '''
     selection = table['SUBMOVE'] == submove
     if sigma:
-        selection &= table['SIGMA_CEILING'] <= sigma
+        selection &= table[add_tag(tag, 'SIGMA_CEILING')] <= sigma
     sel_idxs = np.where(selection)[0].tolist()
     return sel_idxs
 
@@ -255,11 +256,13 @@ def get_submove_ids(table):
     '''
     return sorted(set(table['SUBMOVE']))
 
-def get_sigmas(table):
+def get_sigmas(table, tag):
     '''Returns a dict with keys = 'SIGMA_CEILING' and values = corresponding 'QUANTILE_CEILING'
     '''
-    sigmas = sorted(set(table['SIGMA_CEILING']))
-    return {s: table['QUANTILE_CEILING'][table['SIGMA_CEILING'] == s][0] for s in sigmas}    
+    s_name = add_tag(tag, 'SIGMA_CEILING')
+    q_name = add_tag(tag, 'QUANTILE_CEILING')
+    sigmas = sorted(set(table[s_name]))
+    return {s: table[q_name][table[s_name] == s][0] for s in sigmas}    
 
 def identify_requests(table):
     '''Searches MOVE_CMD fields to identify original requested targets.
@@ -435,8 +438,8 @@ def calc_radii(table, tag=TRACKED):
     '''
     new = table.copy()
     assert tag in TAGS
-    loc_x = table[add_tag(tag, 'LOC_X')],
-    loc_y = table[add_tag(tag, 'LOC_T')],
+    loc_x = table[add_tag(tag, 'LOC_X')]
+    loc_y = table[add_tag(tag, 'LOC_Y')]
     radii = np.hypot(loc_x, loc_y)
     new[add_tag(tag, 'RADIUS')] = radii
     return new
@@ -492,12 +495,14 @@ def analyze_one_pos(table):
 sigma_to_quantile = lambda s: 1 - math.exp(-s)
 quantile_to_sigma = lambda q: -math.log(1-q) if q < 1 else math.inf
 
-def identify_quantiles(table, sigmas=[1,2,3,4,5,math.inf]):
+def identify_quantiles(table, tag=TRACKED, sigmas=[1,2,3,4,5,math.inf]):
     '''Gathering positioners into error quantiles at the specified "sigma" levels.
     Quantile assignments are done independently for each submove.
     
     INPUTS:  table ... astropy table with data for one or many positioners. The table
-                       must include the columns 'ERR_XY' and 'SUBMOVE'
+                       must include 'SUBMOVE' and the tagged column 'ERR_XY' and
+
+             tag ... str, c.f. TAGS
                        
              sigmas ... list of ints giving which sigma quantiles to gather the data
                         into. In other words, sigma=1 corresponds to 63.2% quantile,
@@ -509,8 +514,11 @@ def identify_quantiles(table, sigmas=[1,2,3,4,5,math.inf]):
                      group in which each error value resides.
     '''
     new = table.copy()
-    new['SIGMA_CEILING'] = math.inf
-    new['QUANTILE_CEILING'] = 1.0
+    sigma_ceiling_name = add_tag(tag, 'SIGMA_CEILING')
+    quantile_ceiling_name = add_tag(tag, 'QUANTILE_CEILING')
+    err_xy_name = add_tag(tag, 'ERR_XY')
+    new[sigma_ceiling_name] = math.inf
+    new[quantile_ceiling_name] = 1.0
     submoves = get_submove_ids(new)
     sigmas = sorted(sigmas, reverse=True)  # start with narrowest group (largest sigma), then broaden
     quantiles = {s: sigma_to_quantile(s)  for s in sigmas}
@@ -518,20 +526,22 @@ def identify_quantiles(table, sigmas=[1,2,3,4,5,math.inf]):
         submove_selection = new['SUBMOVE'] == submove
         for sigma in sigmas:
             quantile = quantiles[sigma]
-            cutoff = np.quantile(new['ERR_XY'][submove_selection], quantile, interpolation='midpoint')
-            within_cutoff = new['ERR_XY'] <= cutoff
+            cutoff = np.quantile(new[err_xy_name][submove_selection], quantile, interpolation='midpoint')
+            within_cutoff = new[err_xy_name] <= cutoff
             quantile_selection = np.logical_and(within_cutoff, submove_selection)
-            new['SIGMA_CEILING'][quantile_selection] = sigma
-            new['QUANTILE_CEILING'][quantile_selection] = quantile
+            new[sigma_ceiling_name][quantile_selection] = sigma
+            new[quantile_ceiling_name][quantile_selection] = quantile
     return new
 
-def summarize_stats(table, stat_names=stat_funcs.keys()):
+def summarize_stats(table, tag=TRACKED, stat_names=stat_funcs.keys()):
     '''Generate summary statistics for each submove.
     
     INPUTS:  table ... astropy table with data for one or many positioners. The table
-                       must include columns for 'SUBMOVE', 'POS_ID', 'ERR_XY',
-                       'NUM_IMAGES', 'TARGET_RADIUS', 'SIGMA_CEILING', and
+                       must include columns for 'SUBMOVE', 'POS_ID', 'NUM_IMAGES', and
+                       the tagged columns 'ERR_XY', 'RADIUS', 'SIGMA_CEILING', and
                        'QUANTILE_CEILING'
+
+             tag ... str, c.f. TAGS
                         
              stat_names ... names of which stat_funcs results to perform the quantiles
                             on. Must be a subset of stat_funcs.
@@ -544,21 +554,23 @@ def summarize_stats(table, stat_names=stat_funcs.keys()):
     assert not(any(missing_funcs)), f'undefined stat funcs {missing_funcs}'
     uppercase_names = {key: key.upper() for key in stat_names}
     submoves = get_submove_ids(table)
-    new_columns = ['SUBMOVE', 'SIGMA', 'QUANTILE', 'N_TARGETS'] + list(uppercase_names.values())
+    new_columns = ['SUBMOVE']
+    new_columns += ['SIGMA', 'QUANTILE', 'N_TARGETS']
+    new_columns += list(uppercase_names.values())
     new_dict = {key:[] for key in new_columns}
-    sigmas = get_sigmas(table)
+    sigmas = get_sigmas(table, tag)
     max_radius = -math.inf
     min_radius = math.inf
     for submove in submoves:
         submove_selection = table['SUBMOVE'] == submove
-        radii = table['TARGET_RADIUS'][submove_selection].tolist()
+        radii = table[add_tag(tag, 'RADIUS')][submove_selection].tolist()
         max_radius = max(max_radius, max(radii))
         min_radius = min(min_radius, min(radii))
         for sigma in sigmas:
             quantile = sigmas[sigma]
-            within_quantile = table['QUANTILE_CEILING'] <= quantile
+            within_quantile = table[add_tag(tag, 'QUANTILE_CEILING')] <= quantile
             quantile_selection = np.logical_and(within_quantile, submove_selection)
-            err = table['ERR_XY'][quantile_selection].tolist()
+            err = table[add_tag(tag, 'ERR_XY')][quantile_selection].tolist()
             new_dict['SUBMOVE'].append(submove)
             new_dict['SIGMA'].append(sigma)
             new_dict['QUANTILE'].append(quantile)
@@ -688,9 +700,10 @@ def finalize_plot(savepath, limits={}):
     plt.close(fig)
     return limits
     
-def get_span(table, prefix='PTL_X'):
-    '''Returns max - min for all measured and target data in table, identified by prefix.'''
-    vec = table[f'{prefix}_TARG'].tolist() + table[f'{prefix}_MEAS'].tolist()
+def get_span(table, coord='PTL_X', target_tag=TRACKED):
+    '''Returns max - min for all measured and target data in table, identified by coord.'''
+    vec = table[add_tag(target_tag, coord)].tolist()
+    vec += table[add_tag(MEASURED, coord)].tolist()
     return max(vec) - min(vec)
 
 def get_expids_str(table, for_filename=True):
@@ -817,7 +830,8 @@ def bigchart(table, note1='', note2='', limits={}):
         dpi = 200
         min_plot_dims = (10, 8)
         dots_per_mm = 12
-        data_span_mm = [get_span(table, 'PTL_X'), get_span(table, 'PTL_Y')]
+        data_span_mm = [get_span(table, 'PTL_X', TRACKED),
+                        get_span(table, 'PTL_Y', TRACKED)]
         fig_size_in = [mm * dots_per_mm / dpi for mm in data_span_mm]
         fig_size_in = [max(fig_size_in[i], min_plot_dims[i]) for i in [0,1]]
         fig_size_in[1] += 2
@@ -834,13 +848,16 @@ def bigchart(table, note1='', note2='', limits={}):
         circ_x = max_reach * cos + ptl_x0
         circ_y = max_reach * sin + ptl_y0
         plt.plot(circ_x, circ_y, '--', color='0.8', linewidth=0.5)
-    for suffix, desc in {'TARG':'target', 'MEAS':'measured'}.items():
-        shape = 'o' if suffix == 'TARG' else '+'
-        plt.plot(table[f'PTL_X_{suffix}'], table[f'PTL_Y_{suffix}'], shape, label=desc)
+    shapes = {TRACKED: 'o', REQUESTED: 's', MEASURED: '+'}
+    colors = {TRACKED: 'blue', REQUESTED: 'orange', MEASURED: 'black'}
+    for tag in [REQUESTED, TRACKED, MEASURED]:
+        x = table[add_tag(tag, 'PTL_X')]
+        y = table[add_tag(tag, 'PTL_Y')]
+        plt.plot(x, y, shapes[tag], color=colors[tag], label=tag.lower(), fillstyle='none')
     for posid in posids:
         selection = table['POS_ID'] == posid
-        label_x = np.mean(table['PTL_X_TARG'][selection])
-        label_y = np.mean(table['PTL_Y_TARG'][selection])
+        label_x = np.mean(table[add_tag(TRACKED, 'PTL_X')][selection])
+        label_y = np.mean(table[add_tag(TRACKED, 'PTL_Y')][selection])
         loc = table['DEVICE_LOC'][selection][0]
         label_text = f'{posid}\n({loc})'
         plt.annotate(label_text, xy=(label_x, label_y), xycoords='data', 
@@ -864,15 +881,12 @@ def choose_subplot_dims(n_subplots):
     n_cols = math.ceil(n_subplots / n_rows)
     return (n_rows, n_cols)
 
-def histogram(table, sigma):
+def histogram(table, tag, sigma):
     '''Make a histogram of positioning errors.
     
     INPUT:  table ... astropy table including 'ERR_XY', 'SUBMOVE', and 'S'
-            note1 ... optional multi-line string, to be printed at bottom of chart
-            note2 ... optional multi-line string, to be printed at bottom of chart
-            limits ... optionally can force plot limits (e.g. to homogenize plots
-                       for multiple submoves). format is a dict with keys: 'xlim',
-                       'bins', 'xfig', 'yfig', and 'dpi'. xfig and yfig are in inches
+            tag ... TRACKED or REQUESTED
+            sigma ... which cut to plot
             
     OUTPUT: path ... path to output plot file
             limits ... dict of same format as described above
@@ -888,8 +902,8 @@ def histogram(table, sigma):
     for submove in submoves:
         plot_idx =  submoves.index(submove) + 1
         ax = plt.subplot(nrows, ncols, plot_idx, sharex=ax)
-        selection = get_idxs(table, submove, sigma)
-        data = table[selection]['ERR_XY'] * unit_scale
+        selection = get_idxs(table, submove, sigma, tag)
+        data = table[selection][add_tag(tag, 'ERR_XY')] * unit_scale
         if bins is None:
             bins = knuth_bin_width(data, return_bins=True)[1]
             bins = max(len(bins), n_bins_min)
@@ -918,12 +932,13 @@ def histogram(table, sigma):
     rights_max = str(max([len(line) for line in rights]))
     title = ''
     for i in range(len(lefts)):
-        title += f'\n{format(lefts[i], lefts_max)}{" ":8}{format(rights[i], rights_max)}'
-        
+        title += f'\n{format(lefts[i], lefts_max)}{" ":4}{format(rights[i], rights_max)}'
+    
+    title = f'Errors w.r.t. {tag} targets\n' + title
     plt.suptitle(title, fontfamily='monospace', verticalalignment='top', fontsize='medium')    
     expids_str = get_expids_str(table, for_filename=True)
     sigma_str = get_sigma_str(sigma, for_filename=True)
-    path = os.path.join(save_dir, f'expid_{expids_str}_hist_sigma_{sigma_str}.{img_format}')
+    path = os.path.join(save_dir, f'expid_{expids_str}_hist_sigma_{sigma_str}_{tag}.{img_format}')
     limits = finalize_plot(path, limits)
     return path
 
@@ -972,14 +987,12 @@ if __name__ == '__main__':
     # merge results
     moves = vstack(moves_list)
     stats = vstack(stats_list)
+    stats.rename_columns(list(stats.columns), [col.upper() for col in stats.columns])
     
     # binning
-    moves = identify_quantiles(moves)
-    summary = summarize_stats(moves)
-    
-    
-    # DO VERSIONS WHERE WE HAVE "TARGETS" BE TRACKED VERSUS REQUESTED
-    
+    moves = identify_quantiles(moves, tag=TRACKED)
+    moves = identify_quantiles(moves, tag=REQUESTED)
+    summaries = {tag: summarize_stats(moves, tag) for tag in [TRACKED, REQUESTED]}    
     
     # plot big xy charts
     chart_limits = {}
@@ -989,32 +1002,38 @@ if __name__ == '__main__':
         table = moves[submove_selection]
         note1 = get_description(table, submove)
         note1 += '\n' + get_exposure_description(table)
-        note1 += '\n' + meta_str(summary)
-        note2 = get_summary_stats_str(summary, submove)
+        
+        # 2020-09-28 [JHS] only printing out TRACKED here, perhaps figure out
+        # formatting to include REQUESTED as a future enhancement
+        note1 += '\n' + meta_str(summaries[TRACKED])
+        note2 = get_summary_stats_str(summaries[TRACKED], submove)
+        
         path, chart_limits = bigchart(table, note1, note2, chart_limits)
         log.info(f'Saved big chart for submove {submove} to {path}')
     
     # plot histograms
-    sigmas = get_sigmas(moves)
-    for sigma in sigmas:
-        path = histogram(moves, sigma)
-        log.info(f'Saved histogram for sigma={sigma} to {path}')
+    for tag in [TRACKED, REQUESTED]:
+        sigmas = get_sigmas(moves, tag)
+        for sigma in sigmas:
+            path = histogram(moves, tag, sigma)
+            log.info(f'Saved histogram for sigma={sigma} to {path}')
 
     # export tabular data
     expids_str = 'expid_' + get_expids_str(moves, for_filename=True)
     moves_path = os.path.join(save_dir, f'{expids_str}_moves.csv')
     stats_path = os.path.join(save_dir, f'{expids_str}_stats_by_positioner.csv')
-    summary_path_base = os.path.join(save_dir, f'{expids_str}_stats_summary')
     moves.write(moves_path, overwrite=True)
     log.info(f'Saved move-by-move data table to {moves_path}')
     stats.write(stats_path, overwrite=True)
     log.info(f'Saved positioner-by-positioner performance stats to {stats_path}')
-    ecsv_path = summary_path_base + '.ecsv'
-    summary.write(ecsv_path, overwrite=True, delimiter=',')
-    log.info(f'Saved overall summary stats + metadata to {ecsv_path}')
-    csv_path = summary_path_base + '.csv'
-    summary.write(csv_path, overwrite=True)
-    log.info(f'Saved overall summary stats (no metadata) to {csv_path}')
+    for tag, summary in summaries.items():
+        summary_path_base = os.path.join(save_dir, f'{expids_str}_{tag}_stats_summary')
+        ecsv_path = summary_path_base + '.ecsv'
+        summary.write(ecsv_path, overwrite=True, delimiter=',')
+        log.info(f'Saved overall summary stats + metadata to {ecsv_path}')
+        csv_path = summary_path_base + '.csv'
+        summary.write(csv_path, overwrite=True)
+        log.info(f'Saved overall summary stats (no metadata) to {csv_path}')
     runtime = (Time.now() - start_time).to_value('sec')
     runtime_str = f'{runtime:.1f} sec' if runtime < 60 else f'{runtime/60:.1f} min'
     log.info(f'Total run time: {runtime_str}')
