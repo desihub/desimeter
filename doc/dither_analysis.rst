@@ -28,9 +28,9 @@ Fit pointing offsets, the field rotation and a field compression (3 numbers: sxx
 
 ``fm-00055670.json`` is the "field model" file with the astometric solution::
 
- {"name": "Field model", "version": "1", "ra": 106.33481916831745, "dec": 31.889476531165776, "mjd": 58904.25116974065, "lst": 133.24085389263928, "hexrot_deg": 0.0, "adc1": 70.412607, "adc2": 95.190051, "sxx": 0.9999611908551399, "syy": 0.9999892189227471, "sxy": -4.799877494061412e-05, "fieldrot_zp_deg": 359.9706671491963, "fieldrot_deg": 0.14414265500548332, "expid": 55670, "nstars": 341, "rms_arcsec": 0.2659517231204168}
+ {"name": "Field model", "version": "1", "ra": 169.97172680058398, "dec": 60.001396953233744, "mjd": 58924.473182622765, "lst": 233.09726528124884, "hexrot_deg": 5.555555555555556e-05, "adc1": 51.980022, "adc2": 138.720115, "sxx": 0.9999537892790107, "syy": 0.9999774313698416, "sxy": -4.109184104764672e-05, "fieldrot_zp_deg": 359.946666865039, "fieldrot_deg": 0.06743416213752557, "expid": 55670, "nstars": 79, "rms_arcsec": 0.1640910115685826}
 
-One can see the field dilatation is only of 4e-5.
+One can see the field dilatation is only of 5e-5. The astrometric residuals to 79 guide stars are of 0.16 arcsec.
 
 Fit FVC image
 +++++++++++++
@@ -51,3 +51,6 @@ Compare the desimeter prediction for the fiber to target RA,Dec offsets with the
 results from the dither analysis::
 
  plot_dither_vs_desimeter  dither20200315-63224-B.fits fvc-00055670.csv fiberassign-063225.fits
+
+
+Here the desimeter to dither residuals are of 0.5 arcsec.
