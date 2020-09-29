@@ -21,7 +21,7 @@ parser.add_argument('--exposure-iters', type= str, required=False, default=None,
 parser.add_argument('--date-min', type = str, default = "2019-01-01", required = False, help="date min with format YYYY-MM-DD")
 parser.add_argument('--date-max', type = str, default = "2030-01-01", required = False, help="date max with format YYYY-MM-DD")
 parser.add_argument('--pos-ids', type= str, required=False, default=None, help="comma separated list of positioner ids (same as DEVICE_ID)")
-parser.add_argument('-o','--outdir', type = str, default = "None", required = True, help="output directory where MXXXX.csv files are saved")
+parser.add_argument('-o', '--outdir', type = str, default = "None", required = True, help="output directory where MXXXX.csv files are saved")
 parser.add_argument('-c', '--with-calib', action = 'store_true', help="add matching calib from db")
 parser.add_argument('-t', '--tp-updates', action='store_true', help="include rows where no move was done but POS_T, POS_P was updated")
 parser.add_argument('--recent-rehome-exposure-ids', type= str, required=False, default=None, help="comma separated list of exposure ids where the positioners have been recently rehomed")
@@ -55,11 +55,31 @@ for petalid in petalids :
     for posid in posids :
 
         # read data from db
-        cmd = "select * from posmovedb.positioner_moves_p{} where pos_id='{}' and time_recorded BETWEEN date '{}' and date '{}'".format(int(petalid),posid,args.date_min,args.date_max)
-        if args.exposure_ids is not None :
-            cmd += " and exposure_id in ({})".format(args.exposure_ids)
-        if args.exposure_iters is not None :
-            cmd += " and exposure_iter in ({})".format(args.exposure_iters)
+        from_where = f'from posmovedb.positioner_moves_p{int(petalid)} where'
+        posid_date = "pos_id='{}' and time_recorded BETWEEN date '{}' and date '{}'".format(posid,args.date_min,args.date_max)
+        cmd_exp = ''
+        if args.exposure_ids is not None:
+            cmd_exp += "exposure_id in ({})".format(args.exposure_ids)
+        if args.exposure_iters is not None:
+            cmd_exp += ' and ' if cmd_exp else ''
+            cmd_exp += "exposure_iter in ({})".format(args.exposure_iters)
+        cmd_tp = ''
+        if args.tp_updates:
+            cmd_idx = f'select pos_move_index {from_where} {posid_date}'
+            if cmd_exp:
+                cmd_idx += f' and {cmd_exp}'
+            result = dbquery(comm, cmd_idx)
+            min_idx = min(result['pos_move_index'])
+            max_idx = max(result['pos_move_index'])
+            max_idx += 1  # capture any tp_updates from just after the exposure or exp iteration
+            cmd_tp = f"log_note like '%tp_update%' and pos_move_index >= {min_idx} and pos_move_index <= {max_idx}"
+        cmd = f'select * {from_where} {posid_date}'
+        if cmd_exp and cmd_tp:
+            cmd += f' and (({cmd_exp}) or ({cmd_tp}))'
+        elif cmd_exp:
+            cmd += f' and {cmd_exp}'
+        elif cmd_tp:
+            cmd += f' and {cmd_tp}'
         posmoves=dbquery(comm,cmd)
 
         # add petal loc
