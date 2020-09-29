@@ -1016,12 +1016,28 @@ if __name__ == '__main__':
         note1 += '\n' + get_exposure_description(table)
         
         # 2020-09-28 [JHS] only printing out TRACKED here, perhaps figure out
-        # formatting to include REQUESTED as a future enhancement
+        # formatting plot to include REQUESTED as a future enhancement
+        # for now, will at least capture in bigstr (see below)
         note1 += '\n' + meta_str(summaries[TRACKED])
         note2 = get_summary_stats_str(summaries[TRACKED], submove=submove, tag=TRACKED)
         
         path, chart_limits = bigchart(table, note1, note2, chart_limits)
         log.info(f'Saved big chart for submove {submove} to {path}')
+    
+    # make big text string
+    bigstr = ''  # text version of info that gets printed on bottoms of bigcharts
+    for submove in submoves:
+        submove_selection = get_idxs(moves, submove)
+        table = moves[submove_selection]
+        if any(bigstr):
+            bigstr += '\n' + '-'*10 + '\n'
+        bigstr += get_description(table, submove)
+        bigstr += '\n' + get_exposure_description(table)
+        bigstr += '\n'
+        for tag in [TRACKED, REQUESTED]:
+            bigstr += f'\nWith respect to {tag} targets...'
+            bigstr += '\n' + meta_str(summaries[tag])
+            bigstr += '\n' + get_summary_stats_str(summaries[tag], submove=submove, tag=tag)    
     
     # plot histograms
     for tag in [TRACKED, REQUESTED]:
@@ -1034,6 +1050,7 @@ if __name__ == '__main__':
     expids_str = 'expid_' + get_expids_str(moves, for_filename=True)
     moves_path = os.path.join(save_dir, f'{expids_str}_moves.csv')
     stats_path = os.path.join(save_dir, f'{expids_str}_stats_by_positioner.csv')
+    text_path = os.path.join(save_dir, f'{expids_str}.txt')
     moves.write(moves_path, overwrite=True)
     log.info(f'Saved move-by-move data table to {moves_path}')
     stats.write(stats_path, overwrite=True)
@@ -1046,6 +1063,8 @@ if __name__ == '__main__':
         csv_path = summary_path_base + '.csv'
         summary.write(csv_path, overwrite=True)
         log.info(f'Saved overall summary stats (no metadata) to {csv_path}')
+    with open(text_path, 'w') as file:
+        file.write(bigstr)
     runtime = (Time.now() - start_time).to_value('sec')
     runtime_str = f'{runtime:.1f} sec' if runtime < 60 else f'{runtime/60:.1f} min'
     log.info(f'Total run time: {runtime_str}')
