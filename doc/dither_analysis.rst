@@ -55,7 +55,19 @@ Compare with dither analysis
 Compare the desimeter prediction for the fiber to target RA,Dec offsets with the
 results from the dither analysis::
 
- plot_dither_vs_desimeter  dither20200315-63224-B.fits fvc-00055670.csv fiberassign-063225.fits
+ plot_dither_vs_desimeter  dither20200315-63224-B.fits fvc-00055670.csv fiberassign-063225.fits 55670
 
 
-Here the desimeter to dither residuals are of 0.4 arcsec.
+Here the desimeter to dither residuals are of 0.42 arcsec. After correcting for a rotation, shift, and dilatation,
+the residuals are of 0.26 arcsec::
+
+  number of valid targets from dither analysis = 1758
+  residual scale along HA       = 1-7.8e-05
+  residual scale along Dec      = 1-4.1e-06
+  residual pointing offset dHA  = -0.11 arcsec
+  residual pointing offset dDec = -0.15 arcsec
+  residual rotation             = -9.19 arcsec
+     desimeter(guide+fvc)-target rms 2D = 0.44 arcsec
+                   dither-target rms 2D = 0.23 arcsec
+     desimeter(guide+fvc)-dither rms 2D = 0.42 arcsec
+  transformed(desimeter) -dither rms 2D = 0.26 arcsec
