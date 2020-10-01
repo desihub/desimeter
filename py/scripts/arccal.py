@@ -110,57 +110,6 @@ def main():
 
     dm.write_desimeter('arccal-dm')
 
-def plot_fiducial_offsets(table):
-    # Takes an "fvc-spots" table
-    from desimeter.twrapper import Twrapper
-    T = Twrapper(table)
-    F = T[T.pinhole_id > 0]
-    F.devid = F.device_loc + F.petal_loc * 1000
-    devs = np.unique(F.devid)
-
-    F.dev_x = np.zeros(len(F))
-    F.dev_y = np.zeros(len(F))
-    F.dev_dx = np.zeros(len(F))
-    F.dev_dy = np.zeros(len(F))
-    idevs = []
-    for d in devs:
-        I = np.flatnonzero(F.devid == d)
-        F.dev_x[I] = np.mean(F.x_fp[I])
-        F.dev_y[I] = np.mean(F.y_fp[I])
-        F.dev_dx[I] = np.mean(F.x_fp[I] - F.x_fp_metro[I])
-        F.dev_dy[I] = np.mean(F.y_fp[I] - F.y_fp_metro[I])
-        idevs.append(I[0])
-        #plt.clf()
-        #plt.plot(F.x_fp[I], F.y_fp[I], 'b.')
-        #plt.plot(F.x_fp_metro[I], F.y_fp_metro[I], 'r.')
-        #plt.show()
-    D = F[np.array(idevs)]
-
-    qargs = dict(pivot='middle', angles='xy', scale_units='xy',
-                scale=0.0005)
-
-    plt.figure(figsize=(10,10))
-    for p in np.unique(D.petal_loc):
-        I = np.flatnonzero(D.petal_loc == p)
-        plt.plot(D.dev_x[I], D.dev_y[I], 'o', mec='none', ms=25, alpha=0.1)
-    plt.quiver(D.dev_x, D.dev_y, D.dev_dx, D.dev_dy, **qargs)
-    th = np.linspace(0,np.pi/5,100)
-    for i in range(10):
-        oth = np.deg2rad(i*36)
-        r1 = 410
-        r0 = 40
-        kwargs = dict(color='k', alpha=0.1)
-        plt.plot(r1*np.cos(oth+th), r1*np.sin(oth+th), '-', **kwargs)
-        plt.plot(r0*np.cos(oth+th), r0*np.sin(oth+th), '-', **kwargs)
-        plt.plot([r0*np.cos(oth+th[0]), r1*np.cos(oth+th[0])],
-                 [r0*np.sin(oth+th[0]), r1*np.sin(oth+th[0])], '-', **kwargs)
-        plt.plot([r0*np.cos(oth+th[-1]), r1*np.cos(oth+th[-1])],
-                 [r0*np.sin(oth+th[-1]), r1*np.sin(oth+th[-1])], '-', **kwargs)
-    plt.axis('equal')
-    rms2d = 1000. * np.sqrt(np.mean(D.dev_dx**2 + D.dev_dy**2))
-    plt.title('Offsets of fiducials vs whole-focal-plane fit: %.1f um RMS2d' % rms2d)
-    #plt.savefig('fid-offs.png')
-
 def plot_zb_terms():
     from desimeter.transform import zhaoburge as zb
     xx,yy = np.meshgrid(np.linspace(-1, 1, 20),
@@ -176,10 +125,10 @@ def plot_zb_terms():
         plt.axis('equal')
         plt.title('Zhao-Burge term %i: %s' % (i, label))
         plt.savefig('zb-%02i.png' % i)
-    
+
 if __name__ == '__main__':
     #main()
-    dm = Desimeter(data_dir='dither-20200315-63224', proc_data_dir='proc')
+    #dm = Desimeter(data_dir='dither-20200315-63224', proc_data_dir='proc')
     expnum = 55668
 
     allspots = []

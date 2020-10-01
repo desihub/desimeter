@@ -23,8 +23,14 @@ class Desimeter(object):
         proc_data_dir: directory containing intermediate processed results.
         '''
         if desimeter_dir is None:
+            # will check for $DESIMETER_DATA, else use desimeter/data in desimeter repo.
             desimeter_dir = desimeter_data_dir()
         self.desimeter_dir = desimeter_dir
+
+        if data_dir is None:
+            # check $DESI_DATA_DIR, else assume "data" in current dir?
+            data_dir = os.environ.get('DESI_DATA_DIR', 'data')
+        self.data_dir = data_dir
 
         fn = self.find_file('fvc2fp')
         self.fvc2fp = FVC2FP.read_jsonfile(fn)
@@ -35,17 +41,16 @@ class Desimeter(object):
             # add useful location keyword
             self.metro["LOCATION"] = np.array(self.metro["PETAL_LOC"])*1000+np.array(self.metro["DEVICE_LOC"])
 
-        if data_dir is None:
-            data_dir = '.'
-        self.data_dir = data_dir
 
         if proc_data_dir is None:
             proc_data_dir = '.'
         self.proc_dir = proc_data_dir
 
-    def find_file(self, filetype, expnum=None, frame=None,
+    def find_file(self, filetype, night=None, expnum=None, frame=None,
                   tag=None,
                   desimeter_dir=None):
+        from glob import glob
+
         if desimeter_dir is None:
             desimeter_dir = self.desimeter_dir
 
@@ -55,7 +60,14 @@ class Desimeter(object):
             return os.path.join(desimeter_dir, 'fp-metrology.csv')
 
         if filetype == 'fvc':
-            fn = os.path.join(self.data_dir, 'fvc-%08d.fits.fz' % expnum)
+            if night is None:
+                pat = os.path.join(self.data_dir, '*', '%08d' % expnum, 'fvc-%08d.fits.fz' % expnum)
+                print('Checking', pat)
+                fns = glob(pat)
+                if len(fns) == 0:
+                    return None
+                return fns[0]
+            fn = os.path.join(self.data_dir, night, 'fvc-%08d.fits.fz' % expnum)
             return fn
         if filetype == 'fvc-spots':
             fn = os.path.join(self.proc_dir,

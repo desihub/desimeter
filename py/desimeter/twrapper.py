@@ -35,6 +35,12 @@ class Twrapper(object):
             del self._revmap[k2]
         self._table.rename_column(k2, knew)
 
+    def set(self, k, val):
+        setattr(self, k, val)
+
+    def get(self, k):
+        return getattr(self, k)
+
     def __len__(self):
         return len(self._table)
 
