@@ -26,9 +26,9 @@ class Desimeter(object):
             desimeter_dir = desimeter_data_dir()
         self.desimeter_dir = desimeter_dir
 
-        fn = os.path.join(self.desimeter_dir, 'init-fvc2fp.json')
+        fn = self.find_file('fvc2fp')
         self.fvc2fp = FVC2FP.read_jsonfile(fn)
-        fn = os.path.join(self.desimeter_dir, 'fp-metrology.csv')
+        fn = self.find_file('metrology')
         self.metro = Table.read(fn)
 
         if not "LOCATION" in self.metro.keys() :
@@ -44,7 +44,16 @@ class Desimeter(object):
         self.proc_dir = proc_data_dir
 
     def find_file(self, filetype, expnum=None, frame=None,
-                  tag=None):
+                  tag=None,
+                  desimeter_dir=None):
+        if desimeter_dir is None:
+            desimeter_dir = self.desimeter_dir
+
+        if filetype == 'fvc2fp':
+            return os.path.join(desimeter_dir, 'init-fvc2fp.json')
+        if filetype == 'metrology':
+            return os.path.join(desimeter_dir, 'fp-metrology.csv')
+
         if filetype == 'fvc':
             fn = os.path.join(self.data_dir, 'fvc-%08d.fits.fz' % expnum)
             return fn
@@ -57,6 +66,23 @@ class Desimeter(object):
                               'fvc-circles-%08d-%s.fits' % (expnum, tag))
             return fn
         raise RuntimeError('Unknown file type "%s"' % filetype)
+
+    def write_desimeter(self, dirname,
+                        metrology=True,
+                        fvc2fp=True):
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
+        outfn = self.find_file('fvc2fp', desimeter_dir=dirname)
+        # fake overwriting an existing file
+        if os.path.exists(outfn):
+            os.remove(outfn)
+        self.fvc2fp.write(outfn)
+        print('Wrote', outfn)
+        outfn = self.find_file('metrology', desimeter_dir=dirname)
+        if os.path.exists(outfn):
+            os.remove(outfn)
+        self.metro.write(outfn)
+        print('Wrote', outfn)
 
     def measure_spots(self, expnum, frame):
         infn = self.find_file('fvc', expnum=expnum)
