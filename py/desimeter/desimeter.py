@@ -108,7 +108,9 @@ class Desimeter(object):
                               pinhole_max_separation_mm=1.5)
         print(spots.info)
 
-        self.fvc2fp.fit(spots, update_spots=True, zbfit=True, fixed_scale=False, fixed_rotation=False)
+        self.fvc2fp.fit(spots, metrology=self.metro,
+                        update_spots=True, zbfit=True,
+                        fixed_scale=False, fixed_rotation=False)
         print(spots.info)
 
         # select spots that are not already matched

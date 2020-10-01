@@ -61,6 +61,8 @@ def plot_fiducial_offsets(table, expnum=-1, frame=-1):
     for p in np.unique(D.petal_loc):
         I = np.flatnonzero(D.petal_loc == p)
         plt.plot(D.dev_x[I], D.dev_y[I], 'o', mec='none', ms=25, alpha=0.1)
+    #for x,y,d in zip(D.dev_x, D.dev_y, D.devid):
+    #    plt.text(x, y, '%i' % d)
     qargs = dict(pivot='middle', angles='xy', scale_units='xy',
                 scale=0.0005)
     plt.quiver(D.dev_x, D.dev_y, D.dev_dx, D.dev_dy, **qargs)
@@ -108,5 +110,5 @@ if __name__ == '__main__':
         plt.clf()
 
     fids = astropy.table.vstack(fids)
-    fids.write('fiducials.fits')
+    fids.write('fiducials.fits', overwrite=True)
     

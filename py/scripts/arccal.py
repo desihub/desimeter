@@ -127,18 +127,4 @@ def plot_zb_terms():
         plt.savefig('zb-%02i.png' % i)
 
 if __name__ == '__main__':
-    #main()
-    #dm = Desimeter(data_dir='dither-20200315-63224', proc_data_dir='proc')
-    expnum = 55668
-
-    allspots = []
-    for frame in range(3):
-        fn = dm.find_file('fvc-spots', expnum=expnum, frame=frame)
-        if os.path.exists(fn):
-            spots = astropy.table.Table.read(fn)
-        else:
-            spots = dm.measure_spots(expnum, frame)
-            spots.write(fn, overwrite=True)
-
-        plot_fiducial_offsets(spots)
-        plt.savefig('fvc-fid-offsets-%08i-F%04i.png' % (expnum, frame))
+    main()
