@@ -106,10 +106,12 @@ class Desimeter(object):
                               input_transform_func=self.fvc2fp,
                               metrology=self.metro,
                               pinhole_max_separation_mm=1.5)
-        print(spots.info)
+        #print(spots.info)
+        return self.refit_spots(spots)
 
+    def refit_spots(self, spots, zbfit=True):
         self.fvc2fp.fit(spots, metrology=self.metro,
-                        update_spots=True, zbfit=True,
+                        update_spots=True, zbfit=zbfit,
                         fixed_scale=False, fixed_rotation=False)
         print(spots.info)
 

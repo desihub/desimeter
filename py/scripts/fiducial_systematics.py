@@ -74,41 +74,100 @@ def plot_fiducial_offsets(table, expnum=-1, frame=-1):
     return D
 
 if __name__ == '__main__':
+    plt.figure(figsize=(10,10))
+
     dm = Desimeter(proc_data_dir='proc')
 
-    fids = []
-    plt.figure(figsize=(10,10))
-    for expnum in range(55353, 55692+1):
-    #for expnum in range(55353, 55357+1):
-        fvcfn = dm.find_file('fvc', expnum=expnum)
+    fidfn = 'fiducials.fits'
+    if not os.path.exists(fidfn):
+        fids = []
+        for expnum in range(55353, 55692+1):
+        #for expnum in range(55353, 55357+1):
+            fvcfn = dm.find_file('fvc', expnum=expnum)
+            if fvcfn is None:
+                continue
+            print('Expnum', expnum)
+            print('FVC', fvcfn)
+            frame = 0
+            fn = dm.find_file('fvc-spots', expnum=expnum, frame=frame)
+            if os.path.exists(fn):
+                spots = astropy.table.Table.read(fn)
+            else:
+                spots = dm.measure_spots(expnum, frame)
+                spots.write(fn, overwrite=True)
+            spots = dm.refit_spots(spots, zbfit=False)
+            D = plot_fiducial_offsets(spots, expnum=expnum, frame=frame)
+            # Format table of per-fiducial results
+            D.expnum = np.zeros(len(D), np.int32) + expnum
+            D.frame  = np.zeros(len(D), np.int16) + frame
+            hdr = fitsio.read_header(fvcfn)
+            for key in ['MJD-OBS', 'TARGTRA', 'TARGTDEC', 'TARGTAZ', 'TARGTEZ', 'AIRMASS',
+                        'ADC1PHI', 'ADC2PHI']:
+                D.set(key.replace('-','_').lower(), np.zeros(len(D), np.float32) + hdr.get(key, -99))
+            fids.append(D._table)
+            fn = 'fvc-fid-offsets-%08i-F%04i.png' % (expnum, frame)
+            plt.savefig(fn)
+            print('Wrote', fn)
+            plt.clf()
+        fids = astropy.table.vstack(fids)
+        fids.write('fiducials.fits', overwrite=True)
+    else:
+        fids = astropy.table.Table.read(fidfn)
+
+    from desimeter.twrapper import Twrapper
+    fids = Twrapper(fids)
+    print(len(fids), 'fiducial measurements,', len(np.unique(fids.devid)), 'unique fids')
+    d = np.hypot(fids.dev_dx, fids.dev_dy)
+    I = np.flatnonzero(d < 0.1)
+    fids = fids[I]
+    print('Cut to', len(fids), 'based on residuals')
+
+    M = Twrapper(dm.metro)
+    print('Metrology columns:', M.get_columns())
+
+    for d in np.unique(fids.devid):
+        I = np.flatnonzero(fids.devid == d)
+        # drop largest and smallest dx,dy (cheap 'sigma-clipping')
+        dx = 1000. * fids.dev_dx[I]
+        dy = 1000. * fids.dev_dy[I]
+        print(len(I), 'measurements for dev', d, 'with mean dx,dy  %+5.1f, %+5.1f and std %4.1f, %4.1f' %
+              (np.mean(dx), np.mean(dy), np.std(dx), np.std(dy)))
+        Kx = np.argsort(dx)
+        Ky = np.argsort(dy)
+        dx = dx[Kx[1:-1]]
+        dy = dy[Ky[1:-1]]
+        print('After dropping min & max:', len(dx), 'meas, mean dx,dy %+5.1f, %+5.1f and std %4.1f, %4.1f' %
+              (np.mean(dx), np.mean(dy), np.std(dx), np.std(dy)))
+        dx = np.mean(dx) / 1000.
+        dy = np.mean(dy) / 1000.
+
+        IM = np.flatnonzero(M.location == d)
+        print(len(IM), 'metrology entries for location', d, M.device_type[IM[0]])
+        #print('Metro x_fp,y_fp', M.x_fp[IM], M.y_fp[IM])
+        #print('Fid x_fp, y_fp:', fids.dev_x[I], fids.dev_y[I])
+
+        M.x_fp[IM] += dx
+        M.y_fp[IM] += dy
+
+    outdir = 'dm-fid-sys'
+    dm.write_desimeter(outdir)
+
+
+    # Check!
+    newdm = Desimeter(desimeter_dir=outdir, proc_data_dir='proc-fid-sys')
+    for expnum in range(55353, 55357+1):
+        fvcfn = newdm.find_file('fvc', expnum=expnum)
         if fvcfn is None:
             continue
         print('Expnum', expnum)
         print('FVC', fvcfn)
-
         frame = 0
-
-        fn = dm.find_file('fvc-spots', expnum=expnum, frame=frame)
-        if os.path.exists(fn):
-            spots = astropy.table.Table.read(fn)
-        else:
-            spots = dm.measure_spots(expnum, frame)
-            spots.write(fn, overwrite=True)
-
+        fn = newdm.find_file('fvc-spots', expnum=expnum, frame=frame)
+        spots = dm.measure_spots(expnum, frame)
+        spots.write(fn, overwrite=True)
+        spots = dm.refit_spots(spots, zbfit=False)
         D = plot_fiducial_offsets(spots, expnum=expnum, frame=frame)
-        # Format table of per-fiducial results
-        D.expnum = np.zeros(len(D), np.int32) + expnum
-        D.frame  = np.zeros(len(D), np.int16) + frame
-        hdr = fitsio.read_header(fvcfn)
-        for key in ['MJD-OBS', 'TARGTRA', 'TARGTDEC', 'TARGTAZ', 'TARGTEZ', 'AIRMASS', 'ADC1PHI', 'ADC2PHI']:
-            D.set(key.replace('-','_').lower(), np.zeros(len(D), np.float32) + hdr.get(key, -99))
-        fids.append(D._table)
-        
-        fn = 'fvc-fid-offsets-%08i-F%04i.png' % (expnum, frame)
+        fn = 'fvc-fid-sys-%08i-F%04i.png' % (expnum, frame)
         plt.savefig(fn)
         print('Wrote', fn)
         plt.clf()
-
-    fids = astropy.table.vstack(fids)
-    fids.write('fiducials.fits', overwrite=True)
-    
