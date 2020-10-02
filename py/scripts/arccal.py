@@ -111,14 +111,21 @@ def main():
 
     x1,y1 = x1c,y1c
     zbpolids = np.array([0,1,2,3,4,5,6,9,20,27,28,29,30])
-    x1b, y1b = dm.refit_zb(x1, x2, xfp_metro, yfp_metro, zbpolids)
+    x1b, y1b = dm.refit_zb(x1, y1, xfp_metro, yfp_metro, zbpolids)
 
     report_result(x1b,y1b, x2,y2, pinhole, 'After  refitting Z-B',
                   'quiver3.png')
 
-    # x1d, y1d = dm.refit_zb(x1c,y1c, xfp_metro, yfp_metro, zbpolids)
-    # report_result(x1d,y1d, x2,y2, pinhole, 'After second Z-B',
-    #               'quiver4.png')
+    # Radial plot of residuals
+    plt.clf()
+    dx = x1b - x2
+    dy = y1b - y2
+    dd = np.hypot(dx, dy) * 1000.
+    rr = np.hypot(x2, y2)
+    plt.plot(rr, dd, 'b.')
+    plt.xlabel('Radius (FP mm)')
+    plt.ylabel('Positioner residual (um)')
+    plt.savefig('arccal-resids-r.png')
 
     dm.write_desimeter('arccal-dm')
 
