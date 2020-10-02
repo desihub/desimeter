@@ -5,7 +5,13 @@ import astropy.table
 from desimeter.desimeter import Desimeter
 
 def main():
-    dm = Desimeter(data_dir='arccal', proc_data_dir='proc')
+    # before
+    #dm = Desimeter(proc_data_dir='proc')
+
+    # after
+    dm = Desimeter(desimeter_dir='dm-fid-sys', proc_data_dir='proc-arccal-fid-sys')
+
+    plt.figure(figsize=(10,10))
 
     expnum = 52644
 
@@ -18,6 +24,8 @@ def main():
             spots = dm.measure_spots(expnum, frame)
             spots.write(fn, overwrite=True)
 
+        from fiducial_systematics import plot_fiducial_offsets
+        plt.clf()
         plot_fiducial_offsets(spots)
         plt.savefig('fvc-fid-offsets-%08i-F%04i.png' % (expnum, frame))
 
@@ -49,8 +57,12 @@ def main():
 
         # smaller "scale" makes the arrows longer.
         qargs = dict(pivot='middle', angles='xy', scale_units='xy',
-                     scale=0.005)
-        plt.quiver(x[ii],y[ii],dx[ii],dy[ii], **qargs)
+                     scale=0.005, width=1.5e-3)
+                     #headwidth=2, headlength=3)
+        Q = plt.quiver(x[ii],y[ii],dx[ii],dy[ii], **qargs)
+        # add quiver scale marker!
+        sx = 100
+        plt.quiverkey(Q, -400, 400, sx/1000., '%i um' % sx, coordinates='data')
 
         i_fid = ii[pinhole[ii] > 0]
         plt.quiver(x[i_fid],y[i_fid],dx[i_fid],dy[i_fid], color='r', **qargs)
@@ -64,14 +76,8 @@ def main():
     x1,y1 = xfp_meas,  yfp_meas
     x2,y2 = xfp_metro, yfp_metro
 
-    report_result(x1,y1, x2,y2, pinhole, 'Before refitting Z-B',
+    report_result(x1,y1, x2,y2, pinhole, 'Initial',
                   'quiver1.png')
-
-    zbpolids = np.array([0,1,2,3,4,5,6,9,20,27,28,29,30])
-    x1b, y1b = dm.refit_zb(xfp_meas, yfp_meas, xfp_metro, yfp_metro, zbpolids)
-
-    report_result(x1b,y1b, x2,y2, pinhole, 'After  refitting Z-B',
-                  'quiver2.png')
 
     def apply_rigid(sx, sy, rot, x1, y1):
         c,s = np.cos(np.deg2rad(rot)), np.sin(np.deg2rad(rot))
@@ -87,26 +93,32 @@ def main():
         return np.sqrt(np.mean((xx - x2)**2 + (yy - y2)**2))
 
     # Try moving each petal independently...
-    x1c = np.zeros_like(x1b)
-    y1c = np.zeros_like(y1b)
+    x1c = np.zeros_like(x1)
+    y1c = np.zeros_like(y1)
     from scipy.optimize import minimize
     loc = circles['LOCATION']
     for petal in range(10):
         I = np.flatnonzero(loc // 1000 == petal)
         R = minimize(rms_rigid, np.zeros(3),
-                     args=(x1b[I],y1b[I], xfp_metro[I],yfp_metro[I]))
+                     args=(x1[I],y1[I], xfp_metro[I],yfp_metro[I]))
         sx,sy,rot = R.x
-        xr,yr = apply_rigid(sx, sy, rot, x1b[I], y1b[I])
+        xr,yr = apply_rigid(sx, sy, rot, x1[I], y1[I])
         x1c[I] = xr
         y1c[I] = yr
 
     report_result(x1c,y1c, x2,y2, pinhole, 'After shift/rot',
+                  'quiver2.png')
+
+    x1,y1 = x1c,y1c
+    zbpolids = np.array([0,1,2,3,4,5,6,9,20,27,28,29,30])
+    x1b, y1b = dm.refit_zb(x1, x2, xfp_metro, yfp_metro, zbpolids)
+
+    report_result(x1b,y1b, x2,y2, pinhole, 'After  refitting Z-B',
                   'quiver3.png')
 
-    x1d, y1d = dm.refit_zb(x1c,y1c, xfp_metro, yfp_metro, zbpolids)
-
-    report_result(x1d,y1d, x2,y2, pinhole, 'After second Z-B',
-                  'quiver4.png')
+    # x1d, y1d = dm.refit_zb(x1c,y1c, xfp_metro, yfp_metro, zbpolids)
+    # report_result(x1d,y1d, x2,y2, pinhole, 'After second Z-B',
+    #               'quiver4.png')
 
     dm.write_desimeter('arccal-dm')
 

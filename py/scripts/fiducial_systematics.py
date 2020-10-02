@@ -130,10 +130,31 @@ if __name__ == '__main__':
     fids = fids[I]
     print('Cut to', len(fids), 'based on residuals')
 
+    # Plots wrt some observing properties.
+    X = fids[fids.devid == 1542]
+    X.dx = X.dev_dx * 1000.
+    X.dy = X.dev_dy * 1000.
+    tt = 'Fiducial 1542, 2020-03-(14,15)'
+    X.adc_dphi = np.fmod(360 + X.adc2phi-X.adc1phi, 360)
+
+    for k in ('airmass', 'expnum', 'adc_dphi'):
+        plt.clf()
+        plt.plot(X.get(k), X.dx, 'b.', label='dx')
+        plt.plot(X.get(k), X.dy, 'r.', label='dy')
+        plt.title(tt)
+        plt.legend()
+        plt.xlabel(k)
+        plt.ylabel('Fiducial offset (um)')
+        plt.savefig('fid-%s.png' % k)
+
     M = Twrapper(dm.metro)
     print('Metrology columns:', M.get_columns())
 
-    for d in np.unique(fids.devid):
+    applied_dx = []
+    applied_dy = []
+
+    devids = np.unique(fids.devid)
+    for d in devids:
         I = np.flatnonzero(fids.devid == d)
         # drop largest and smallest dx,dy (cheap 'sigma-clipping')
         dx = 1000. * fids.dev_dx[I]
@@ -154,8 +175,19 @@ if __name__ == '__main__':
         #print('Metro x_fp,y_fp', M.x_fp[IM], M.y_fp[IM])
         #print('Fid x_fp, y_fp:', fids.dev_x[I], fids.dev_y[I])
 
+        applied_dx.append(dx)
+        applied_dy.append(dy)
+
         M.x_fp[IM] += dx
         M.y_fp[IM] += dy
+
+    petals = devids // 1000
+    applied_dx = np.array(applied_dx)
+    applied_dy = np.array(applied_dy)
+    for p in np.unique(petals):
+        I = np.flatnonzero(petals == p)
+        print('Petal', p, ': average dx,dy %.1f, %.1f um' %
+              (1000. * np.mean(applied_dx[I]), 1000. * np.mean(applied_dy[I])))
 
     outdir = 'dm-fid-sys'
     dm.write_desimeter(outdir)
