@@ -1,5 +1,6 @@
 import os
 
+from desimeter.log import get_logger
 from desimeter.detectspots import detectspots
 from desimeter.findfiducials import findfiducials
 from desimeter.transform.fvc2fp import FVC2FP
@@ -9,6 +10,9 @@ from desimeter.circles import fit_circle
 from desimeter.transform.xy2qs import xy2uv, uv2xy
 from desimeter.io import desimeter_data_dir
 from desimeter.transform.zhaoburge import fit_scale_rotation_offset
+from desimeter.transform.gfa2fp import fit_gfa2fp
+from desimeter.fieldmodel import FieldModel        
+from desimeter.time import mjd2lst
 
 from astropy.table import Table
 
@@ -16,7 +20,9 @@ import fitsio
 import numpy as np
 
 class Desimeter(object):
-    def __init__(self, desimeter_dir=None, data_dir=None, proc_data_dir=None):
+    def __init__(self, desimeter_dir=None, data_dir=None,
+                 gfa_dir=None,
+                 proc_data_dir=None):
         '''
         desimeter_dir: directory containing metrology and other Desimeter state files.
         data_dir: directory containing data from the DESI spectrographs & FVC.
@@ -32,6 +38,11 @@ class Desimeter(object):
             data_dir = os.environ.get('DESI_DATA_DIR', 'data')
         self.data_dir = data_dir
 
+        if gfa_dir is None:
+            # check $DESI_GFA_DIR, else 'data'
+            gfa_dir = os.environ.get('DESI_GFA_DIR', 'data')
+        self.gfa_dir = gfa_dir
+
         fn = self.find_file('fvc2fp')
         self.fvc2fp = FVC2FP.read_jsonfile(fn)
         fn = self.find_file('metrology')
@@ -41,6 +52,8 @@ class Desimeter(object):
             # add useful location keyword
             self.metro["LOCATION"] = np.array(self.metro["PETAL_LOC"])*1000+np.array(self.metro["DEVICE_LOC"])
 
+        # Set up GFA-pixel-to-FP-mm transforms
+        self.gfa_trans = fit_gfa2fp(self.metro)
 
         if proc_data_dir is None:
             proc_data_dir = '.'
@@ -54,20 +67,22 @@ class Desimeter(object):
         if desimeter_dir is None:
             desimeter_dir = self.desimeter_dir
 
-        if filetype == 'fvc2fp':
-            return os.path.join(desimeter_dir, 'init-fvc2fp.json')
-        if filetype == 'metrology':
-            return os.path.join(desimeter_dir, 'fp-metrology.csv')
+        if filetype in ['fvc2fp', 'metrology']:
+            fn = { 'fvc2fp': 'init-fvc2fp.json',
+                   'metrology': 'fp-metrology.csv',
+            }[filetype]
+            return os.path.join(desimeter_dir, fn)
 
-        if filetype == 'fvc':
+        if filetype in ['fvc', 'guide']:
             if night is None:
-                pat = os.path.join(self.data_dir, '*', '%08d' % expnum, 'fvc-%08d.fits.fz' % expnum)
+                pat = os.path.join(self.data_dir, '*', '%08d' % expnum,
+                                   '%s-%08d.fits.fz' % (filetype, expnum))
                 print('Checking', pat)
                 fns = glob(pat)
                 if len(fns) == 0:
                     return None
                 return fns[0]
-            fn = os.path.join(self.data_dir, night, 'fvc-%08d.fits.fz' % expnum)
+            fn = os.path.join(self.data_dir, night, '%s-%08d.fits.fz' % (filetype, expnum))
             return fn
         if filetype == 'fvc-spots':
             fn = os.path.join(self.proc_dir,
@@ -77,6 +92,19 @@ class Desimeter(object):
             fn = os.path.join(self.proc_dir,
                               'fvc-circles-%08d-%s.fits' % (expnum, tag))
             return fn
+        if filetype == 'fieldmodel':
+            fn = os.path.join(self.proc_dir,
+                              'fm-%08d-F%04d.json' % (expnum, frame))
+            return fn
+        if filetype == 'guide-catalog':
+            pat = os.path.join(self.gfa_dir, '*', '%08d' % expnum,
+                               'guide-%08d_catalog-%05d.fits' % (expnum, frame))
+            print('Checking', pat)
+            fns = glob(pat)
+            if len(fns) == 0:
+                return None
+            return fns[0]
+            
         raise RuntimeError('Unknown file type "%s"' % filetype)
 
     def write_desimeter(self, dirname,
@@ -286,3 +314,31 @@ class Desimeter(object):
         x1b,y1b = transfo.fvc2fp(xpix,ypix)
 
         return x1b, y1b
+
+    def fit_guide_star_coords(self, expnum, frame):
+        log = get_logger()
+        hdrfn = self.find_file('guide', expnum=expnum)
+        header = fitsio.read_header(hdrfn)
+        #if not "TARGTRA" in header :
+        #    log.warning("no TARGTRA in header of HDU 0, try HDU 1")
+        #    header = fitsio.read_header(args.fits_header,1)
+        if not "TARGTRA" in header :
+            log.error("no TARGTRA in header of file {}".format(hdrfn))
+            return None
+
+        fm = FieldModel()
+        fm.ra  = header["TARGTRA"]
+        fm.dec = header["TARGTDEC"]
+        fm.expid = header["EXPID"]
+        fm.hexrot_deg = float(header["FOCUS"][5])/3600.
+        fm.adc1 = header["ADC1PHI"]
+        fm.adc2 = header["ADC2PHI"]
+
+        catfn = self.find_file('guide-catalog', expnum=expnum, frame=frame)
+        catalog = fm.read_guide_stars_catalog(catfn)
+
+        # MJD and LST are needed for sky transform
+        fm.mjd    = np.mean(catalog["mjd_obs"])
+        fm.lst    = mjd2lst(fm.mjd)
+        fm.fit_tancorr(catalog, gfa_transform=self.gfa_trans)
+        return fm

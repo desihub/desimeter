@@ -109,7 +109,8 @@ class FieldModel(object):
 
         return catalog[:][selection]
 
-    def fit_tancorr(self,catalog,mjd=None,hexrot_deg=None,lst=None) :
+    def fit_tancorr(self,catalog,mjd=None,hexrot_deg=None,lst=None,
+                    gfa_transform=None):
         log = get_logger()
 
         x_gfa  = catalog["xcentroid"]
@@ -145,7 +146,8 @@ class FieldModel(object):
         log.info("Use LST={}".format(self.lst))
 
         # first transfo: gfa2fp
-        x_fp,y_fp = self.all_gfa2fp(x_gfa,y_gfa,petal_loc=catalog["petal_loc"])
+        x_fp,y_fp = self.all_gfa2fp(x_gfa,y_gfa,petal_loc=catalog["petal_loc"],
+                                    gfa_transform=gfa_transform)
 
         # keep only petal data for which we have the metrology
         selection = (x_fp!=0)
@@ -236,7 +238,7 @@ class FieldModel(object):
         t2t.rot_deg = self.fieldrot_zp_deg
         return t2t.apply_inverse(x_tan,y_tan)
 
-    def all_gfa2fp(self,x_gfa,y_gfa,petal_loc) :
+    def all_gfa2fp(self,x_gfa,y_gfa,petal_loc, gfa_transform=None):
         log = get_logger()
 
         # simple loop on petals
@@ -246,7 +248,7 @@ class FieldModel(object):
         for petal in petals :
             ii = (petal_loc==petal)
             try :
-                x,y = gfa2fp(petal,x_gfa[ii],y_gfa[ii])
+                x,y = gfa2fp(petal,x_gfa[ii],y_gfa[ii], gfa_transform=gfa_transform)
                 x_fp[ii]  = x
                 y_fp[ii]  = y
             except KeyError:
@@ -322,7 +324,7 @@ class TanCorr(object):
 
         assert((x1.shape == y1.shape)&(x2.shape == y2.shape)&(x1.shape == x2.shape))
 
-        # first ajust an offset using spherical coordinates
+        # first adjust an offset using spherical coordinates
         # assume fiducial pointing of telescope to convert
         # tangent plane coords to angles
         self.dha=0.
