@@ -86,8 +86,12 @@ class FVC2FP(object):
         params['rotation'] = self.rotation
         params['offset_x'] = self.offset_x
         params['offset_y'] = self.offset_y
-        params['zbpolids'] = [int(polid) for polid in self.zbpolids]
-        params['zbcoeffs'] = list(self.zbcoeffs)
+        if self.zbpolids is None or self.zbcoeffs is None:
+            params['zbpolids'] = []
+            params['zbcoeffs'] = []
+        else:
+            params['zbpolids'] = [int(polid) for polid in self.zbpolids]
+            params['zbcoeffs'] = list(self.zbcoeffs)
         return json.dumps(params)
 
     def __str__(self) :

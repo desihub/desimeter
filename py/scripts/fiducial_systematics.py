@@ -64,8 +64,11 @@ def plot_fiducial_offsets(table, expnum=-1, frame=-1):
     #for x,y,d in zip(D.dev_x, D.dev_y, D.devid):
     #    plt.text(x, y, '%i' % d)
     qargs = dict(pivot='middle', angles='xy', scale_units='xy',
-                scale=0.0005)
-    plt.quiver(D.dev_x, D.dev_y, D.dev_dx, D.dev_dy, **qargs)
+                 scale=0.0005)
+    Q = plt.quiver(D.dev_x, D.dev_y, D.dev_dx, D.dev_dy, **qargs)
+    # add quiver scale marker!
+    sx = 20
+    plt.quiverkey(Q, -400, 400, sx/1000., '%i um' % sx, coordinates='data')
     # Draw lines around the petals.
     outline_petals(color='k', alpha=0.1)
     plt.axis('equal')
@@ -81,8 +84,9 @@ if __name__ == '__main__':
     fidfn = 'fiducials.fits'
     if not os.path.exists(fidfn):
         fids = []
-        for expnum in range(55353, 55692+1):
-        #for expnum in range(55353, 55357+1):
+        # All exposures on 2020-03-14,15
+        for keep,expnum in [(False, 52644)] + [(True, e) for e in list(range(55353, 55692+1))]:
+        #for expnum in [52644] + list(range(55353, 55357+1)):
             fvcfn = dm.find_file('fvc', expnum=expnum)
             if fvcfn is None:
                 continue
@@ -95,8 +99,16 @@ if __name__ == '__main__':
             else:
                 spots = dm.measure_spots(expnum, frame)
                 spots.write(fn, overwrite=True)
-            spots = dm.refit_spots(spots, zbfit=False)
+            spots = dm.refit_spots(spots)
+            #print('Fit fvc2fp transform:', dm.fvc2fp.tojson())
+            plt.clf()
             D = plot_fiducial_offsets(spots, expnum=expnum, frame=frame)
+            fn = 'fvc-fid-offsets-%08i-F%04i.png' % (expnum, frame)
+            plt.savefig(fn)
+            print('Wrote', fn)
+            plt.clf()
+            if not keep:
+                continue
             # Format table of per-fiducial results
             D.expnum = np.zeros(len(D), np.int32) + expnum
             D.frame  = np.zeros(len(D), np.int16) + frame
@@ -105,10 +117,6 @@ if __name__ == '__main__':
                         'ADC1PHI', 'ADC2PHI']:
                 D.set(key.replace('-','_').lower(), np.zeros(len(D), np.float32) + hdr.get(key, -99))
             fids.append(D._table)
-            fn = 'fvc-fid-offsets-%08i-F%04i.png' % (expnum, frame)
-            plt.savefig(fn)
-            print('Wrote', fn)
-            plt.clf()
         fids = astropy.table.vstack(fids)
         fids.write('fiducials.fits', overwrite=True)
     else:
@@ -155,7 +163,7 @@ if __name__ == '__main__':
 
     # Check!
     newdm = Desimeter(desimeter_dir=outdir, proc_data_dir='proc-fid-sys')
-    for expnum in range(55353, 55357+1):
+    for expnum in [52644] + list(range(55353, 55357+1)):
         fvcfn = newdm.find_file('fvc', expnum=expnum)
         if fvcfn is None:
             continue
@@ -163,9 +171,17 @@ if __name__ == '__main__':
         print('FVC', fvcfn)
         frame = 0
         fn = newdm.find_file('fvc-spots', expnum=expnum, frame=frame)
-        spots = dm.measure_spots(expnum, frame)
-        spots.write(fn, overwrite=True)
-        spots = dm.refit_spots(spots, zbfit=False)
+        if os.path.exists(fn):
+            spots = astropy.table.Table.read(fn)
+        else:
+            spots = newdm.measure_spots(expnum, frame)
+            spots.write(fn, overwrite=True)
+        # At first I thought we could get away without Z-B, or a constant Z-B, but that very
+        # much does not work due to, I assume, how different offsets & scales interact with Z-B.
+        # Zero out the Z-B corrections (zbfit=False does not touch them)
+        #newdm.fvc2fp.zbcoeffs = newdm.fvc2fp.zbpolids = None
+        #spots = newdm.refit_spots(spots, zbfit=False)
+        spots = newdm.refit_spots(spots)
         D = plot_fiducial_offsets(spots, expnum=expnum, frame=frame)
         fn = 'fvc-fid-sys-%08i-F%04i.png' % (expnum, frame)
         plt.savefig(fn)

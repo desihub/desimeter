@@ -101,19 +101,17 @@ class Desimeter(object):
         F = fitsio.read(infn, ext='F%04i' % frame)
 
         spots = detectspots(F, nsig=7, psf_sigma=1.)
-        #threshold=500.,
         spots = findfiducials(spots,
                               input_transform_func=self.fvc2fp,
                               metrology=self.metro,
                               pinhole_max_separation_mm=1.5)
-        #print(spots.info)
-        return self.refit_spots(spots)
+        spots = self.refit_spots(spots)
+        return spots
 
     def refit_spots(self, spots, zbfit=True):
         self.fvc2fp.fit(spots, metrology=self.metro,
                         update_spots=True, zbfit=zbfit,
                         fixed_scale=False, fixed_rotation=False)
-        print(spots.info)
 
         # select spots that are not already matched
         selection  = (spots["LOCATION"]==-1)
