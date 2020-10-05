@@ -16,7 +16,6 @@ from desimeter.transform.radec2tan import hadec2xy
 from desimeter.simplecorr import SimpleCorr
 
 def main():
-    plt.figure(figsize=(6,6))
     log = get_logger()
 
     dm = Desimeter(desimeter_dir='dm-fid-sys', proc_data_dir='proc-dither')
@@ -225,42 +224,60 @@ def main():
 
     def myquiver(x1,y1,x2,y2,title=None):
         x0=-1.5 ; y0=1.7
+        #x0=min(x1); y0=max(y1)
+        #x0 = -1.5
+        #y0 =  1.5
+
         dx=(x2-x1)
         dy=(y2-y1)
-        Q = plt.quiver(x1,y1,dx,dy)
+
+        qargs = dict(pivot='middle', angles='xy')
+        #, scale_units='xy',
+        #scale=0.0005)
+
+        Q = plt.quiver(x1,y1,dx,dy, **qargs)
+        #plt.axis('equal')
         dr=np.sqrt(dx[:-1]**2+dy[:-1]**2)
         rms2d=np.sqrt(np.mean(dr**2))
         darcsec = 0.5
-        plt.quiverkey(Q, x0, y0, darcsec, '%f arcsec' % darcsec)
+        plt.quiverkey(Q, x0, y0, darcsec/3600., '%.1f "' % darcsec,
+                      coordinates='data', labelpos='E',
+                      fontproperties=dict(size=10))
         text="rms$_{2D}$ = %3.2f''"%(rms2d*3600.)
         plt.text(1.6,y0,text,fontsize=10,
                  horizontalalignment="right",verticalalignment="center")
         text="rms 2D = %3.2f arcsec"%(rms2d*3600.)
         if title:
             print("%30s %s"%(title,text))
-            plt.title('%s %s' % (title, text))
+            #plt.title('%s %s' % (title, text), fontsize=10)
+            plt.title(title)
         else:
             print(text)
 
-    title="desimeter(guide+fvc)-target"
+    plt.figure(figsize=(8,8))
     plt.clf()
+    title="desimeter(guide+fvc)-target"
+    plt.subplot(221)
     myquiver(target_x,target_y,desimeter_x,desimeter_y,title=title)
-    plt.savefig('dither-%08i-1.png' % expnum)
+    #plt.savefig('dither-%08i-1.png' % expnum)
 
     title="dither-target"
-    plt.clf()
+    plt.subplot(222)
     myquiver(target_x,target_y,dither_x,dither_y,title=title)
-    plt.savefig('dither-%08i-2.png' % expnum)
+    #plt.savefig('dither-%08i-2.png' % expnum)
 
     title="desimeter(guide+fvc)-dither"
-    plt.clf()
+    plt.subplot(223)
     myquiver(dither_x,dither_y,desimeter_x,desimeter_y,title=title)
-    plt.savefig('dither-%08i-3.png' % expnum)
+    #plt.savefig('dither-%08i-3.png' % expnum)
 
     title="transformed(desimeter) -dither"
-    plt.clf()
+    plt.subplot(224)
     myquiver(dither_x,dither_y,desimeter_x_bis,desimeter_y_bis,title=title)
-    plt.savefig('dither-%08i-4.png' % expnum)
+    #plt.savefig('dither-%08i-4.png' % expnum)
+
+    plt.tight_layout()
+    plt.savefig('dither-%08i.png' % expnum)
 
 if __name__ == '__main__':
     main()
