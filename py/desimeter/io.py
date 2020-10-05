@@ -21,6 +21,8 @@ def load_metrology():
     log=get_logger()
     log.debug("loading {}".format(filename))
 
+    print('Loading metrology from', filename)
+    
     metrology = Table.read(filename)
     return metrology
 
@@ -28,10 +30,16 @@ def load_petal_alignement():
     filename = os.path.join(desimeter_data_dir(),'petal-alignments.yaml')
     with open(filename) as ifile :
         petal_alignment_dict = yaml.safe_load(ifile)
+
+    print('Loading petal alignment from', filename)
     return petal_alignment_dict
 
 def fvc2fp_filename():
+    print('Fetched fvc2fp filename')
+
     return os.path.join(desimeter_data_dir(),'init-fvc2fp.json')
 
 def fvc_bias_filename():
+    print('Fetched fvc2fp bias filename')
+
     return os.path.join(desimeter_data_dir(),'bias.fits')

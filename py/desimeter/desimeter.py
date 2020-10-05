@@ -343,7 +343,11 @@ class Desimeter(object):
         fm.ra  = header["TARGTRA"]
         fm.dec = header["TARGTDEC"]
         fm.expid = header["EXPID"]
-        fm.hexrot_deg = float(header["FOCUS"][5])/3600.
+        # "FOCUS" header is a comma-separated vector.
+        focus = header['FOCUS']
+        words = focus.split(',')
+        fm.hexrot_deg = float(words[5]) / 3600.
+
         fm.adc1 = header["ADC1PHI"]
         fm.adc2 = header["ADC2PHI"]
 

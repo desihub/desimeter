@@ -45,7 +45,8 @@ def main():
     pinhole   = circles['PINHOLE_ID']
 
     def report_result(x, y, xmetro,ymetro, pinhole,
-                      title, plotfn):
+                      title, plotfn, scale=0.005):
+        # smaller "scale" makes the arrows longer.
         dx = x - xmetro
         dy = y - ymetro
         nmad2d=1.20*np.median(np.sqrt((dx)**2+(dx)**2))
@@ -55,9 +56,8 @@ def main():
         plt.figure("quiver",figsize=(10,10))
         plt.clf()
 
-        # smaller "scale" makes the arrows longer.
         qargs = dict(pivot='middle', angles='xy', scale_units='xy',
-                     scale=0.005, width=1.5e-3)
+                     scale=scale, width=1.5e-3)
                      #headwidth=2, headlength=3)
         Q = plt.quiver(x[ii],y[ii],dx[ii],dy[ii], **qargs)
         # add quiver scale marker!
@@ -115,6 +115,9 @@ def main():
 
     report_result(x1b,y1b, x2,y2, pinhole, 'After  refitting Z-B',
                   'quiver3.png')
+
+    report_result(x1b,y1b, x2,y2, pinhole, 'After  refitting Z-B',
+                  'quiver4.png', scale=0.003)
 
     # Radial plot of residuals
     plt.clf()

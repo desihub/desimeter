@@ -33,9 +33,9 @@ def main():
         fm = dm.fit_guide_star_coords(expnum, frame)
         with open(fn, 'w') as f:
             f.write(fm.tojson())
-    else:
-        with open(fn) as f:
-            fm = FieldModel.fromjson(f.read())
+    #else:
+    with open(fn) as f:
+        fm = FieldModel.fromjson(f.read())
 
     fn = dm.find_file('fvc-spots', expnum=expnum, frame=frame)
     if os.path.exists(fn):
@@ -278,6 +278,11 @@ def main():
 
     plt.tight_layout()
     plt.savefig('dither-%08i.png' % expnum)
+
+    plt.figure(figsize=(10,10))
+    plt.clf()
+    myquiver(dither_x,dither_y,desimeter_x_bis,desimeter_y_bis,title=title)
+    plt.savefig('dither-%08i-b.png' % expnum)
 
 if __name__ == '__main__':
     main()
