@@ -59,7 +59,8 @@ class Desimeter(object):
             proc_data_dir = '.'
         self.proc_dir = proc_data_dir
 
-    def find_file(self, filetype, night=None, expnum=None, frame=None,
+    def find_file(self, filetype,
+                  night=None, expnum=None, frame=None, tile=None,
                   tag=None,
                   desimeter_dir=None):
         from glob import glob
@@ -83,7 +84,18 @@ class Desimeter(object):
                 if len(fns) == 0:
                     return None
                 return fns[0]
-            fn = os.path.join(self.data_dir, night, '%s-%08d.fits.fz' % (filetype, expnum))
+            fn = os.path.join(self.data_dir, night, '%s-%08d.fits%s' % (filetype, expnum, suff))
+            return fn
+        if filetype in ['fiberassign']:
+            if night is None:
+                pat = os.path.join(self.data_dir, '*', '%08d' % expnum,
+                                   '%s-%06d.fits' % (filetype, tile))
+                print('Checking', pat)
+                fns = glob(pat)
+                if len(fns) == 0:
+                    return None
+                return fns[0]
+            fn = os.path.join(self.data_dir, night, '%s-%06d.fits' % (filetype, expnum))
             return fn
         if filetype == 'fvc-spots':
             fn = os.path.join(self.proc_dir,
