@@ -73,10 +73,11 @@ class Desimeter(object):
             }[filetype]
             return os.path.join(desimeter_dir, fn)
 
-        if filetype in ['fvc', 'guide']:
+        if filetype in ['fvc', 'guide', 'coordinates']:
+            suff = dict(coordinates='').get(filetype, '.fz')
             if night is None:
                 pat = os.path.join(self.data_dir, '*', '%08d' % expnum,
-                                   '%s-%08d.fits.fz' % (filetype, expnum))
+                                   '%s-%08d.fits%s' % (filetype, expnum, suff))
                 print('Checking', pat)
                 fns = glob(pat)
                 if len(fns) == 0:
