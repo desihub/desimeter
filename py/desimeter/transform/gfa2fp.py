@@ -97,6 +97,13 @@ def fit_gfa2fp(metrology):
             norm_vector= np.cross(x01,x12)
             # I checked the sign of all components
 
+
+            # The guide CCDs are about 2.23 mm below the focal surface
+            # because of the filter of thickness 5.03+-0.01 mm
+            # and refractive index 1.805 to 1.791 from 578nm to 706nm
+            # see DESI-5336, https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=5336
+            # there is a correction to apply because the focal surface is curved
+
             #- compute correction to apply
             delta_z = 2.23 # mm
             delta_x = delta_z*norm_vector[0]/norm_vector[2]
