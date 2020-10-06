@@ -61,6 +61,12 @@ def plot_fiducial_offsets(table, expnum=-1, frame=-1):
     for p in np.unique(D.petal_loc):
         I = np.flatnonzero(D.petal_loc == p)
         plt.plot(D.dev_x[I], D.dev_y[I], 'o', mec='none', ms=25, alpha=0.1)
+        #plt.text(np.mean(D.dev_x[I]), np.mean(D.dev_y[I]), 'Petal loc %i' % p)
+        th = np.arctan2(np.mean(D.dev_y[I]), np.mean(D.dev_x[I]))
+        pp = int(np.round((th / (2.*np.pi / 10.)) - 0.5))
+        pth = (pp + 0.5) * (2.*np.pi/10.)
+        R = 300.
+        plt.text(np.cos(pth)*R, np.sin(pth)*R, 'Petal loc %i' % p)
     #for x,y,d in zip(D.dev_x, D.dev_y, D.devid):
     #    plt.text(x, y, '%i' % d)
     qargs = dict(pivot='middle', angles='xy', scale_units='xy',
