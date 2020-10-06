@@ -62,6 +62,7 @@ def plot_fiducial_offsets(table, expnum=-1, frame=-1):
         if D.device_loc[i] in [541, 542]:
             print('GIF % 4i' % D.location[i], 'dx,dy',
                   '%+.3f, %+.3f' % (D.dev_dx[i], D.dev_dy[i]))
+    D.is_gif = np.logical_or(D.device_loc == 541, D.device_loc == 542)
 
     for p in np.unique(D.petal_loc):
         I = np.flatnonzero(D.petal_loc == p)
@@ -77,6 +78,7 @@ def plot_fiducial_offsets(table, expnum=-1, frame=-1):
     qargs = dict(pivot='middle', angles='xy', scale_units='xy',
                  scale=0.0005)
     Q = plt.quiver(D.dev_x, D.dev_y, D.dev_dx, D.dev_dy, **qargs)
+    plt.quiver(D.dev_x[D.is_gif], D.dev_y[D.is_gif], D.dev_dx[D.is_gif], D.dev_dy[D.is_gif], color='b', **qargs)
     # add quiver scale marker!
     sx = 20
     plt.quiverkey(Q, -400, 400, sx/1000., '%i um' % sx, coordinates='data')
