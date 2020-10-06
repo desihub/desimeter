@@ -58,12 +58,29 @@ def plot_fiducial_offsets(table, expnum=-1, frame=-1):
         #plt.show()
     D = F[np.array(idevs)]
 
+    D.dev_radi = np.zeros(len(D), np.float32)
+    D.dev_tang = np.zeros(len(D), np.float32)
     for i in range(len(D)):
         if D.device_loc[i] in [541, 542]:
+            # decompose into radial and tangential terms.
+            th = np.arctan2(D.dev_y[i], D.dev_x[i])
+            rx =  np.cos(th)
+            ry =  np.sin(th)
+            tx = -np.sin(th)
+            ty =  np.cos(th)
+            radi = D.dev_dx[i] * rx + D.dev_dy[i] * ry
+            tang = D.dev_dx[i] * tx + D.dev_dy[i] * ty
             print('GIF % 4i' % D.location[i], 'dx,dy',
-                  '%+.3f, %+.3f' % (D.dev_dx[i], D.dev_dy[i]))
+                  '%+.3f, %+.3f' % (D.dev_dx[i], D.dev_dy[i]),
+                  'Radial %+.3f, Tangential %+.3f' % (radi, tang))
+            D.dev_radi[i] = radi
+            D.dev_tang[i] = tang
     D.is_gif = np.logical_or(D.device_loc == 541, D.device_loc == 542)
+    D.is_guide = np.isin(D.petal_loc, [0, 2, 3, 5, 7, 8])
 
+    print('Average GUIDE GIF radial: %+.3f.  Average tangential: %+.3f' %
+          (np.mean(D.dev_radi[D.is_gif * D.is_guide]),
+           np.mean(D.dev_tang[D.is_gif * D.is_guide])))
     for p in np.unique(D.petal_loc):
         I = np.flatnonzero(D.petal_loc == p)
         plt.plot(D.dev_x[I], D.dev_y[I], 'o', mec='none', ms=25, alpha=0.1)
@@ -72,7 +89,7 @@ def plot_fiducial_offsets(table, expnum=-1, frame=-1):
         pp = int(np.round((th / (2.*np.pi / 10.)) - 0.5))
         pth = (pp + 0.5) * (2.*np.pi/10.)
         R = 300.
-        plt.text(np.cos(pth)*R, np.sin(pth)*R, 'Petal loc %i' % p)
+        plt.text(np.cos(pth)*R, np.sin(pth)*R, 'Petal loc %i' % p, ha='center')
     #for x,y,d in zip(D.dev_x, D.dev_y, D.devid):
     #    plt.text(x, y, '%i' % d)
     qargs = dict(pivot='middle', angles='xy', scale_units='xy',
