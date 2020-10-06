@@ -4,6 +4,21 @@
 retrieved using the "get_posmoves --with-calib" tool.
 """
 
+# TRACKED vs REQUESTED targets:
+# -----------------------------
+#
+#     TRACKED ... These are errors calculated with respect to POS_T, POS_P. They
+#                 show whether we have control over the robots.
+#
+#   REQUESTED ... Due to anticollision, travel limits, and enabled/disabled state,
+#                 the petal has the right to refuse some targets. Hence REQUESTED
+#                 will vary from TRACKED in these cases. Errors calculated with
+#                 respect to REQUESTED show us how well we are getting fibers to
+#                 desired locations / whether our desired locations are possible.
+#
+# See "TAGS" implementation below, for how I've handled labeling to differentiate.
+
+
 # command line argument parsing
 import argparse
 parser = argparse.ArgumentParser(description=__doc__)
@@ -27,6 +42,8 @@ from astropy.time import Time
 from astropy.visualization import hist
 from astropy.stats import knuth_bin_width
 import desimeter.transform.pos2ptl as pos2ptl
+import desimeter.transform.xy2qs as xy2qs
+import desimeter.transform.ptl2fp as ptl2fp
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
 import multiprocessing
@@ -58,9 +75,42 @@ img_format = 'png'  # for plot outputs
 # data identifiers and keywords
 required = {'POS_ID', 'POS_MOVE_INDEX', 'POS_T', 'POS_P', 'PTL_X', 'PTL_Y',
             'LENGTH_R1', 'LENGTH_R2', 'OFFSET_X', 'OFFSET_Y', 'OFFSET_T', 'OFFSET_P',
-            'MOVE_CMD', 'EXPOSURE_ID', 'EXPOSURE_ITER', 'DEVICE_LOC', 'DATE', 'LOG_NOTE'}
+            'MOVE_CMD', 'EXPOSURE_ID', 'EXPOSURE_ITER', 'DEVICE_LOC', 'DATE',
+            'LOG_NOTE', 'PETAL_LOC'}
 sequence_note_prefix = 'sequence: '
+abs_move_coords = {'QS', 'obsXY', 'poslocXY', 'ptlXY', 'posintTP', 'poslocTP'}
+rel_move_coords = {'dQdS', 'obsdXdY', 'poslocdXdY', 'dTdP'}
+all_move_coords = abs_move_coords | rel_move_coords
 
+# tagging of different position value types
+TRACKED = 'TRACKED'  # refers to internally-tracked angles 'POS_T', 'POS_P'
+REQUESTED = 'REQUESTED'  # refers to user-requested target positions
+MEASURED = 'MEASURED'  # refers to measured values
+TAGS = [TRACKED, REQUESTED, MEASURED]
+tag_separator = '_'
+def add_tag(tag_str, other_str):
+    '''Return a tagged string with standard format.'''
+    assert tag_str in TAGS
+    return f'{other_str}{tag_separator}{tag_str}'
+
+def is_tagged(tagged_string):
+    '''Returns boolean.'''
+    suffix = tagged_string.split(tag_separator)[-1]
+    return suffix in TAGS
+    
+def strip_tag(tagged_string):
+    '''Get the non-tag part of string.'''
+    split = tagged_string.split(tag_separator)
+    assert split[-1] in TAGS
+    prefix = tag_separator.join(split[:-2])
+    return prefix
+    
+def get_tag(tagged_string):
+    '''Get the tag part of string.'''
+    suffix = tagged_string.split(tag_separator)[-1]
+    assert suffix in TAGS
+    return suffix
+    
 # statistics functions for summarizing errors
 stat_funcs = {'max': np.max, 'min': np.min, 'mean': np.mean, 'median': np.median,
               'std': np.std, 'rms': lambda X: np.sqrt(np.sum(np.power(X, 2))/len(X))}
@@ -198,18 +248,19 @@ def identify_submoves(table):
     new['SUBMOVE'] = submoves
     return new
 
-def get_idxs(table, submove, sigma=None):
+def get_idxs(table, submove, sigma=None, tag=TRACKED):
     '''Returns a list of idxs for rows associated with the argued submove.
     
     INPUT:  table ... astropy table including column 'SUBMOVE'
             submove ... integer
             sigma ... optional, like 1, 2, 3, ... math.inf or np.inf are also valid
+            tag ... str, c.f. TAGS, only needed when arguing sigma
             
     OUTPUT: list of row index integers
     '''
     selection = table['SUBMOVE'] == submove
     if sigma:
-        selection &= table['SIGMA_CEILING'] <= sigma
+        selection &= table[add_tag(tag, 'SIGMA_CEILING')] <= sigma
     sel_idxs = np.where(selection)[0].tolist()
     return sel_idxs
 
@@ -220,60 +271,169 @@ def get_submove_ids(table):
     '''
     return sorted(set(table['SUBMOVE']))
 
-def get_sigmas(table):
+def get_sigmas(table, tag):
     '''Returns a dict with keys = 'SIGMA_CEILING' and values = corresponding 'QUANTILE_CEILING'
     '''
-    sigmas = sorted(set(table['SIGMA_CEILING']))
-    return {s: table['QUANTILE_CEILING'][table['SIGMA_CEILING'] == s][0] for s in sigmas}    
+    s_name = add_tag(tag, 'SIGMA_CEILING')
+    q_name = add_tag(tag, 'QUANTILE_CEILING')
+    sigmas = sorted(set(table[s_name]))
+    return {s: table[q_name][table[s_name] == s][0] for s in sigmas}    
 
-def calc_errors(table):
+def identify_requests(table):
+    '''Searches MOVE_CMD fields to identify original requested targets.
+    These differ from posintTP (internally-tracked) targets.
+    
+    INPUTS:  table ... astropy table containing 'POS_MOVE_INDEX', 'MOVE_CMD',
+                      'EXPOSURE_ID', 'MOVE', and 'SUBMOVE'
+                      
+    OUTPUT:  copy of table, with new columns 
+             
+    Note that 'MOVE' values may not be unique, if the dataset includes multiple
+    tests. In such cases, uniqueness can be determined by inspecting also the
+    EXPOSURE_ID field --- within which MOVE *will* be unique.
+    
+    Additionally, note that 'MOVE' integers may not correspond 1:1 with those
+    given in the LOG_NOTE fields, again due to handling of uniqueness corner
+    cases. However, 'SUBMOVE' ids *will* correspond exactly to those in LOG_NOTE.
+    '''
+    new = table.copy()
+    new.sort('POS_MOVE_INDEX')    
+    n = len(new)
+    possible_requests = [s.split(';')[0] for s in new['MOVE_CMD']]
+    possible_coords = [s.split('=')[0] for s in possible_requests]
+    is_move = [s in all_move_coords for s in possible_coords]
+    requests = [possible_requests[i] if is_move[i] else '' for i in range(n)]
+    coords = [possible_coords[i] if is_move[i] else '' for i in range(n)]
+    val_strs = [requests[i].split('=')[1] if is_move[i] else '' for i in range(n)]
+    val_str_lists = [s.strip('[').strip(']').split(',') for s in val_strs]
+    vals0 = [float(val_str_lists[i][0]) if is_move[i] else None for i in range(n)]
+    vals1 = [float(val_str_lists[i][1]) if is_move[i] else None for i in range(n)]    
+    last_known_request_idx = -1
+    x_flat = [None]*len(new)
+    y_flat = [None]*len(new)
+    for i in range(n):
+        coord = coords[i]
+        if not(coord):
+            # This occurs, for example, with auto-generated neighbor collision avoidance moves.
+            # Resolve ambiguity by treating "requested" position as equal to internally-tracked.
+            coord = 'posintTP'
+            vals0[i] = new['POS_T'][i]
+            vals1[i] = new['POS_P'][i]
+        submove0 = new['SUBMOVE'][i] == 0
+        is_abs = coord in abs_move_coords
+        is_request = submove0 and is_abs
+        if is_request:
+            if coord in {'QS', 'obsXY', 'ptlXY'}:
+                if coord == 'ptlXY':
+                    x_ptl, y_ptl = vals0[i], vals1[i]
+                else:
+                    ptl_loc = new['PETAL_LOC'][i]
+                    if coord == 'QS':
+                        x_fp, y_fp = xy2qs.qs2xy(vals0[i], vals1[i])
+                    else:
+                        x_fp, y_fp = vals0[i], vals1[i]
+                    x_ptl, y_ptl, z_ptl = ptl2fp.fp2ptl(ptl_loc, x_fp, y_fp)
+                x_flat[i], y_flat[i] = pos2ptl.ptl2flat(x_ptl, y_ptl)
+            elif coord in {'poslocXY', 'posintTP', 'poslocTP'}:
+                if coord == 'poslocXY':
+                    x_loc, y_loc = vals0[i], vals1[i]
+                elif coord == 'posintTP':
+                    x_loc, y_loc = pos2ptl.int2loc(t_int=vals0[i],
+                                                   p_int=vals1[i],
+                                                   r1=new['LENGTH_R1'][i],
+                                                   r2=new['LENGTH_R2'][i],
+                                                   t_offset=new['OFFSET_T'][i],
+                                                   p_offset=new['OFFSET_P'][i])
+                elif coord == 'poslocTP':
+                    t_ext = pos2ptl.int2ext(vals0[i], new['OFFSET_T'][i])
+                    p_ext = pos2ptl.int2ext(vals1[i], new['OFFSET_P'][i])
+                    x_loc, y_loc = pos2ptl.ext2loc(t_ext=t_ext,
+                                                   p_ext=p_ext,
+                                                   r1=new['LENGTH_R1'][i],
+                                                   r2=new['LENGTH_R2'][i])
+                else:
+                    assert False, f'command coordinates {coord} not recognized'
+                x_flat[i] = pos2ptl.loc2flat(x_loc, new['OFFSET_X'][i])
+                y_flat[i] = pos2ptl.loc2flat(y_loc, new['OFFSET_Y'][i])
+            last_known_request_idx = i
+        elif not submove0:
+            x_flat[i] = x_flat[last_known_request_idx]
+            y_flat[i] = y_flat[last_known_request_idx]
+        else:
+            assert False, f'Unexpected case for {new["POS_ID"][i]} at row {i}. Not handled right in identify_requests(), needs debugging.'
+    for vec in [x_flat, y_flat]:
+        assert not any([x == None for x in vec]), f'Unexpected case for {new["POS_ID"][i]}. Not handled right in identify_requests(), needs debugging.'
+    x_flat = [float(x) for x in x_flat]  # avoid screwy numpy ambiguous dimensions
+    y_flat = [float(y) for y in y_flat]  # avoid screwy numpy ambiguous dimensions
+    new[add_tag(REQUESTED, 'FLAT_X')] = x_flat
+    new[add_tag(REQUESTED, 'FLAT_Y')] = y_flat
+    return new
+
+def calc_errors(table, tag=TRACKED):
     '''Identifies measured and target values, then calculates errors.
     
-    INPUTS:  table ... astropy table containing 'PTL_X', 'PTL_Y', 'POS_T', 'POS_P',
-                       'LENGTH_R1', 'LENGTH_R2', 'OFFSET_T', 'OFFSET_P', 'OFFSET_X',
-                       'OFFSET_Y', 'SUBMOVE', and 'POS_MOVE_INDEX'
-    OUTPUT:  copy of table, where measured data columns will have _MEAS  appended to
-             their names (for clarity) and new columns will be added with _TARG suffix,
-             as well as new columns with ERR_ prefix
+    Note: any existing measured / target columns are *not* recalculated or replaced.
+    This makes the function more efficient when calling multiple times in a row,
+    e.g. with tag=TRACKED, then later with tag=REQUESTED.
+    
+    INPUTS:  table ... astropy table containing 'PTL_X', 'PTL_Y', 'LENGTH_R1',
+                       'LENGTH_R2', 'OFFSET_T', 'OFFSET_P', 'OFFSET_X', 'OFFSET_Y',
+                       'SUBMOVE', 'POS_MOVE_INDEX', and either ...
+                              ... tag=TRACKED --> 'POS_T', 'POS_P'
+                         ... or tag=REQUESTED --> similarly-tagged 'FLAT_X', 'FLAT_Y'
+                       
+             tag ... str, c.f. TAGS
+             
+    OUTPUT:  copy of table, where measured data columns will have _MEAS appended to
+             their names (for clarity) and new columns will be added with prefixes
+             of f'{ref}_' and 'ERR_'.
     '''
     new = table.copy()
     new.sort('POS_MOVE_INDEX')
-    for key in ['PTL_X', 'PTL_Y', 'PTL_Z', 'OBS_X', 'OBS_Y']:
-        if key in new.columns:
-            new.rename_column(key, f'{key}_MEAS')
-    meas_x, meas_y = new['PTL_X_MEAS'], new['PTL_Y_MEAS']
-    targ_x, targ_y = pos2ptl.int2ptl(t_int=new['POS_T'], p_int=new['POS_P'],
+    assert tag in TAGS
+    x_meas_name = add_tag(MEASURED, 'FLAT_X')
+    y_meas_name = add_tag(MEASURED, 'FLAT_Y')
+    x_targ_name = add_tag(tag, 'FLAT_X')
+    y_targ_name = add_tag(tag, 'FLAT_Y')
+    if any(name not in new.columns for name in {x_meas_name, y_meas_name}):
+        new[x_meas_name], new[y_meas_name] = pos2ptl.ptl2flat(new['PTL_X'],  new['PTL_Y'])
+    if tag == TRACKED:
+        targ_x_ptl, targ_y_ptl = pos2ptl.int2ptl(
+                                     t_int=new['POS_T'], p_int=new['POS_P'],
                                      r1=new['LENGTH_R1'], r2=new['LENGTH_R2'],
                                      t_offset=new['OFFSET_T'], p_offset=new['OFFSET_P'],
                                      x_offset=new['OFFSET_X'], y_offset=new['OFFSET_Y'])
-    is_submove0 = new['SUBMOVE'] == 0
-    targ_xy = [targ_x, targ_y]
-    for i in [0, 1]:
-        last_targ0 = targ_xy[i][0]
-        for j in range(len(targ_xy[i])):
-            if is_submove0[j]:
-                last_targ0 = targ_xy[i][j]
-            else:
-                targ_xy[i][j] = last_targ0
-    new['PTL_X_TARG'] = targ_x
-    new['PTL_Y_TARG'] = targ_y
-    new['ERR_X'] = meas_x - targ_x
-    new['ERR_Y'] = meas_y - targ_y
-    new['ERR_XY'] = np.hypot(new['ERR_X'], new['ERR_Y'])
+        targ_x, targ_y = pos2ptl.ptl2flat(targ_x_ptl, targ_y_ptl)
+        new[x_targ_name] = targ_x
+        new[y_targ_name] = targ_y
+    else:
+        targ_x = new[x_targ_name]
+        targ_y = new[y_targ_name]
+    err_x = new[x_meas_name] - targ_x
+    err_y = new[y_meas_name] - targ_y
+    new[add_tag(tag, 'ERR_X')] = err_x
+    new[add_tag(tag, 'ERR_Y')] = err_y
+    new[add_tag(tag, 'ERR_XY')] = np.hypot(err_x, err_y)
     return new
 
-def calc_loc(table):
-    '''Adds columns for "LOC" coordinates, matching any prefixed with "PTL".
+def calc_alt_coords(table):
+    '''Adds columns for "PTL" and "LOC" coordinates, matching any cases where the
+    detagged name starts with "FLAT".
     '''
     new = table.copy()
-    suffixes = [col.split('PTL_X')[1] for col in table.columns if col.find('PTL_X') == 0]
-    for suffix in suffixes:
-        x_flat, y_flat = pos2ptl.ptl2flat(x_ptl=new['PTL_X' + suffix],
-                                          y_ptl=new['PTL_Y' + suffix])
-        x_loc = pos2ptl.flat2loc(x_flat, new['OFFSET_X'])
-        y_loc = pos2ptl.flat2loc(y_flat, new['OFFSET_Y'])
-        new['LOC_X' + suffix] = x_loc
-        new['LOC_Y' + suffix] = y_loc
+    tags = {get_tag(x) for x in table.columns if is_tagged(x) and 'FLAT' in strip_tag(x)}                
+    for tag in tags:
+        x_flat = new[add_tag(tag, 'FLAT_X')]
+        y_flat = new[add_tag(tag, 'FLAT_Y')]
+        x_ptl, y_ptl = pos2ptl.flat2ptl(x_flat, y_flat)
+        converted = {add_tag(tag, 'PTL_X'): x_ptl,
+                     add_tag(tag, 'PTL_Y'): y_ptl,
+                     add_tag(tag, 'LOC_X'): pos2ptl.flat2loc(x_flat, new['OFFSET_X']),
+                     add_tag(tag, 'LOC_Y'): pos2ptl.flat2loc(y_flat, new['OFFSET_Y']),
+                     }
+        for name, values in converted.items():
+            assert name not in new.columns, f'column {name} already exists'
+            new[name] = values
     return new
 
 null_num_images = -1
@@ -293,16 +453,20 @@ def detect_num_fvc_images(table):
     new['NUM_IMAGES'][zeroth_exp_iters] = null_num_images
     return new
 
-def calc_target_radii(table):
-    '''Calculates local radius of each target from its positioner's center.
+def calc_radii(table, tag=TRACKED):
+    '''Calculates local radius of each point from its positioner's center.
     
-    INPUT:  table ... astropy table including columns 'LOC_X_TARG' and 'LOC_Y_TARG'
+    INPUT:  table ... astropy table including tagged columns for 'LOC_X' and 'LOC_Y'
+            tag ... str, c.f. TAGS
     
-    OUTPUT: copy of table, adding column 'TARGET_RADIUS'
+    OUTPUT: copy of table, adding tagged 'RADIUS' column
     '''
     new = table.copy()
-    radii = np.hypot(table['LOC_X_TARG'], table['LOC_Y_TARG'])
-    new['TARGET_RADIUS'] = radii
+    assert tag in TAGS
+    loc_x = table[add_tag(tag, 'LOC_X')]
+    loc_y = table[add_tag(tag, 'LOC_Y')]
+    radii = np.hypot(loc_x, loc_y)
+    new[add_tag(tag, 'RADIUS')] = radii
     return new
     
 def analyze_one_pos(table):
@@ -323,21 +487,32 @@ def analyze_one_pos(table):
     assert len(posids) == 1, f'error: input to analyze should be a table with only one posid, not {posids}'
     posid = posids.pop()
     new = identify_submoves(new)
-    new = calc_errors(new)
-    new = calc_loc(new)
-    new = calc_target_radii(new)
+    new = identify_requests(new)
+    new = calc_errors(new, tag=TRACKED)
+    new = calc_errors(new, tag=REQUESTED)
+    new = calc_alt_coords(new)
+    new = calc_radii(new, tag=TRACKED)
+    new = calc_radii(new, tag=REQUESTED)
     new = detect_num_fvc_images(new)
-    stats_cols = ['POS_ID', 'SUBMOVE', 'N_TARGETS'] + list(stat_funcs)
+    stats_cols = ['POS_ID', 'SUBMOVE']
+    stats_cols += [add_tag(tag, 'N_TARGETS') for tag in [TRACKED, REQUESTED]]
+    tagged_funcs = {add_tag(tag, name): func for name, func in stat_funcs.items() for tag in [TRACKED, REQUESTED]}
+    stats_cols += list(tagged_funcs)
     stats_dict = {name:[] for name in stats_cols}
     submoves = get_submove_ids(new)
     for submove in submoves:
         selection = get_idxs(new, submove)
-        err_xy = new['ERR_XY'][selection].tolist()
+        err_xy_tracked = new[add_tag(TRACKED, 'ERR_XY')][selection].tolist()
+        err_xy_request = new[add_tag(REQUESTED, 'ERR_XY')][selection].tolist()
         stats_dict['POS_ID'].append(posid)
         stats_dict['SUBMOVE'].append(submove)
-        stats_dict['N_TARGETS'].append(len(err_xy))
-        for name, func in stat_funcs.items():
-            stats_dict[name].append(func(err_xy))
+        stats_dict[add_tag(TRACKED, 'N_TARGETS')].append(len(err_xy_tracked))
+        stats_dict[add_tag(REQUESTED, 'N_TARGETS')].append(len(err_xy_request))
+        for name, func in tagged_funcs.items():
+            if get_tag(name) == TRACKED:
+                stats_dict[name].append(func(err_xy_tracked))
+            else:
+                stats_dict[name].append(func(err_xy_request))
     stats = Table(stats_dict)
     log.info(f'Analyzed {posid}: {len(new)} data rows, {len(submoves)} submoves')
     return new, stats
@@ -345,12 +520,14 @@ def analyze_one_pos(table):
 sigma_to_quantile = lambda s: 1 - math.exp(-s)
 quantile_to_sigma = lambda q: -math.log(1-q) if q < 1 else math.inf
 
-def identify_quantiles(table, sigmas=[1,2,3,4,5,math.inf]):
+def identify_quantiles(table, tag=TRACKED, sigmas=[1,2,3,4,5,math.inf]):
     '''Gathering positioners into error quantiles at the specified "sigma" levels.
     Quantile assignments are done independently for each submove.
     
     INPUTS:  table ... astropy table with data for one or many positioners. The table
-                       must include the columns 'ERR_XY' and 'SUBMOVE'
+                       must include 'SUBMOVE' and the tagged column 'ERR_XY' and
+
+             tag ... str, c.f. TAGS
                        
              sigmas ... list of ints giving which sigma quantiles to gather the data
                         into. In other words, sigma=1 corresponds to 63.2% quantile,
@@ -362,8 +539,11 @@ def identify_quantiles(table, sigmas=[1,2,3,4,5,math.inf]):
                      group in which each error value resides.
     '''
     new = table.copy()
-    new['SIGMA_CEILING'] = math.inf
-    new['QUANTILE_CEILING'] = 1.0
+    sigma_ceiling_name = add_tag(tag, 'SIGMA_CEILING')
+    quantile_ceiling_name = add_tag(tag, 'QUANTILE_CEILING')
+    err_xy_name = add_tag(tag, 'ERR_XY')
+    new[sigma_ceiling_name] = math.inf
+    new[quantile_ceiling_name] = 1.0
     submoves = get_submove_ids(new)
     sigmas = sorted(sigmas, reverse=True)  # start with narrowest group (largest sigma), then broaden
     quantiles = {s: sigma_to_quantile(s)  for s in sigmas}
@@ -371,20 +551,22 @@ def identify_quantiles(table, sigmas=[1,2,3,4,5,math.inf]):
         submove_selection = new['SUBMOVE'] == submove
         for sigma in sigmas:
             quantile = quantiles[sigma]
-            cutoff = np.quantile(new['ERR_XY'][submove_selection], quantile, interpolation='midpoint')
-            within_cutoff = new['ERR_XY'] <= cutoff
+            cutoff = np.quantile(new[err_xy_name][submove_selection], quantile, interpolation='midpoint')
+            within_cutoff = new[err_xy_name] <= cutoff
             quantile_selection = np.logical_and(within_cutoff, submove_selection)
-            new['SIGMA_CEILING'][quantile_selection] = sigma
-            new['QUANTILE_CEILING'][quantile_selection] = quantile
+            new[sigma_ceiling_name][quantile_selection] = sigma
+            new[quantile_ceiling_name][quantile_selection] = quantile
     return new
 
-def summarize_stats(table, stat_names=stat_funcs.keys()):
+def summarize_stats(table, tag=TRACKED, stat_names=stat_funcs.keys()):
     '''Generate summary statistics for each submove.
     
     INPUTS:  table ... astropy table with data for one or many positioners. The table
-                       must include columns for 'SUBMOVE', 'POS_ID', 'ERR_XY',
-                       'NUM_IMAGES', 'TARGET_RADIUS', 'SIGMA_CEILING', and
+                       must include columns for 'SUBMOVE', 'POS_ID', 'NUM_IMAGES', and
+                       the tagged columns 'ERR_XY', 'RADIUS', 'SIGMA_CEILING', and
                        'QUANTILE_CEILING'
+
+             tag ... str, c.f. TAGS
                         
              stat_names ... names of which stat_funcs results to perform the quantiles
                             on. Must be a subset of stat_funcs.
@@ -397,21 +579,23 @@ def summarize_stats(table, stat_names=stat_funcs.keys()):
     assert not(any(missing_funcs)), f'undefined stat funcs {missing_funcs}'
     uppercase_names = {key: key.upper() for key in stat_names}
     submoves = get_submove_ids(table)
-    new_columns = ['SUBMOVE', 'SIGMA', 'QUANTILE', 'N_TARGETS'] + list(uppercase_names.values())
+    new_columns = ['SUBMOVE']
+    new_columns += ['SIGMA', 'QUANTILE', 'N_TARGETS']
+    new_columns += list(uppercase_names.values())
     new_dict = {key:[] for key in new_columns}
-    sigmas = get_sigmas(table)
+    sigmas = get_sigmas(table, tag)
     max_radius = -math.inf
     min_radius = math.inf
     for submove in submoves:
         submove_selection = table['SUBMOVE'] == submove
-        radii = table['TARGET_RADIUS'][submove_selection].tolist()
+        radii = table[add_tag(tag, 'RADIUS')][submove_selection].tolist()
         max_radius = max(max_radius, max(radii))
         min_radius = min(min_radius, min(radii))
         for sigma in sigmas:
             quantile = sigmas[sigma]
-            within_quantile = table['QUANTILE_CEILING'] <= quantile
+            within_quantile = table[add_tag(tag, 'QUANTILE_CEILING')] <= quantile
             quantile_selection = np.logical_and(within_quantile, submove_selection)
-            err = table['ERR_XY'][quantile_selection].tolist()
+            err = table[add_tag(tag, 'ERR_XY')][quantile_selection].tolist()
             new_dict['SUBMOVE'].append(submove)
             new_dict['SIGMA'].append(sigma)
             new_dict['QUANTILE'].append(quantile)
@@ -451,11 +635,12 @@ def meta_str(table):
         s += f'{name}: {val}\n'
     return s.strip()
 
-def get_summary_stats_str(table, submove='all'):
+def get_summary_stats_str(table, submove='all', tag=None):
     '''Produces a multi-line string representation of summary statistics
     
     INPUT:  table ... astropy table as-generated by summarize_stats()
             submove ... 'all' or integer
+            tag ... str, c.f. TAGS
     
     OUTPUT: string
     '''
@@ -499,7 +684,8 @@ def get_summary_stats_str(table, submove='all'):
             s += left_cell(prefix + name) + row_str(row_data, scale=1000)
             prefix = '... '
     row_widths = [len(x) for x in s.split('\n')]
-    header = f'Positioning errors summary (distance units = {unit}):'
+    tag_str = tag.title() if tag in TAGS else 'Positioning'
+    header = f'{tag_str} errors summary (distance units = {unit}):'
     s = format(header, f'<{max(row_widths)}') + '\n' + s
     return s
 
@@ -541,9 +727,10 @@ def finalize_plot(savepath, limits={}):
     plt.close(fig)
     return limits
     
-def get_span(table, prefix='PTL_X'):
-    '''Returns max - min for all measured and target 'PTL_X' or 'PTL_Y' data in table.'''
-    vec = table[f'{prefix}_TARG'].tolist() + table[f'{prefix}_MEAS'].tolist()
+def get_span(table, coord='PTL_X', target_tag=TRACKED):
+    '''Returns max - min for all measured and target data in table, identified by coord.'''
+    vec = table[add_tag(target_tag, coord)].tolist()
+    vec += table[add_tag(MEASURED, coord)].tolist()
     return max(vec) - min(vec)
 
 def get_expids_str(table, for_filename=True):
@@ -670,7 +857,8 @@ def bigchart(table, note1='', note2='', limits={}):
         dpi = 200
         min_plot_dims = (10, 8)
         dots_per_mm = 12
-        data_span_mm = [get_span(table, 'PTL_X'), get_span(table, 'PTL_Y')]
+        data_span_mm = [get_span(table, 'PTL_X', TRACKED),
+                        get_span(table, 'PTL_Y', TRACKED)]
         fig_size_in = [mm * dots_per_mm / dpi for mm in data_span_mm]
         fig_size_in = [max(fig_size_in[i], min_plot_dims[i]) for i in [0,1]]
         fig_size_in[1] += 2
@@ -687,13 +875,16 @@ def bigchart(table, note1='', note2='', limits={}):
         circ_x = max_reach * cos + ptl_x0
         circ_y = max_reach * sin + ptl_y0
         plt.plot(circ_x, circ_y, '--', color='0.8', linewidth=0.5)
-    for suffix, desc in {'TARG':'target', 'MEAS':'measured'}.items():
-        shape = 'o' if suffix == 'TARG' else '+'
-        plt.plot(table[f'PTL_X_{suffix}'], table[f'PTL_Y_{suffix}'], shape, label=desc)
+    shapes = {TRACKED: 'o', REQUESTED: 's', MEASURED: '+'}
+    colors = {TRACKED: 'blue', REQUESTED: 'orange', MEASURED: 'black'}
+    for tag in [REQUESTED, TRACKED, MEASURED]:
+        x = table[add_tag(tag, 'PTL_X')]
+        y = table[add_tag(tag, 'PTL_Y')]
+        plt.plot(x, y, shapes[tag], color=colors[tag], label=tag.lower(), fillstyle='none')
     for posid in posids:
         selection = table['POS_ID'] == posid
-        label_x = np.mean(table['PTL_X_TARG'][selection])
-        label_y = np.mean(table['PTL_Y_TARG'][selection])
+        label_x = np.mean(table[add_tag(TRACKED, 'PTL_X')][selection])
+        label_y = np.mean(table[add_tag(TRACKED, 'PTL_Y')][selection])
         loc = table['DEVICE_LOC'][selection][0]
         label_text = f'{posid}\n({loc})'
         plt.annotate(label_text, xy=(label_x, label_y), xycoords='data', 
@@ -717,15 +908,12 @@ def choose_subplot_dims(n_subplots):
     n_cols = math.ceil(n_subplots / n_rows)
     return (n_rows, n_cols)
 
-def histogram(table, sigma):
+def histogram(table, tag, sigma):
     '''Make a histogram of positioning errors.
     
     INPUT:  table ... astropy table including 'ERR_XY', 'SUBMOVE', and 'S'
-            note1 ... optional multi-line string, to be printed at bottom of chart
-            note2 ... optional multi-line string, to be printed at bottom of chart
-            limits ... optionally can force plot limits (e.g. to homogenize plots
-                       for multiple submoves). format is a dict with keys: 'xlim',
-                       'bins', 'xfig', 'yfig', and 'dpi'. xfig and yfig are in inches
+            tag ... TRACKED or REQUESTED
+            sigma ... which cut to plot
             
     OUTPUT: path ... path to output plot file
             limits ... dict of same format as described above
@@ -741,8 +929,8 @@ def histogram(table, sigma):
     for submove in submoves:
         plot_idx =  submoves.index(submove) + 1
         ax = plt.subplot(nrows, ncols, plot_idx, sharex=ax)
-        selection = get_idxs(table, submove, sigma)
-        data = table[selection]['ERR_XY'] * unit_scale
+        selection = get_idxs(table, submove, sigma, tag)
+        data = table[selection][add_tag(tag, 'ERR_XY')] * unit_scale
         if bins is None:
             bins = knuth_bin_width(data, return_bins=True)[1]
             bins = max(len(bins), n_bins_min)
@@ -771,12 +959,13 @@ def histogram(table, sigma):
     rights_max = str(max([len(line) for line in rights]))
     title = ''
     for i in range(len(lefts)):
-        title += f'\n{format(lefts[i], lefts_max)}{" ":8}{format(rights[i], rights_max)}'
-        
+        title += f'\n{format(lefts[i], lefts_max)}{" ":4}{format(rights[i], rights_max)}'
+    
+    title = f'Errors w.r.t. {tag} targets\n' + title
     plt.suptitle(title, fontfamily='monospace', verticalalignment='top', fontsize='medium')    
     expids_str = get_expids_str(table, for_filename=True)
     sigma_str = get_sigma_str(sigma, for_filename=True)
-    path = os.path.join(save_dir, f'expid_{expids_str}_hist_sigma_{sigma_str}.{img_format}')
+    path = os.path.join(save_dir, f'expid_{expids_str}_hist_sigma_{sigma_str}_{tag}.{img_format}')
     limits = finalize_plot(path, limits)
     return path
 
@@ -825,10 +1014,12 @@ if __name__ == '__main__':
     # merge results
     moves = vstack(moves_list)
     stats = vstack(stats_list)
+    stats.rename_columns(list(stats.columns), [col.upper() for col in stats.columns])
     
     # binning
-    moves = identify_quantiles(moves)
-    summary = summarize_stats(moves)
+    moves = identify_quantiles(moves, tag=TRACKED)
+    moves = identify_quantiles(moves, tag=REQUESTED)
+    summaries = {tag: summarize_stats(moves, tag) for tag in [TRACKED, REQUESTED]}    
     
     # plot big xy charts
     chart_limits = {}
@@ -838,32 +1029,57 @@ if __name__ == '__main__':
         table = moves[submove_selection]
         note1 = get_description(table, submove)
         note1 += '\n' + get_exposure_description(table)
-        note1 += '\n' + meta_str(summary)
-        note2 = get_summary_stats_str(summary, submove)
+        
+        # 2020-09-28 [JHS] only printing out TRACKED here, perhaps figure out
+        # formatting plot to include REQUESTED as a future enhancement
+        # for now, will at least capture in bigstr (see below)
+        note1 += '\n' + meta_str(summaries[TRACKED])
+        note2 = get_summary_stats_str(summaries[TRACKED], submove=submove, tag=TRACKED)
+        
         path, chart_limits = bigchart(table, note1, note2, chart_limits)
         log.info(f'Saved big chart for submove {submove} to {path}')
     
+    # make big text string
+    bigstr = ''  # text version of info that gets printed on bottoms of bigcharts
+    for submove in submoves:
+        submove_selection = get_idxs(moves, submove)
+        table = moves[submove_selection]
+        if any(bigstr):
+            bigstr += '\n' + '-'*10 + '\n'
+        bigstr += get_description(table, submove)
+        bigstr += '\n' + get_exposure_description(table)
+        bigstr += '\n'
+        for tag in [TRACKED, REQUESTED]:
+            bigstr += f'\nWith respect to {tag} targets...'
+            bigstr += '\n' + meta_str(summaries[tag])
+            bigstr += '\n' + get_summary_stats_str(summaries[tag], submove=submove, tag=tag)    
+    
     # plot histograms
-    sigmas = get_sigmas(moves)
-    for sigma in sigmas:
-        path = histogram(moves, sigma)
-        log.info(f'Saved histogram for sigma={sigma} to {path}')
+    for tag in [TRACKED, REQUESTED]:
+        sigmas = get_sigmas(moves, tag)
+        for sigma in sigmas:
+            path = histogram(moves, tag, sigma)
+            log.info(f'Saved histogram for sigma={sigma} to {path}')
 
     # export tabular data
     expids_str = 'expid_' + get_expids_str(moves, for_filename=True)
     moves_path = os.path.join(save_dir, f'{expids_str}_moves.csv')
     stats_path = os.path.join(save_dir, f'{expids_str}_stats_by_positioner.csv')
-    summary_path_base = os.path.join(save_dir, f'{expids_str}_stats_summary')
+    text_path = os.path.join(save_dir, f'{expids_str}.txt')
     moves.write(moves_path, overwrite=True)
     log.info(f'Saved move-by-move data table to {moves_path}')
     stats.write(stats_path, overwrite=True)
     log.info(f'Saved positioner-by-positioner performance stats to {stats_path}')
-    ecsv_path = summary_path_base + '.ecsv'
-    summary.write(ecsv_path, overwrite=True, delimiter=',')
-    log.info(f'Saved overall summary stats + metadata to {ecsv_path}')
-    csv_path = summary_path_base + '.csv'
-    summary.write(csv_path, overwrite=True)
-    log.info(f'Saved overall summary stats (no metadata) to {csv_path}')
+    for tag, summary in summaries.items():
+        summary_path_base = os.path.join(save_dir, f'{expids_str}_{tag}_stats_summary')
+        ecsv_path = summary_path_base + '.ecsv'
+        summary.write(ecsv_path, overwrite=True, delimiter=',')
+        log.info(f'Saved overall summary stats + metadata to {ecsv_path}')
+        csv_path = summary_path_base + '.csv'
+        summary.write(csv_path, overwrite=True)
+        log.info(f'Saved overall summary stats (no metadata) to {csv_path}')
+    with open(text_path, 'w') as file:
+        file.write(bigstr)
     runtime = (Time.now() - start_time).to_value('sec')
     runtime_str = f'{runtime:.1f} sec' if runtime < 60 else f'{runtime/60:.1f} min'
     log.info(f'Total run time: {runtime_str}')
