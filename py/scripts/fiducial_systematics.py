@@ -58,14 +58,27 @@ def plot_fiducial_offsets(table, expnum=-1, frame=-1):
         #plt.show()
     D = F[np.array(idevs)]
 
+    for i in range(len(D)):
+        if D.device_loc[i] in [541, 542]:
+            print('GIF % 4i' % D.location[i], 'dx,dy',
+                  '%+.3f, %+.3f' % (D.dev_dx[i], D.dev_dy[i]))
+    D.is_gif = np.logical_or(D.device_loc == 541, D.device_loc == 542)
+
     for p in np.unique(D.petal_loc):
         I = np.flatnonzero(D.petal_loc == p)
         plt.plot(D.dev_x[I], D.dev_y[I], 'o', mec='none', ms=25, alpha=0.1)
+        #plt.text(np.mean(D.dev_x[I]), np.mean(D.dev_y[I]), 'Petal loc %i' % p)
+        th = np.arctan2(np.mean(D.dev_y[I]), np.mean(D.dev_x[I]))
+        pp = int(np.round((th / (2.*np.pi / 10.)) - 0.5))
+        pth = (pp + 0.5) * (2.*np.pi/10.)
+        R = 300.
+        plt.text(np.cos(pth)*R, np.sin(pth)*R, 'Petal loc %i' % p)
     #for x,y,d in zip(D.dev_x, D.dev_y, D.devid):
     #    plt.text(x, y, '%i' % d)
     qargs = dict(pivot='middle', angles='xy', scale_units='xy',
                  scale=0.0005)
     Q = plt.quiver(D.dev_x, D.dev_y, D.dev_dx, D.dev_dy, **qargs)
+    plt.quiver(D.dev_x[D.is_gif], D.dev_y[D.is_gif], D.dev_dx[D.is_gif], D.dev_dy[D.is_gif], color='b', **qargs)
     # add quiver scale marker!
     sx = 20
     plt.quiverkey(Q, -400, 400, sx/1000., '%i um' % sx, coordinates='data')
