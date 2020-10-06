@@ -58,6 +58,11 @@ def plot_fiducial_offsets(table, expnum=-1, frame=-1):
         #plt.show()
     D = F[np.array(idevs)]
 
+    for i in range(len(D)):
+        if D.device_loc[i] in [541, 542]:
+            print('GIF % 4i' % D.location[i], 'dx,dy',
+                  '%+.3f, %+.3f' % (D.dev_dx[i], D.dev_dy[i]))
+
     for p in np.unique(D.petal_loc):
         I = np.flatnonzero(D.petal_loc == p)
         plt.plot(D.dev_x[I], D.dev_y[I], 'o', mec='none', ms=25, alpha=0.1)
