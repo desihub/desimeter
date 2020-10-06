@@ -75,11 +75,10 @@ for petalid in petalids :
             cmd_tp = f"log_note like '%tp_update%' and pos_move_index >= {min_idx} and pos_move_index <= {max_idx}"
         cmd = f'select * {from_where} {posid_date}'
         if cmd_exp and cmd_tp:
-            cmd += f' and (({cmd_exp}) or ({cmd_tp}))'
+            combined = f'({cmd_exp}) or ({cmd_tp})'
+            cmd += f' and ({combined})'
         elif cmd_exp:
-            cmd += f' and {cmd_exp}'
-        elif cmd_tp:
-            cmd += f' and {cmd_tp}'
+            cmd += f' and ({cmd_exp})'
         posmoves=dbquery(comm,cmd)
 
         # add petal loc
