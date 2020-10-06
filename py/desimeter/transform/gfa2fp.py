@@ -10,7 +10,7 @@ from desimeter.simplecorr import SimpleCorr
 #- Cached GFA pix -> GFA FP metrology scale, rotation, offsets per petal
 _gfa_transforms = None
 
-def gfa2fp(petal_loc, xgfa, ygfa):
+def gfa2fp(petal_loc, xgfa, ygfa, gfa_transform=None):
     """
     Transforms from GFA pixel coordinates to focal plane mm
 
@@ -20,16 +20,19 @@ def gfa2fp(petal_loc, xgfa, ygfa):
 
     Returns CS5 xfp, yfp in mm
     """
-    global _gfa_transforms
-    if _gfa_transforms is None:
-        metrology = io.load_metrology()
-        _gfa_transforms = fit_gfa2fp(metrology)
+
+    if gfa_transform is None:
+        global _gfa_transforms
+        if _gfa_transforms is None:
+            metrology = io.load_metrology()
+            _gfa_transforms = fit_gfa2fp(metrology)
+        gfa_transform = _gfa_transforms
 
     log = get_logger()
-    if petal_loc not in _gfa_transforms:
+    if petal_loc not in gfa_transform:
         log.error('PETAL_LOC {} GFA metrology missing'.format(petal_loc))
 
-    xfp, yfp = _gfa_transforms[petal_loc].apply(xgfa, ygfa)
+    xfp, yfp = gfa_transform[petal_loc].apply(xgfa, ygfa)
 
     return xfp, yfp
 

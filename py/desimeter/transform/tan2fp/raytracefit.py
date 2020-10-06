@@ -172,7 +172,7 @@ class TAN2FP_RayTraceFit(object) :
         # rotate then derotate to account
         # for average ADC angle
         # this leave 20 microns residuals, I don't understand why ...
-        rrxtan = ca*rxtan + sa*rytan
+        rrxtan =  ca*rxtan + sa*rytan
         rrytan = -sa*rxtan + ca*rytan
         rrxfp, rryfp   = transform(rrxtan, rrytan, scale, rotation, offset_x, offset_y, self.zbpolids, zbcoeffs)
         rxfp = ca*rrxfp - sa*rryfp
@@ -225,7 +225,7 @@ class TAN2FP_RayTraceFit(object) :
         ryy -= offset_y
 
         # undo average ADC rotation
-        xx = ca*rxx - sa*ryy
+        xx =  ca*rxx - sa*ryy
         yy = +sa*rxx + ca*ryy
 
         xtan, ytan = _expand_xytan(xx, yy)
