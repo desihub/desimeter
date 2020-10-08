@@ -402,11 +402,31 @@ def identify_avoidances(table):
     for i in range(len(log_notes)):
         tokens = tokenize_note(log_notes[i])
         for token in tokens:
-            if key in token:
-                avoidances_str = token.split(sep)[-1]
+            split = token.split(sep)
+            if key == split[0]:
+                avoidances_str = split[1]
                 avoidances = avoidances_str.strip('[').strip(']').replace("'","").replace(' ','').split(',')
                 counts[i] += len(avoidances)
     new['NUM_COLLISION_AVOIDANCES'] = counts
+    return new
+
+def identify_sequences(table):
+    '''Identifies named target sequences.
+    INPUT:  table ... astropy table including column 'LOG_NOTE'
+    OUTPUT: copy of table, including new column 'SEQUENCE'  
+    '''
+    new = sequential_copy(table)
+    key = 'sequence'
+    sep = ': '
+    log_notes = new['LOG_NOTE'].tolist()
+    sequences = [''] * len(log_notes)
+    for i in range(len(log_notes)):
+        tokens = tokenize_note(log_notes[i])
+        for token in tokens:
+            split = token.split(sep)
+            if key == split[0]:
+                sequences[i] = split[1]
+    new['SEQUENCE'] = sequences
     return new
 
 def calc_errors(table, tag=TRACKED):
@@ -527,6 +547,7 @@ def analyze_one_pos(table):
     new = identify_moves(new)
     new = identify_requests(new)
     new = identify_avoidances(new)
+    new = identify_sequences(new)
     new = calc_errors(new, tag=TRACKED)
     new = calc_errors(new, tag=REQUESTED)
     new = calc_alt_coords(new)
@@ -1101,17 +1122,18 @@ if __name__ == '__main__':
         bigstr += f'\n\nTop {user_args.n_top_errs} errors for {tag} targets...\n'
         err_col = add_tag(tag, 'ERR_XY')
         err_col_um = err_col + '_UM'
-        top_err_cols = ['DATE', 'PETAL_ID', 'POS_ID', 'POS_MOVE_INDEX', 'EXPOSURE_ID', 'EXPOSURE_ITER', 'SEQUENCE_MOVE_IDX', 'SUBMOVE'] + [err_col_um]
+        top_err_cols = ['DATE', 'PETAL_ID', 'POS_ID', 'POS_MOVE_INDEX', 'EXPOSURE_ID', 'EXPOSURE_ITER',
+                        'SEQUENCE', 'SEQUENCE_MOVE_IDX', 'SUBMOVE'] + [err_col_um]
         moves.sort(err_col, reverse=True)
         display_table = moves[:user_args.n_top_errs].copy()
-        display_table['SEQUENCE_MOVE_IDX'] = None
-        for remove_if_empty in ['SEQUENCE_MOVE_IDX']:
+        for remove_if_empty in ['SEQUENCE', 'SEQUENCE_MOVE_IDX']:
             if not(any(display_table[remove_if_empty])):
                 i = top_err_cols.index(remove_if_empty)
                 del top_err_cols[i]
         display_table[err_col_um] = [f'{x*1000:.1f}' for x in display_table[err_col].tolist()]
         display_table = display_table[top_err_cols]
-        lines = display_table.pformat_all(show_dtype=False)
+        align = ['<' if col in {'DATE', 'SEQUENCE'} else '>' for col in top_err_cols]
+        lines = display_table.pformat_all(show_dtype=False, align=align)
         bigstr += '\n'.join(lines)
         bigstr += '\n'
         
