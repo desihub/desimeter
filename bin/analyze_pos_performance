@@ -197,6 +197,12 @@ def read(path):
         log.info(f'Read data for {posid} at {path}')
     return data
 
+def sequential_copy(table):
+    '''Returns a copy of astropy table, sorted by date.'''
+    new = table.copy()
+    new.sort('DATE')
+    return new
+
 def identify_submoves(table):
     '''Searches LOG_NOTE field to identify submoves (i.e. correction moves).
     
@@ -212,8 +218,7 @@ def identify_submoves(table):
     given in the LOG_NOTE fields, again due to handling of uniqueness corner
     cases. However, 'SUBMOVE' ids *will* correspond exactly to those in LOG_NOTE.
     '''
-    new = table.copy()
-    new.sort('POS_MOVE_INDEX')
+    new = sequential_copy(table)
     move_counter = -1
     moves = []
     submoves = []
@@ -296,8 +301,7 @@ def identify_requests(table):
     given in the LOG_NOTE fields, again due to handling of uniqueness corner
     cases. However, 'SUBMOVE' ids *will* correspond exactly to those in LOG_NOTE.
     '''
-    new = table.copy()
-    new.sort('POS_MOVE_INDEX')    
+    new = sequential_copy(table)    
     n = len(new)
     possible_requests = [s.split(';')[0] for s in new['MOVE_CMD']]
     possible_coords = [s.split('=')[0] for s in possible_requests]
@@ -369,6 +373,25 @@ def identify_requests(table):
     new[add_tag(REQUESTED, 'FLAT_Y')] = y_flat
     return new
 
+def identify_avoidances(table):
+    '''Identifies collision avoidance cases.
+    INPUT:  table ... astropy table including column 'LOG_NOTE'
+    OUTPUT: list    
+    '''
+    new = sequential_copy(table)
+    key = 'collision avoidance'
+    sep = ': '
+    count = [0] * len(new)
+    for note in new['LOG_NOTE'].tolist():
+        if key in note:
+            tokens = tokenize_note(log_note)
+            
+        
+def parse_val(string, separator=' ', typefunc=int):
+    '''Parse a number out of typical token format from LOG_NOTE strings.'''
+
+    return new
+
 def calc_errors(table, tag=TRACKED):
     '''Identifies measured and target values, then calculates errors.
     
@@ -388,8 +411,7 @@ def calc_errors(table, tag=TRACKED):
              their names (for clarity) and new columns will be added with prefixes
              of f'{ref}_' and 'ERR_'.
     '''
-    new = table.copy()
-    new.sort('POS_MOVE_INDEX')
+    new = sequential_copy(table)
     assert tag in TAGS
     x_meas_name = add_tag(MEASURED, 'FLAT_X')
     y_meas_name = add_tag(MEASURED, 'FLAT_Y')
@@ -481,13 +503,13 @@ def analyze_one_pos(table):
     "stats" is another  astropy table, containing summary error statistics for
     each submove in "table".
     '''
-    new = table.copy()
-    new.sort('POS_MOVE_INDEX')
+    new = sequential_copy(table)
     posids = set(new['POS_ID'])
     assert len(posids) == 1, f'error: input to analyze should be a table with only one posid, not {posids}'
     posid = posids.pop()
     new = identify_submoves(new)
     new = identify_requests(new)
+    new = identify_avoidances(new)
     new = calc_errors(new, tag=TRACKED)
     new = calc_errors(new, tag=REQUESTED)
     new = calc_alt_coords(new)
