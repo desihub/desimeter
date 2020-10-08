@@ -20,7 +20,7 @@ parser.add_argument('--exposure-ids', type= str, required=False, default=None, h
 parser.add_argument('--exposure-iters', type= str, required=False, default=None, help="comma separated list of exposure iters")
 parser.add_argument('--date-min', type = str, default = "2019-01-01", required = False, help="date min with format YYYY-MM-DD")
 parser.add_argument('--date-max', type = str, default = "2030-01-01", required = False, help="date max with format YYYY-MM-DD")
-parser.add_argument('--pos-ids', type= str, required=False, default=None, help="comma separated list of positioner ids (same as DEVICE_ID)")
+parser.add_argument('--pos-ids', type= str, required=False, default=None, help="comma separated list of positioner ids (same as DEVICE_ID). alternately, argue 'movers' to only pull data files for those robots with move data")
 parser.add_argument('-o', '--outdir', type = str, default = "None", required = True, help="output directory where MXXXX.csv files are saved")
 parser.add_argument('-c', '--with-calib', action = 'store_true', help="add matching calib from db")
 parser.add_argument('-t', '--tp-updates', action='store_true', help="include rows where no move was done but POS_T, POS_P was updated")
@@ -45,10 +45,10 @@ if args.recent_rehome_exposure_ids is not None :
 
 for petalid in petalids :
 
-    if args.pos_ids is not None :
-        posids = args.pos_ids.split(",")
-    else :
+    if args.pos_ids in {None, 'movers'}:
         posids = get_pos_ids(comm, petalid)
+    else:
+        posids = args.pos_ids.split(",")        
 
     petal_loc = get_petal_loc(petalid)
 
@@ -80,6 +80,11 @@ for petalid in petalids :
         elif cmd_exp:
             cmd += f' and ({cmd_exp})'
         posmoves=dbquery(comm,cmd)
+
+        if args.pos_ids == 'movers':
+            has_move_cmd = {x is not None for x in posmoves['move_cmd']}
+            if not any(has_move_cmd):
+                continue
 
         # add petal loc
         posmoves["PETAL_LOC"] = np.repeat(petal_loc,len(posmoves["petal_id"]))
