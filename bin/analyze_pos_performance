@@ -376,20 +376,21 @@ def identify_requests(table):
 def identify_avoidances(table):
     '''Identifies collision avoidance cases.
     INPUT:  table ... astropy table including column 'LOG_NOTE'
-    OUTPUT: list    
+    OUTPUT: copy of table, including new column 'NUM_COLLISION_AVOIDANCES'  
     '''
     new = sequential_copy(table)
     key = 'collision avoidance'
     sep = ': '
-    count = [0] * len(new)
-    for note in new['LOG_NOTE'].tolist():
-        if key in note:
-            tokens = tokenize_note(log_note)
-            
-        
-def parse_val(string, separator=' ', typefunc=int):
-    '''Parse a number out of typical token format from LOG_NOTE strings.'''
-
+    log_notes = new['LOG_NOTE'].tolist()
+    counts = [0] * len(log_notes)
+    for i in range(len(log_notes)):
+        tokens = tokenize_note(log_notes[i])
+        for token in tokens:
+            if key in token:
+                avoidances_str = token.split(sep)[-1]
+                avoidances = avoidances_str.strip('[').strip(']').replace("'","").replace(' ','').split(',')
+                counts[i] += len(avoidances)
+    new['NUM_COLLISION_AVOIDANCES'] = counts
     return new
 
 def calc_errors(table, tag=TRACKED):
@@ -1020,7 +1021,12 @@ if __name__ == '__main__':
     input_data = {}
     results = imap(read, infiles)
     for result in results:
-        input_data.update(result)
+        for posid, table in result.items():
+            if posid in input_data:
+                items_to_stack = [input_data[posid], table]
+                input_data[posid] = vstack(items_to_stack)
+            else:
+                input_data[posid] = table
     assert any(input_data), 'No data to analyze. Please check that input file args are correct.'
     
     # analyze individual positioners
