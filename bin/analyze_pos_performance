@@ -30,7 +30,13 @@ parser.add_argument('-i', '--infiles', type=str, required=True, nargs='*',
 parser.add_argument('-o', '--outdir', type=str, required=True, help='Path to directory where to save output files.')
 parser.add_argument('-np', '--n_processes_max', type=int, default=None,  help='max number of processors to use')
 parser.add_argument('-d', '--debug_mode', action='store_true', help='turn on some helpful features for debugging')
+top_errs_default = 10
+parser.add_argument('-top', '--n_top_errs', type=int, default=top_errs_default, help=f'identify this many moves with worst case errors, default={top_errs_default}')
 user_args = parser.parse_args()
+
+# simple checks on user args
+assert user_args.n_processes_max == None or user_args.n_processes_max > 0, f'unrecognized arg {user_args.n_processes_max} for user_args.n_processes_max'
+assert user_args.n_top_errs >= 1, f'unrecognized arg {user_args.n_top_errs} for user_args.n_top_errs'
 
 # proceed with bulk of imports
 import os
@@ -1082,8 +1088,20 @@ if __name__ == '__main__':
         for tag in [TRACKED, REQUESTED]:
             bigstr += f'\nWith respect to {tag} targets...'
             bigstr += '\n' + meta_str(summaries[tag])
-            bigstr += '\n' + get_summary_stats_str(summaries[tag], submove=submove, tag=tag)    
-    
+            bigstr += '\n' + get_summary_stats_str(summaries[tag], submove=submove, tag=tag)
+    for tag in [TRACKED, REQUESTED]:
+        bigstr += f'\n\nTop {user_args.n_top_errs} errors for {tag} targets...\n'
+        err_col = add_tag(tag, 'ERR_XY')
+        err_col_um = err_col + '_UM'
+        top_err_cols = ['DATE', 'PETAL_ID', 'POS_ID', 'POS_MOVE_INDEX', 'EXPOSURE_ID', 'EXPOSURE_ITER'] + [err_col_um]
+        moves.sort(err_col, reverse=True)
+        display_table = moves[:user_args.n_top_errs].copy()
+        display_table[err_col_um] = [f'{x*1000:.1f}' for x in display_table[err_col].tolist()]
+        display_table = display_table[top_err_cols]
+        lines = display_table.pformat_all(show_dtype=False)
+        bigstr += '\n'.join(lines)
+        bigstr += '\n'
+        
     # plot histograms
     for tag in [TRACKED, REQUESTED]:
         sigmas = get_sigmas(moves, tag)
@@ -1095,7 +1113,8 @@ if __name__ == '__main__':
     expids_str = 'expid_' + get_expids_str(moves, for_filename=True)
     moves_path = os.path.join(save_dir, f'{expids_str}_moves.csv')
     stats_path = os.path.join(save_dir, f'{expids_str}_stats_by_positioner.csv')
-    text_path = os.path.join(save_dir, f'{expids_str}.txt')
+    text_path = os.path.join(save_dir, f'{expids_str}_report.txt')
+    moves = sequential_copy(moves, copy=False)
     moves.write(moves_path, overwrite=True)
     log.info(f'Saved move-by-move data table to {moves_path}')
     stats.write(stats_path, overwrite=True)
