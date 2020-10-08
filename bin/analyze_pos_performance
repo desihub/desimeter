@@ -197,10 +197,12 @@ def read(path):
         log.info(f'Read data for {posid} at {path}')
     return data
 
-def sequential_copy(table):
-    '''Returns a copy of astropy table, sorted by date.'''
-    new = table.copy()
-    new.sort('DATE')
+def sequential_copy(table, copy=True):
+    '''Returns copy of table, sorted such that earlier move data rows are always
+    before later. Argue copy=False to return not a copy, but to sort table itself
+    in place (the same pointer to table is returned).'''
+    new = table.copy() if copy else table
+    new.sort(['DATE', 'POS_ID'])
     return new
 
 def identify_submoves(table):
