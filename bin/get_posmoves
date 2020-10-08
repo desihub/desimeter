@@ -5,6 +5,8 @@ import psycopg2
 import numpy as np
 from astropy.table import Table
 import argparse
+import time
+start_time = time.time()
 
 from desimeter.util import parse_fibers
 from desimeter.dbutil import dbquery,get_petal_ids,get_pos_ids,get_petal_loc
@@ -151,3 +153,5 @@ for petalid in petalids :
         ofilename="{}/{}.csv".format(args.outdir,posid)
         otable.write(ofilename,overwrite=True)
         print("wrote",ofilename)
+
+print(f'Total elapsed time: {time.time() - start_time:.1f} sec')
