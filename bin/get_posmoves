@@ -69,10 +69,11 @@ for petalid in petalids :
             if cmd_exp:
                 cmd_idx += f' and {cmd_exp}'
             result = dbquery(comm, cmd_idx)
-            min_idx = min(result['pos_move_index'])
-            max_idx = max(result['pos_move_index'])
-            max_idx += 1  # capture any tp_updates from just after the exposure or exp iteration
-            cmd_tp = f"log_note like '%tp_update%' and pos_move_index >= {min_idx} and pos_move_index <= {max_idx}"
+            if any(result['pos_move_index']):
+                min_idx = min(result['pos_move_index'])
+                max_idx = max(result['pos_move_index'])
+                max_idx += 1  # capture any tp_updates from just after the exposure or exp iteration
+                cmd_tp = f"log_note like '%tp_update%' and pos_move_index >= {min_idx} and pos_move_index <= {max_idx}"
         cmd = f'select * {from_where} {posid_date}'
         if cmd_exp and cmd_tp:
             combined = f'({cmd_exp}) or ({cmd_tp})'
@@ -82,7 +83,7 @@ for petalid in petalids :
         posmoves=dbquery(comm,cmd)
 
         if args.pos_ids == 'movers':
-            has_move_cmd = {x is not None for x in posmoves['move_cmd']}
+            has_move_cmd = {x not in {'', None} for x in posmoves['move_cmd']}
             if not any(has_move_cmd):
                 continue
 
