@@ -1093,7 +1093,7 @@ if __name__ == '__main__':
         bigstr += f'\n\nTop {user_args.n_top_errs} errors for {tag} targets...\n'
         err_col = add_tag(tag, 'ERR_XY')
         err_col_um = err_col + '_UM'
-        top_err_cols = ['DATE', 'PETAL_ID', 'POS_ID', 'POS_MOVE_INDEX', 'EXPOSURE_ID', 'EXPOSURE_ITER'] + [err_col_um]
+        top_err_cols = ['DATE', 'PETAL_ID', 'POS_ID', 'POS_MOVE_INDEX', 'EXPOSURE_ID', 'EXPOSURE_ITER', 'MOVE', 'SUBMOVE'] + [err_col_um]
         moves.sort(err_col, reverse=True)
         display_table = moves[:user_args.n_top_errs].copy()
         display_table[err_col_um] = [f'{x*1000:.1f}' for x in display_table[err_col].tolist()]
