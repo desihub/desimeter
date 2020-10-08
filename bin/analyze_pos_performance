@@ -124,7 +124,7 @@ stat_funcs = {'max': np.max, 'min': np.min, 'mean': np.mean, 'median': np.median
 # function defs
 def nulls(*args):
     '''Returns set of indexes for null entries in one or more argued arrays.'''
-    special_null_cases = {'None', 'none', '(null)', 'null'}
+    special_null_cases = {'None', 'none', '(null)', 'null', '--'}
     idxs = set()
     for array in args:
         idxs |= {i for i in range(len(array)) if not(array[i]) or array[i] in special_null_cases}
@@ -211,52 +211,60 @@ def sequential_copy(table, copy=True):
     new.sort(['DATE', 'POS_ID'])
     return new
 
-def identify_submoves(table):
-    '''Searches LOG_NOTE field to identify submoves (i.e. correction moves).
+def identify_moves(table):
+    '''Searches LOG_NOTE field to identify moves and submoves (i.e. correction moves).
     
     INPUTS:  table ... astropy table containing 'LOG_NOTE' and 'EXPOSURE_ID'
-    OUTPUT:  copy of table, with new columns 'MOVE' and 'SUBMOVE', containing
-             integer IDs identifying any moves and submoves.
+    OUTPUT:  copy of table, with new columns 'MOVE_COUNTER', 'SEQUENCE_MOVE_IDX', 'MOVE',
+             and 'SUBMOVE', containing integer IDs identifying any moves and submoves.
              
-    Note that 'MOVE' values may not be unique, if the dataset includes multiple
-    tests. In such cases, uniqueness can be determined by inspecting also the
-    EXPOSURE_ID field --- within which MOVE *will* be unique.
+    'MOVE_COUNTER' is counted sequentially within a given EXPOSURE_ID. Therefore, for
+    example if this function is called repeatedly on tables with different positioners,
+    then you can get different 'MOVE_COUNTER' for two different positioners at the *same*
+    timestamp.
     
-    Additionally, note that 'MOVE' integers may not correspond 1:1 with those
-    given in the LOG_NOTE fields, again due to handling of uniqueness corner
-    cases. However, 'SUBMOVE' ids *will* correspond exactly to those in LOG_NOTE.
+    For this reason, the function also makes columns 'SEQUENCE_MOVE_IDX' and 'MOVE'. These contain
+    the exact index value specified in the 'LOG_NOTE' field, for their respective values,
+    if present.
     '''
     new = sequential_copy(table)
     move_counter = -1
+    move_counters = []
+    seq_move_idxs = []
     moves = []
     submoves = []
     last_expid = new['EXPOSURE_ID'][0]
-    last_named_move = None  # different from move_counter ... this is from LOG_NOTE field
+    no_move_cmd = nulls(new['MOVE_CMD'])
     for i in range(len(new)):
         expid = new['EXPOSURE_ID'][i]
         if expid != last_expid:
             move_counter = -1
             last_expid = expid
         note = new['LOG_NOTE'][i]
-        if 'submove' not in note:
+        tokens = tokenize_note(note)
+        seq_move_idx = None
+        move = None
+        submove = 0
+        for token in tokens:
+            if token.find('sequence_move_idx') == 0:
+                seq_move_idx = parse_val(token)
+            if token.find('move') == 0:
+                move = parse_val(token)
+            if token.find('submove') == 0:
+                submove = parse_val(token)
+        if i not in no_move_cmd:
             move_counter += 1
-            submove = 0
-        else:
-            tokens = tokenize_note(note)
-            found_move, found_submove = False, False
-            for token in tokens:
-                if token.find('move') == 0:
-                    named_move = parse_val(token)
-                    found_move = True
-                if token.find('submove') == 0:
-                    submove = parse_val(token)
-                    found_submove = True
-            assert found_move and found_submove, f'move/submove parsing error of LOG_NOTE: {note}'
-            if named_move != last_named_move:
-                move_counter += 1
-                last_named_move = named_move
-        moves.append(move_counter)
+            
+            # special case, for data pre 2020-10-08
+            if seq_move_idx == None and move != None and 'sequence' in note:
+                seq_move_idx = move - 1
+        
+        move_counters.append(move_counter)
+        moves.append(move)
+        seq_move_idxs.append(seq_move_idx)
         submoves.append(submove)
+    new['MOVE_COUNTER'] = move_counters
+    new['SEQUENCE_MOVE_IDX'] = seq_move_idxs
     new['MOVE'] = moves
     new['SUBMOVE'] = submoves
     return new
@@ -516,7 +524,7 @@ def analyze_one_pos(table):
     posids = set(new['POS_ID'])
     assert len(posids) == 1, f'error: input to analyze should be a table with only one posid, not {posids}'
     posid = posids.pop()
-    new = identify_submoves(new)
+    new = identify_moves(new)
     new = identify_requests(new)
     new = identify_avoidances(new)
     new = calc_errors(new, tag=TRACKED)
@@ -1093,9 +1101,14 @@ if __name__ == '__main__':
         bigstr += f'\n\nTop {user_args.n_top_errs} errors for {tag} targets...\n'
         err_col = add_tag(tag, 'ERR_XY')
         err_col_um = err_col + '_UM'
-        top_err_cols = ['DATE', 'PETAL_ID', 'POS_ID', 'POS_MOVE_INDEX', 'EXPOSURE_ID', 'EXPOSURE_ITER', 'MOVE', 'SUBMOVE'] + [err_col_um]
+        top_err_cols = ['DATE', 'PETAL_ID', 'POS_ID', 'POS_MOVE_INDEX', 'EXPOSURE_ID', 'EXPOSURE_ITER', 'SEQUENCE_MOVE_IDX', 'SUBMOVE'] + [err_col_um]
         moves.sort(err_col, reverse=True)
         display_table = moves[:user_args.n_top_errs].copy()
+        display_table['SEQUENCE_MOVE_IDX'] = None
+        for remove_if_empty in ['SEQUENCE_MOVE_IDX']:
+            if not(any(display_table[remove_if_empty])):
+                i = top_err_cols.index(remove_if_empty)
+                del top_err_cols[i]
         display_table[err_col_um] = [f'{x*1000:.1f}' for x in display_table[err_col].tolist()]
         display_table = display_table[top_err_cols]
         lines = display_table.pformat_all(show_dtype=False)
