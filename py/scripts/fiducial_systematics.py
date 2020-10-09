@@ -103,11 +103,15 @@ def plot_fiducial_offsets(table, expnum=-1, frame=-1):
     outline_petals(color='k', alpha=0.1)
     plt.axis('equal')
     rms2d = 1000. * np.sqrt(np.mean(D.dev_dx**2 + D.dev_dy**2))
-    plt.title('Offsets of fiducials vs whole-focal-plane fit: %.1f um RMS2d, expnum %i frame %i' % (rms2d, expnum, frame))
+    #plt.title('Offsets of fiducials vs whole-focal-plane fit: %.1f um RMS2d, expnum %i frame %i' % (rms2d, expnum, frame))
+    plt.xlabel('Focal plane x (mm)')
+    plt.ylabel('Focal plane y (mm)')
+    plt.title('Fiducial resids: %.1f um RMS2d, expnum %i frame %i' % (rms2d, expnum, frame))
     return D
 
-if __name__ == '__main__':
-    plt.figure(figsize=(10,10))
+def main():
+    #plt.figure(figsize=(10,10))
+    plt.figure(figsize=(6,6))
 
     dm = Desimeter(proc_data_dir='proc')
 
@@ -144,7 +148,7 @@ if __name__ == '__main__':
             D.frame  = np.zeros(len(D), np.int16) + frame
             hdr = fitsio.read_header(fvcfn)
             for key in ['MJD-OBS', 'TARGTRA', 'TARGTDEC', 'TARGTAZ', 'TARGTEZ', 'AIRMASS',
-                        'ADC1PHI', 'ADC2PHI']:
+                        'ADC1PHI', 'ADC2PHI', 'TRUSTEMP']:
                 D.set(key.replace('-','_').lower(), np.zeros(len(D), np.float32) + hdr.get(key, -99))
             fids.append(D._table)
         fids = astropy.table.vstack(fids)
@@ -160,6 +164,13 @@ if __name__ == '__main__':
     fids = fids[I]
     print('Cut to', len(fids), 'based on residuals')
 
+    plt.clf()
+    plt.hist(d * 1000., range=(0, 60), bins=30)
+    rms = np.sqrt(np.mean((d*1000.)**2))
+    plt.xlabel('Offset of fiducials (um)')
+    plt.title('Before: Fiducials, 2020-03-14 & 15: RMS2D %.1f um' % rms)
+    plt.savefig('fid-offset-hist-before.png')
+
     # Plots wrt some observing properties.
     X = fids[fids.devid == 1542]
     X.dx = X.dev_dx * 1000.
@@ -167,7 +178,7 @@ if __name__ == '__main__':
     tt = 'Fiducial 1542, 2020-03-(14,15)'
     X.adc_dphi = np.fmod(360 + X.adc2phi-X.adc1phi, 360)
 
-    for k in ('airmass', 'expnum', 'adc_dphi'):
+    for k in ('airmass', 'expnum', 'adc_dphi', 'trustemp'):
         plt.clf()
         plt.plot(X.get(k), X.dx, 'b.', label='dx')
         plt.plot(X.get(k), X.dy, 'r.', label='dy')
@@ -225,7 +236,9 @@ if __name__ == '__main__':
 
     # Check!
     newdm = Desimeter(desimeter_dir=outdir, proc_data_dir='proc-fid-sys')
-    for expnum in [52644] + list(range(55353, 55357+1)):
+    fids = []
+    #for expnum in [52644] + list(range(55353, 55357+1)):
+    for keep,expnum in [(False, 52644)] + [(True, e) for e in list(range(55353, 55692+1))]:
         fvcfn = newdm.find_file('fvc', expnum=expnum)
         if fvcfn is None:
             continue
@@ -249,3 +262,22 @@ if __name__ == '__main__':
         plt.savefig(fn)
         print('Wrote', fn)
         plt.clf()
+        if not keep:
+            continue
+        fids.append(D._table)
+    fids = astropy.table.vstack(fids)
+    fids = Twrapper(fids)
+    print('After:', len(fids), 'fiducial measurements,', len(np.unique(fids.devid)), 'unique fids')
+    d = np.hypot(fids.dev_dx, fids.dev_dy)
+    I = np.flatnonzero(d < 0.1)
+    fids = fids[I]
+    print('Cut to', len(fids), 'based on residuals')
+    plt.clf()
+    plt.hist(d * 1000., range=(0, 60), bins=30)
+    rms = np.sqrt(np.mean((d*1000.)**2))
+    plt.xlabel('Offset of fiducials (um)')
+    plt.title('After: Fiducials, 2020-03-14 & 15: RMS2D %.1f um' % rms)
+    plt.savefig('fid-offset-hist-after.png')
+
+if __name__ == '__main__':
+    main()
