@@ -30,7 +30,13 @@ parser.add_argument('-i', '--infiles', type=str, required=True, nargs='*',
 parser.add_argument('-o', '--outdir', type=str, required=True, help='Path to directory where to save output files.')
 parser.add_argument('-np', '--n_processes_max', type=int, default=None,  help='max number of processors to use')
 parser.add_argument('-d', '--debug_mode', action='store_true', help='turn on some helpful features for debugging')
+top_errs_default = 10
+parser.add_argument('-top', '--n_top_errs', type=int, default=top_errs_default, help=f'identify this many moves with worst case errors, default={top_errs_default}')
 user_args = parser.parse_args()
+
+# simple checks on user args
+assert user_args.n_processes_max == None or user_args.n_processes_max > 0, f'unrecognized arg {user_args.n_processes_max} for user_args.n_processes_max'
+assert user_args.n_top_errs >= 1, f'unrecognized arg {user_args.n_top_errs} for user_args.n_top_errs'
 
 # proceed with bulk of imports
 import os
@@ -118,7 +124,7 @@ stat_funcs = {'max': np.max, 'min': np.min, 'mean': np.mean, 'median': np.median
 # function defs
 def nulls(*args):
     '''Returns set of indexes for null entries in one or more argued arrays.'''
-    special_null_cases = {'None', 'none', '(null)', 'null'}
+    special_null_cases = {'None', 'none', '(null)', 'null', '--'}
     idxs = set()
     for array in args:
         idxs |= {i for i in range(len(array)) if not(array[i]) or array[i] in special_null_cases}
@@ -197,53 +203,68 @@ def read(path):
         log.info(f'Read data for {posid} at {path}')
     return data
 
-def identify_submoves(table):
-    '''Searches LOG_NOTE field to identify submoves (i.e. correction moves).
+def sequential_copy(table, copy=True):
+    '''Returns copy of table, sorted such that earlier move data rows are always
+    before later. Argue copy=False to return not a copy, but to sort table itself
+    in place (the same pointer to table is returned).'''
+    new = table.copy() if copy else table
+    new.sort(['DATE', 'POS_ID'])
+    return new
+
+def identify_moves(table):
+    '''Searches LOG_NOTE field to identify moves and submoves (i.e. correction moves).
     
     INPUTS:  table ... astropy table containing 'LOG_NOTE' and 'EXPOSURE_ID'
-    OUTPUT:  copy of table, with new columns 'MOVE' and 'SUBMOVE', containing
-             integer IDs identifying any moves and submoves.
+    OUTPUT:  copy of table, with new columns 'MOVE_COUNTER', 'SEQUENCE_MOVE_IDX', 'MOVE',
+             and 'SUBMOVE', containing integer IDs identifying any moves and submoves.
              
-    Note that 'MOVE' values may not be unique, if the dataset includes multiple
-    tests. In such cases, uniqueness can be determined by inspecting also the
-    EXPOSURE_ID field --- within which MOVE *will* be unique.
+    'MOVE_COUNTER' is counted sequentially within a given EXPOSURE_ID. Therefore, for
+    example if this function is called repeatedly on tables with different positioners,
+    then you can get different 'MOVE_COUNTER' for two different positioners at the *same*
+    timestamp.
     
-    Additionally, note that 'MOVE' integers may not correspond 1:1 with those
-    given in the LOG_NOTE fields, again due to handling of uniqueness corner
-    cases. However, 'SUBMOVE' ids *will* correspond exactly to those in LOG_NOTE.
+    For this reason, the function also makes columns 'SEQUENCE_MOVE_IDX' and 'MOVE'. These contain
+    the exact index value specified in the 'LOG_NOTE' field, for their respective values,
+    if present.
     '''
-    new = table.copy()
-    new.sort('POS_MOVE_INDEX')
+    new = sequential_copy(table)
     move_counter = -1
+    move_counters = []
+    seq_move_idxs = []
     moves = []
     submoves = []
     last_expid = new['EXPOSURE_ID'][0]
-    last_named_move = None  # different from move_counter ... this is from LOG_NOTE field
+    no_move_cmd = nulls(new['MOVE_CMD'])
     for i in range(len(new)):
         expid = new['EXPOSURE_ID'][i]
         if expid != last_expid:
             move_counter = -1
             last_expid = expid
         note = new['LOG_NOTE'][i]
-        if 'submove' not in note:
+        tokens = tokenize_note(note)
+        seq_move_idx = None
+        move = None
+        submove = 0
+        for token in tokens:
+            if token.find('sequence_move_idx') == 0:
+                seq_move_idx = parse_val(token)
+            if token.find('move') == 0:
+                move = parse_val(token)
+            if token.find('submove') == 0:
+                submove = parse_val(token)
+        if i not in no_move_cmd:
             move_counter += 1
-            submove = 0
-        else:
-            tokens = tokenize_note(note)
-            found_move, found_submove = False, False
-            for token in tokens:
-                if token.find('move') == 0:
-                    named_move = parse_val(token)
-                    found_move = True
-                if token.find('submove') == 0:
-                    submove = parse_val(token)
-                    found_submove = True
-            assert found_move and found_submove, f'move/submove parsing error of LOG_NOTE: {note}'
-            if named_move != last_named_move:
-                move_counter += 1
-                last_named_move = named_move
-        moves.append(move_counter)
+            
+            # special case, for data pre 2020-10-08
+            if seq_move_idx == None and move != None and 'sequence' in note:
+                seq_move_idx = move - 1
+        
+        move_counters.append(move_counter)
+        moves.append(move)
+        seq_move_idxs.append(seq_move_idx)
         submoves.append(submove)
+    new['MOVE_COUNTER'] = move_counters
+    new['SEQUENCE_MOVE_IDX'] = seq_move_idxs
     new['MOVE'] = moves
     new['SUBMOVE'] = submoves
     return new
@@ -296,8 +317,7 @@ def identify_requests(table):
     given in the LOG_NOTE fields, again due to handling of uniqueness corner
     cases. However, 'SUBMOVE' ids *will* correspond exactly to those in LOG_NOTE.
     '''
-    new = table.copy()
-    new.sort('POS_MOVE_INDEX')    
+    new = sequential_copy(table)    
     n = len(new)
     possible_requests = [s.split(';')[0] for s in new['MOVE_CMD']]
     possible_coords = [s.split('=')[0] for s in possible_requests]
@@ -369,6 +389,46 @@ def identify_requests(table):
     new[add_tag(REQUESTED, 'FLAT_Y')] = y_flat
     return new
 
+def identify_avoidances(table):
+    '''Identifies collision avoidance cases.
+    INPUT:  table ... astropy table including column 'LOG_NOTE'
+    OUTPUT: copy of table, including new column 'NUM_COLLISION_AVOIDANCES'  
+    '''
+    new = sequential_copy(table)
+    key = 'collision avoidance'
+    sep = ': '
+    log_notes = new['LOG_NOTE'].tolist()
+    counts = [0] * len(log_notes)
+    for i in range(len(log_notes)):
+        tokens = tokenize_note(log_notes[i])
+        for token in tokens:
+            split = token.split(sep)
+            if key == split[0]:
+                avoidances_str = split[1]
+                avoidances = avoidances_str.strip('[').strip(']').replace("'","").replace(' ','').split(',')
+                counts[i] += len(avoidances)
+    new['NUM_COLLISION_AVOIDANCES'] = counts
+    return new
+
+def identify_sequences(table):
+    '''Identifies named target sequences.
+    INPUT:  table ... astropy table including column 'LOG_NOTE'
+    OUTPUT: copy of table, including new column 'SEQUENCE'  
+    '''
+    new = sequential_copy(table)
+    key = 'sequence'
+    sep = ': '
+    log_notes = new['LOG_NOTE'].tolist()
+    sequences = [''] * len(log_notes)
+    for i in range(len(log_notes)):
+        tokens = tokenize_note(log_notes[i])
+        for token in tokens:
+            split = token.split(sep)
+            if key == split[0]:
+                sequences[i] = split[1]
+    new['SEQUENCE'] = sequences
+    return new
+
 def calc_errors(table, tag=TRACKED):
     '''Identifies measured and target values, then calculates errors.
     
@@ -388,8 +448,7 @@ def calc_errors(table, tag=TRACKED):
              their names (for clarity) and new columns will be added with prefixes
              of f'{ref}_' and 'ERR_'.
     '''
-    new = table.copy()
-    new.sort('POS_MOVE_INDEX')
+    new = sequential_copy(table)
     assert tag in TAGS
     x_meas_name = add_tag(MEASURED, 'FLAT_X')
     y_meas_name = add_tag(MEASURED, 'FLAT_Y')
@@ -481,13 +540,14 @@ def analyze_one_pos(table):
     "stats" is another  astropy table, containing summary error statistics for
     each submove in "table".
     '''
-    new = table.copy()
-    new.sort('POS_MOVE_INDEX')
+    new = sequential_copy(table)
     posids = set(new['POS_ID'])
     assert len(posids) == 1, f'error: input to analyze should be a table with only one posid, not {posids}'
     posid = posids.pop()
-    new = identify_submoves(new)
+    new = identify_moves(new)
     new = identify_requests(new)
+    new = identify_avoidances(new)
+    new = identify_sequences(new)
     new = calc_errors(new, tag=TRACKED)
     new = calc_errors(new, tag=REQUESTED)
     new = calc_alt_coords(new)
@@ -998,7 +1058,12 @@ if __name__ == '__main__':
     input_data = {}
     results = imap(read, infiles)
     for result in results:
-        input_data.update(result)
+        for posid, table in result.items():
+            if posid in input_data:
+                items_to_stack = [input_data[posid], table]
+                input_data[posid] = vstack(items_to_stack)
+            else:
+                input_data[posid] = table
     assert any(input_data), 'No data to analyze. Please check that input file args are correct.'
     
     # analyze individual positioners
@@ -1052,8 +1117,26 @@ if __name__ == '__main__':
         for tag in [TRACKED, REQUESTED]:
             bigstr += f'\nWith respect to {tag} targets...'
             bigstr += '\n' + meta_str(summaries[tag])
-            bigstr += '\n' + get_summary_stats_str(summaries[tag], submove=submove, tag=tag)    
-    
+            bigstr += '\n' + get_summary_stats_str(summaries[tag], submove=submove, tag=tag)
+    for tag in [TRACKED, REQUESTED]:
+        bigstr += f'\n\nTop {user_args.n_top_errs} errors for {tag} targets...\n'
+        err_col = add_tag(tag, 'ERR_XY')
+        err_col_um = err_col + '_UM'
+        top_err_cols = ['DATE', 'PETAL_ID', 'POS_ID', 'POS_MOVE_INDEX', 'EXPOSURE_ID', 'EXPOSURE_ITER',
+                        'SEQUENCE', 'SEQUENCE_MOVE_IDX', 'SUBMOVE'] + [err_col_um]
+        moves.sort(err_col, reverse=True)
+        display_table = moves[:user_args.n_top_errs].copy()
+        for remove_if_empty in ['SEQUENCE', 'SEQUENCE_MOVE_IDX']:
+            if not(any(display_table[remove_if_empty])):
+                i = top_err_cols.index(remove_if_empty)
+                del top_err_cols[i]
+        display_table[err_col_um] = [f'{x*1000:.1f}' for x in display_table[err_col].tolist()]
+        display_table = display_table[top_err_cols]
+        align = ['<' if col in {'DATE', 'SEQUENCE'} else '>' for col in top_err_cols]
+        lines = display_table.pformat_all(show_dtype=False, align=align)
+        bigstr += '\n'.join(lines)
+        bigstr += '\n'
+        
     # plot histograms
     for tag in [TRACKED, REQUESTED]:
         sigmas = get_sigmas(moves, tag)
@@ -1065,7 +1148,8 @@ if __name__ == '__main__':
     expids_str = 'expid_' + get_expids_str(moves, for_filename=True)
     moves_path = os.path.join(save_dir, f'{expids_str}_moves.csv')
     stats_path = os.path.join(save_dir, f'{expids_str}_stats_by_positioner.csv')
-    text_path = os.path.join(save_dir, f'{expids_str}.txt')
+    text_path = os.path.join(save_dir, f'{expids_str}_report.txt')
+    moves = sequential_copy(moves, copy=False)
     moves.write(moves_path, overwrite=True)
     log.info(f'Saved move-by-move data table to {moves_path}')
     stats.write(stats_path, overwrite=True)
