@@ -53,6 +53,8 @@ parser.add_argument('-v', '--verbose', action='store_true',
                     help='extra verbosity of print outs at terminal')
 parser.add_argument('--log-note-selection', type=str, default=None, required=False,
                     help="required keywords in LOG_NOTE selection, seperated by '&', like ''arc calibration & use_desimeter=True'")
+parser.add_argument('--force-recent-rehome', action='store_true',
+                    help="force considering all moves where performed just after a rehoming.")
 
 args = parser.parse_args()
 
@@ -108,7 +110,8 @@ if __name__ == '__main__':
                       'savedir': args.outdir,
                       'static_quantile': args.static_quantile,
                       'printf': printf,
-                      'log_note_selection': args.log_note_selection
+                      'log_note_selection': args.log_note_selection,
+                      'force_recent_rehome': args.force_recent_rehome
                       }
             if args.n_processes_max == 1:
                 logstr = fithandler.run_best_fits(**kwargs)
