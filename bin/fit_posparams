@@ -54,7 +54,7 @@ parser.add_argument('-v', '--verbose', action='store_true',
 parser.add_argument('--log-note-selection', type=str, default=None, required=False,
                     help="required keywords in LOG_NOTE selection, seperated by '&', like ''arc calibration & use_desimeter=True'")
 parser.add_argument('--force-recent-rehome', action='store_true',
-                    help="force considering all moves where performed just after a rehoming.")
+                    help="consider all moves were performed just after a rehoming (not recommended, this affects the calibration of OFFSET_P and OFFSET_T)")
 
 args = parser.parse_args()
 
