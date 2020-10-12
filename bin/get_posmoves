@@ -121,7 +121,7 @@ for petalid in petalids :
                 posmoves[k]=list()
 
             for t in tstamp_posmovedb :
-                j=np.where(tstamp_calib<t)[0][-1]
+                j=np.where(tstamp_calib<=t)[0][-1]
                 for k1,k2 in zip(new_keys,calib.keys()) :
                     posmoves[k1].append(calib[k2][j])
 
