@@ -69,13 +69,18 @@ print(f'Reading {len(infiles)} input files...')
 required = {'POS_ID', 'DATA_END_DATE_SEC', 'ANALYSIS_DATE_STATIC'}
 for d in plotter.param_subplot_defs:
     required |= set(d['keys'])
+all_missing = set()
 for path in infiles:
     if 'csv' in os.path.splitext(path)[-1]:
         this_table = Table.read(path, format='csv')
         missing = required - set(this_table.columns)
         if any(missing):
-            f'Skipping data at {path}, missing some values'
-        tables += [this_table]
+            print(f'Skipping data at {path}, which is missing {len(missing)} required columns')
+            all_missing |= missing
+        else:
+            tables += [this_table]
+if any(all_missing):
+    print(f'The following required columns were missing from one or more input files: {all_missing}')
 table = vstack(tables)
 table.sort(['POS_ID', 'DATA_END_DATE_SEC'])
 analysis_timestamp = Time(min(table['ANALYSIS_DATE_STATIC'])).iso.split('.')[0]
