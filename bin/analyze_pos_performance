@@ -43,7 +43,7 @@ import os
 import glob
 import numpy as np
 import math
-from astropy.table import Table, vstack
+from astropy.table import Table, Column, vstack
 from astropy.time import Time
 from astropy.visualization import hist
 from astropy.stats import knuth_bin_width
@@ -264,8 +264,8 @@ def identify_moves(table):
         seq_move_idxs.append(seq_move_idx)
         submoves.append(submove)
     new['MOVE_COUNTER'] = move_counters
-    new['SEQUENCE_MOVE_IDX'] = seq_move_idxs
-    new['MOVE'] = moves
+    new['SEQUENCE_MOVE_IDX'] = Column(seq_move_idxs, dtype=object)  # sometimes carries int, sometimes None
+    new['MOVE'] = Column(moves, dtype=object)  # sometimes carries int, sometimes None
     new['SUBMOVE'] = submoves
     return new
 
