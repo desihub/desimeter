@@ -5,12 +5,12 @@ from astropy.table import Table
 
 def process_fvc(filename, overwrite=False):
     '''Calls desi_fvc_proc on the input file.
-    
+
     INPUTS:  filename ... fits file (can also be csv, in which case desi_fvc_proc is skipped)
              overwrite ... if a processed table of the same basename already exists in /tmp,
                            reprocess and overwrite it with new table. (default behavior is
                            to use the already-existing table)
-                           
+
     OUTPUT:  astropy table
     '''
     if filename.find(".csv")>0 :
