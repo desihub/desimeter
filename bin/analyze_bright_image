@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 
 import argparse
-import sys,os
+import os
 import numpy as np
-import multiprocessing
 import matplotlib.pyplot as plt
 import fitsio
 
@@ -42,7 +41,7 @@ if args.phi_arm_angle_table is not None :
     spots = Table.read(args.phi_arm_angle_table)
 else :
     print("Process standard back illuminated FVC image {}".format(args.back_illuminated))
-    spots = process_fvc(args.back_illuminated)
+    spots = process_fvc(args.back_illuminated, overwrite=True)
     template_filename = os.path.join(desimeter_data_dir(),"fiber_arm_outline.fits")
     detect_phi_arms(spots,args.front_illuminated,template_filename,args.ang_step,args.nproc)
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
-import os,sys
+import os
 import psycopg2
 import numpy as np
-import matplotlib.pyplot as plt
 from astropy.table import Table
-import datetime
 import argparse
+import time
+start_time = time.time()
 
 from desimeter.util import parse_fibers
 from desimeter.dbutil import dbquery,get_petal_ids,get_pos_ids,get_petal_loc
@@ -22,9 +22,10 @@ parser.add_argument('--exposure-ids', type= str, required=False, default=None, h
 parser.add_argument('--exposure-iters', type= str, required=False, default=None, help="comma separated list of exposure iters")
 parser.add_argument('--date-min', type = str, default = "2019-01-01", required = False, help="date min with format YYYY-MM-DD")
 parser.add_argument('--date-max', type = str, default = "2030-01-01", required = False, help="date max with format YYYY-MM-DD")
-parser.add_argument('--pos-ids', type= str, required=False, default=None, help="comma separated list of positioner ids (same as DEVICE_ID)")
-parser.add_argument('-o','--outdir', type = str, default = "None", required = True, help="output directory where MXXXX.csv files are saved")
-parser.add_argument('--with-calib', action = 'store_true', help="add matching calib from db")
+parser.add_argument('--pos-ids', type= str, required=False, default=None, help="comma separated list of positioner ids (same as DEVICE_ID). alternately, argue 'movers' to only pull data files for those robots with move data")
+parser.add_argument('-o', '--outdir', type = str, default = "None", required = True, help="output directory where MXXXX.csv files are saved")
+parser.add_argument('-c', '--with-calib', action = 'store_true', help="add matching calib from db")
+parser.add_argument('-t', '--tp-updates', action='store_true', help="include rows where no move was done but POS_T, POS_P was updated")
 parser.add_argument('--recent-rehome-exposure-ids', type= str, required=False, default=None, help="comma separated list of exposure ids where the positioners have been recently rehomed")
 
 args  = parser.parse_args()
@@ -46,22 +47,47 @@ if args.recent_rehome_exposure_ids is not None :
 
 for petalid in petalids :
 
-    if args.pos_ids is not None :
-        posids = args.pos_ids.split(",")
-    else :
+    if args.pos_ids in {None, 'movers'}:
         posids = get_pos_ids(comm, petalid)
+    else:
+        posids = args.pos_ids.split(",")        
 
     petal_loc = get_petal_loc(petalid)
 
     for posid in posids :
 
         # read data from db
-        cmd = "select * from posmovedb.positioner_moves_p{} where pos_id='{}' and time_recorded BETWEEN date '{}' and date '{}'".format(int(petalid),posid,args.date_min,args.date_max)
-        if args.exposure_ids is not None :
-            cmd += " and exposure_id in ({})".format(args.exposure_ids)
-        if args.exposure_iters is not None :
-            cmd += " and exposure_iter in ({})".format(args.exposure_iters)
+        from_where = f'from posmovedb.positioner_moves_p{int(petalid)} where'
+        posid_date = "pos_id='{}' and time_recorded BETWEEN date '{}' and date '{}'".format(posid,args.date_min,args.date_max)
+        cmd_exp = ''
+        if args.exposure_ids is not None:
+            cmd_exp += "exposure_id in ({})".format(args.exposure_ids)
+        if args.exposure_iters is not None:
+            cmd_exp += ' and ' if cmd_exp else ''
+            cmd_exp += "exposure_iter in ({})".format(args.exposure_iters)
+        cmd_tp = ''
+        if args.tp_updates:
+            cmd_idx = f'select pos_move_index {from_where} {posid_date}'
+            if cmd_exp:
+                cmd_idx += f' and {cmd_exp}'
+            result = dbquery(comm, cmd_idx)
+            if any(result['pos_move_index']):
+                min_idx = min(result['pos_move_index'])
+                max_idx = max(result['pos_move_index'])
+                max_idx += 1  # capture any tp_updates from just after the exposure or exp iteration
+                cmd_tp = f"log_note like '%tp_update%' and pos_move_index >= {min_idx} and pos_move_index <= {max_idx}"
+        cmd = f'select * {from_where} {posid_date}'
+        if cmd_exp and cmd_tp:
+            combined = f'({cmd_exp}) or ({cmd_tp})'
+            cmd += f' and ({combined})'
+        elif cmd_exp:
+            cmd += f' and ({cmd_exp})'
         posmoves=dbquery(comm,cmd)
+
+        if args.pos_ids == 'movers':
+            has_move_cmd = {x not in {'', None} for x in posmoves['move_cmd']}
+            if not any(has_move_cmd):
+                continue
 
         # add petal loc
         posmoves["PETAL_LOC"] = np.repeat(petal_loc,len(posmoves["petal_id"]))
@@ -95,7 +121,7 @@ for petalid in petalids :
                 posmoves[k]=list()
 
             for t in tstamp_posmovedb :
-                j=np.where(tstamp_calib<t)[0][-1]
+                j=np.where(tstamp_calib<=t)[0][-1]
                 for k1,k2 in zip(new_keys,calib.keys()) :
                     posmoves[k1].append(calib[k2][j])
 
@@ -127,3 +153,5 @@ for petalid in petalids :
         ofilename="{}/{}.csv".format(args.outdir,posid)
         otable.write(ofilename,overwrite=True)
         print("wrote",ofilename)
+
+print(f'Total elapsed time: {time.time() - start_time:.1f} sec')

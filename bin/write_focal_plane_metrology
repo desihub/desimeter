@@ -92,6 +92,25 @@ for i,row in enumerate(gfa_patch):
 spots = vstack([spots, gfa_patch])
 
 
+log.info("add columns with PETAL_ID, DEVICE_ID")
+# first version of this file copied from desimodel/data/focalplane/desi-focalplane_2020-03-06T00:00:00.ecsv
+filename = resource_filename('desimeter',"data/desi_positioner_indexes.csv")
+table_with_ids = Table.read(filename)
+location = 1000*np.array(table_with_ids["PETAL_LOC"])+np.array(table_with_ids["DEVICE_LOC"])
+loc2index  = {loc:i for i,loc in enumerate(location)}
+selection  = (spots["DEVICE_TYPE"]=="POS") | (spots["DEVICE_TYPE"]=="FIF") | (spots["DEVICE_TYPE"]=="GIF")
+tableindex = [loc2index[loc] for loc in spots["LOCATION"][selection]]
+for k in ["DEVICE_ID","BUS_ID","CAN_ID"] :
+    if k == "DEVICE_ID" :
+        spots[k] = np.repeat("unknown    ",len(spots))
+    else :
+        spots[k] = np.repeat(-1,len(spots))
+    spots[k][selection] = table_with_ids[k][tableindex]
+    print("adding",k,np.array(spots[k][selection][:5]),"...")
+
+ploc2id = {ploc : table_with_ids["PETAL_ID"][table_with_ids["PETAL_LOC"]==ploc][0] for ploc in np.unique(table_with_ids["PETAL_LOC"])}
+spots["PETAL_ID"] = [ploc2id[ploc] for ploc in spots["PETAL_LOC"]]
+
 spots.write(args.outfile,format='csv',overwrite=True)
 
 log.info("wrote {}".format(args.outfile))

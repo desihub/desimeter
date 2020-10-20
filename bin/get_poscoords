@@ -1,0 +1,130 @@
+#!/usr/bin/env python
+
+import os
+import psycopg2
+import numpy as np
+from astropy.table import Table,vstack
+import argparse
+import time
+start_time = time.time()
+
+from desimeter.util import parse_fibers
+from desimeter.dbutil import dbquery,get_petal_ids,get_pos_ids,get_petal_loc
+from desimeter.transform.pos2ptl import int2ptl
+from desimeter.transform.ptl2fp import ptl2fp
+import matplotlib.pyplot as plt
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="""Retrieve data from posmove DB and save to disk as CSV table. Similar to get_posmoves, but designed for comparison with FVC image""")
+
+parser.add_argument('--host', type= str, required=False, default='db.replicator.dev-cattle.stable.spin.nersc.org', help="db.replicator.dev-cattle.stable.spin.nersc.org for kpno or beyonce.lbl.gov for petaltest")
+parser.add_argument('--port', type= int, required=False, default=60042, help="60042 for kpno or 5432 for petaltest")
+parser.add_argument('--password', type= str, required=False, default=None, help="nothing for kpno")
+parser.add_argument('--petal-ids', type= str, required=False, default=None, help="comma separated list of petal ids")
+parser.add_argument('--exposure-id', type= int, required=True, default=None, help="exposure id")
+parser.add_argument('--exposure-iter', type= int, required=False, default=0, help="exposure iter")
+parser.add_argument('-o', '--outfile', type = str, required = True, default=None,  help="output csv file name")
+parser.add_argument('--plot', action = 'store_true',  help="plot")
+
+args  = parser.parse_args()
+
+# example
+# get_poscoords --host beyonce.lbl.gov --port 5432 --password reader --exposure-id 3172 --outfile expected-coords-3172.csv --petal-ids 1 --plot
+
+# open connection
+comm = psycopg2.connect(host=args.host,port=args.port, database='desi_dev', user='desi_reader',password=args.password)
+
+
+if args.petal_ids is not None :
+    petalids = parse_fibers(args.petal_ids)
+else :
+    petalids = get_petal_ids(comm)
+
+otable = None
+
+for petalid in petalids :
+
+    petal_loc = get_petal_loc(petalid)
+    cmd  = "select * from posmovedb.positioner_moves_p{} where exposure_id={} and exposure_iter={}".format(int(petalid),args.exposure_id,args.exposure_iter)
+    posmoves = dbquery(comm, cmd)
+    
+    # add petal loc
+    posmoves["PETAL_LOC"] = np.repeat(petal_loc,len(posmoves["petal_id"]))
+
+    # make sure there is no comma in log_note
+    if "log_note" in posmoves :
+        for i in range(len(posmoves["log_note"])) :
+            if posmoves["log_note"][i] is not None:
+                posmoves["log_note"][i]=str(posmoves["log_note"][i]).replace(",",";")
+
+    npos=len(posmoves["pos_id"])
+    print("npos=",npos)
+    for postableindex,posid in enumerate(posmoves["pos_id"]) :
+
+        # adding calib info
+        cmd="select pos_calib_index, length_r1, length_r2, offset_x, offset_y, offset_t, offset_p, physical_range_t, physical_range_p, gear_calib_t, gear_calib_p, total_limit_seeks_t, total_limit_seeks_p, last_primary_hardstop_dir_t, last_primary_hardstop_dir_p, keepout_expansion_phi_radial, keepout_expansion_phi_angular, keepout_expansion_theta_radial, keepout_expansion_theta_angular, classified_as_retracted, time_recorded from posmovedb.positioner_calibration_p{} where pos_id='{}' order by time_recorded".format(int(petalid),posid)
+        
+        calib=dbquery(comm,cmd)
+
+        # get time stamps to match
+        tstamp_calib     =  np.array([d.timestamp() for d in calib["time_recorded"]])
+        tstamp_posmovedb =  np.array([d.timestamp() for d in posmoves["time_recorded"]])
+        
+        for k in calib.keys() :
+            if k == 'time_recorded' : continue
+            if k not in posmoves :
+                posmoves[k]=np.zeros(npos)
+
+        for t in tstamp_posmovedb :
+            j=np.where(tstamp_calib<t)[0][-1]
+            for k in calib.keys() :
+                if k == 'time_recorded' : continue
+                posmoves[k][postableindex] = calib[k][j]
+ 
+    # by default convert keys to upper case,
+    # but with special cases (of course),
+    rename_keys={
+        'obs_x':'X_FP_MEAS',
+        'obs_y':'Y_FP_MEAS',
+        'time_recorded':'DATE',
+        'calib_time_recorded':'CALIB_DATE',
+    }
+
+    table=Table()
+    for k in posmoves.keys() :
+
+        if k in rename_keys.keys() :
+            k2=rename_keys[k]
+        else :
+            k2=k.upper()
+
+        table[k2]=np.array(posmoves[k])
+
+    if otable is None :
+        otable = table
+    else :
+        otable = vstack(otable,table)
+
+# now compute expected positions
+t=otable
+t["X_PTL_EXP"] = np.zeros(npos)
+t["Y_PTL_EXP"] = np.zeros(npos)
+t["X_FP_EXP"] = np.zeros(npos)
+t["Y_FP_EXP"] = np.zeros(npos)
+for i in range(npos) :
+    t["X_PTL_EXP"][i], t["Y_PTL_EXP"][i] = int2ptl(t["POS_T"][i],t["POS_P"][i], t['LENGTH_R1'][i], t['LENGTH_R2'][i] , t['OFFSET_T'][i] , t['OFFSET_P'][i], t['OFFSET_X'][i] , t['OFFSET_Y'][i])
+
+for ploc in np.unique(t["PETAL_LOC"]) :
+    ii = (t["PETAL_LOC"]==ploc)
+    t["X_FP_EXP"][ii],t["Y_FP_EXP"][ii],_ = ptl2fp(ploc,t["X_PTL_EXP"][ii],t["Y_PTL_EXP"][ii],None)
+
+otable.write(args.outfile,overwrite=True)
+print("wrote",args.outfile)
+
+print(f'Total elapsed time: {time.time() - start_time:.1f} sec')
+
+
+if args.plot :
+    plt.plot(t["X_FP_MEAS"],t["Y_FP_MEAS"],"o")
+    plt.plot(t["X_FP_EXP"],t["Y_FP_EXP"],"x")
+    plt.show()

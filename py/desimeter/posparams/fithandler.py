@@ -44,7 +44,7 @@ def write_failed_fit(posid,savedir,flag) :
     output.write(filepath, overwrite=True)
 
 def run_best_fits(posid, path, period_days, data_window, savedir,
-                  static_quantile, printf=print, min_window=10, log_note_selection=None):
+                  static_quantile, printf=print, min_window=10, log_note_selection=None, force_recent_rehome=False):
     '''Define best-fit analysis cases for one positioner.
 
     INPUTS:
@@ -57,12 +57,12 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
         printf ... print function (so you can control how this module spits any messages)
         min_window ... (optional) minimum number of data points to attempt a fit
         log_note_selection ... (optional) required keywords in LOG_NOTE selection, seperated by '&', like ''arc calibration & use_desimeter=True'
-
+        force_recent_rehome ... (optional) force considering all moves where performed just after a rehoming
     OUTPUTS:
         logstr ... string describing (very briefly) what was done. suitable for
                    printing to stdout, etc
     '''
-    table = _read(posid=posid, path=path, printf=printf, log_note_selection=log_note_selection)
+    table = _read(posid=posid, path=path, printf=printf, log_note_selection=log_note_selection, force_recent_rehome=force_recent_rehome)
 
     if not table:
         write_failed_fit(posid,savedir,flag=movemask["INVALID_TABLE"])
@@ -154,13 +154,14 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
     logstr = f'{posid}: Best-fit results on {len(cases)} data windows written to {merged_filepath}'
     return logstr
 
-def _read(posid, path, printf=print, log_note_selection=None):
+def _read(posid, path, printf=print, log_note_selection=None,force_recent_rehome=False):
     '''Read csv file at path. File should contain positioner measured vs
     commanded data. Data is appropriately type cast as necessary.
 
     INPUTS:  posid ... expected unique POS_ID string to be found within table
              path ... file path to csv file for one positioner's data
              printf ... print function
+             force_recent_rehome ... (optional) force considering all moves where performed just after a rehoming
 
     OUTPUT:  table ... astropy table or None if no valid table found
     '''
@@ -185,6 +186,17 @@ def _read(posid, path, printf=print, log_note_selection=None):
     # refer to same sequences whatever the choice of time windows for the fit below
     table["SEQUENCE_ID"] = _sequences_of_consistent_posintTP(table)
 
+    if force_recent_rehome :
+        print("WARNING: Force recent rehome requested. I will set RECENT_REHOME=1 for all entries.")
+        print("WARNING: THE OFFSET_T AND OFFSET_P COMING FROM THIS FIT MIGHT NOT BE RELIABLE.")
+        table["RECENT_REHOME"] = np.repeat(1,len(table))
+
+    if np.sum(table["RECENT_REHOME"]>0)==0 :
+        print("ERROR: There in no entry with RECENT_REHOME=1 in {}".format(path))
+        print("ERROR: Entries with RECENT_REHOME=1 are required for the fit of OFFSET_T and OFFSET_P.")
+        print("ERROR: To do things right, you should recall get_posmoves with the option --recent-rehome-exposure-ids")
+        print("ERROR: The quick but not recommended alternative is to rerun fit_params with the option --force-recent-rehome")
+        raise RuntimeError("ERROR: There in no entry with RECENT_REHOME=1 in {}".format(path))
 
     table.sort('DATE')
     key_search = [key in table.columns for key in required_keys]
@@ -193,6 +205,8 @@ def _read(posid, path, printf=print, log_note_selection=None):
         for key,func in typecast_funcs.items():
             table[key] = [func(val) for val in table[key]]
         return table
+
+
     return None
 
 def _make_petal_xy(table, printf=print):
