@@ -26,3 +26,9 @@ pos2ptl_test_data.json
 --------------------------------------
 * generated using postransforms.py from SVN
 * used to validate equivalency of pos2ptl coordinate transformations
+
+desi_positioner_indexes.csv
+--------------------------------------
+* DEVICE_ID and PETAL_ID
+* copied from online/Positioner/PositionerIndexTable/trunk/index_files
+* latest: desi_positioner_indexes_20200123.csv
