@@ -4,6 +4,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from desimeter.io import load_metrology
+import argparse
+
+parser = argparse.ArgumentParser(description=__doc__)
+
+parser.add_argument('--device-ids', type= str, required=False, default=None, help="comma separated list of positioner or fiducial ids to highlight")
+
+args = parser.parse_args()
 
 spots    = load_metrology()
 
@@ -11,15 +18,24 @@ print(spots.dtype.names)
 print(np.unique(spots["DEVICE_TYPE"]))
 
 plt.figure(figsize=(6,6))
-for petal in np.unique(spots['PETAL_LOC']) :
-    selection=(spots['PETAL_LOC']==petal)&(spots['DEVICE_TYPE']=="POS")
-    petalid = spots['PETAL_ID'][selection][0]
-    plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",alpha=0.5,label="PETAL LOC={} ID={}".format(petal,petalid))
 
-for what in np.unique(spots['DEVICE_TYPE']) :
-    if what=="POS": continue
-    selection=(spots['DEVICE_TYPE']==what)
-    plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",label=what)
+if args.device_ids is not None :
+    selection=(spots['DEVICE_TYPE']=="POS")|(spots['DEVICE_TYPE']=="FIF")|(spots['DEVICE_TYPE']=="GIF")
+    plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",alpha=0.5,color="gray",label=None)
+    for did in args.device_ids.split(",") :
+        selection=(spots['DEVICE_ID']==did)
+        plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],"o",label=did)
+
+else :
+    for petal in np.unique(spots['PETAL_LOC']) :
+        selection=(spots['PETAL_LOC']==petal)&(spots['DEVICE_TYPE']=="POS")
+        petalid = spots['PETAL_ID'][selection][0]
+        plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",alpha=0.5,label="PETAL LOC={} ID={}".format(petal,petalid))
+
+    for what in np.unique(spots['DEVICE_TYPE']) :
+        if what=="POS": continue
+        selection=(spots['DEVICE_TYPE']==what)
+        plt.plot(spots["X_FP"][selection],spots["Y_FP"][selection],".",label=what)
 
 first=True
 for petal in np.unique(spots['PETAL_LOC']) :
@@ -34,6 +50,7 @@ for petal in np.unique(spots['PETAL_LOC']) :
             first = False
         else :
             label = None
+        if args.device_ids is not None : label = None
         plt.plot(x,y,"-",label=label,color="k")
 plt.legend()
 plt.show()
