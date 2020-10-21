@@ -188,9 +188,17 @@ def main():
         plt.ylabel('Fiducial offset (um)')
         plt.savefig('fid-%s.png' % k)
 
-    M = Twrapper(dm.metro)
-    print('Metrology columns:', M.get_columns())
+    # We're going to re-read the metrology table, because all the positions have been updated
+    # during dm.measure_spots.
 
+    fn = dm.find_file('metrology')
+    from astropy.table import Table
+    dm.metro = Table.read(fn)
+
+    M = Twrapper(dm.metro)
+    #M.orig_x_fp = M.x_fp.copy()
+    #M.orig_y_fp = M.y_fp.copy()
+    
     applied_dx = []
     applied_dy = []
 
@@ -222,17 +230,90 @@ def main():
         M.x_fp[IM] += dx
         M.y_fp[IM] += dy
 
-    petals = devids // 1000
-    applied_dx = np.array(applied_dx)
-    applied_dy = np.array(applied_dy)
-    for p in np.unique(petals):
-        I = np.flatnonzero(petals == p)
-        print('Petal', p, ': average dx,dy %.1f, %.1f um' %
-              (1000. * np.mean(applied_dx[I]), 1000. * np.mean(applied_dy[I])))
+    # I attempted to convert the shift + rotation of the GIFs into shift + rotation of the GFAs
+    # -- not complete!!
+    # petals = devids // 1000
+    # applied_dx = np.array(applied_dx)
+    # applied_dy = np.array(applied_dy)
+    # for p in np.unique(petals):
+    #     I = np.flatnonzero(petals == p)
+    #     print('Petal', p, ': average dx,dy %.1f, %.1f um' %
+    #           (1000. * np.mean(applied_dx[I]), 1000. * np.mean(applied_dy[I])))
+    #
+    #     ig1 = np.flatnonzero(devids == 1000*p + 541)
+    #     ig2 = np.flatnonzero(devids == 1000*p + 542)
+    #     if not(len(ig1) == 1 and len(ig2) == 1):
+    #         print('Petal', p, ': found', len(ig1), 'and', len(ig2), 'offsets for GIFs')
+    #         continue
+    #     dx1 = applied_dx[ig1]
+    #     dy1 = applied_dy[ig1]
+    #     dx2 = applied_dx[ig2]
+    #     dy2 = applied_dy[ig2]
+    #     G1 = np.flatnonzero((M.device_loc == 541) * (M.petal_loc == p))
+    #     G2 = np.flatnonzero((M.device_loc == 542) * (M.petal_loc == p))
+    #     if not(len(G1) == 4 and len(G2) == 4):
+    #         print('Petal', p, ': Found', len(G1), 'and', len(G2), 'GIFs -- not fixing GFAs')
+    #         continue
+    #     GIF1 = M[G1]
+    #     GIF2 = M[G2]
+    #
+    #     I = np.flatnonzero((M.petal_loc == p) * (M.device_type == 'GFA'))
+    #     if len(I) != 4:
+    #         print('Petal', p, ': Found', len(I), 'GFA points -- not fixing GFAs')
+    #         continue
+    #     GFA = M[I]
+    #
+    #     # Vectors from GIF1 to GIF2, before and after moving them.
+    #     gdx2 = np.mean(GIF2.x_fp) - np.mean(GIF1.x_fp)
+    #     gdy2 = np.mean(GIF2.y_fp) - np.mean(GIF1.y_fp)
+    #     gdx = np.mean(GIF2.orig_x_fp) - np.mean(GIF1.orig_x_fp)
+    #     gdy = np.mean(GIF2.orig_y_fp) - np.mean(GIF1.orig_y_fp)
+    #
+    #     print('gdx2,gdy2', gdx2,gdy2)
+    #     print('gdx ,gdy ', gdx ,gdy )
+    #
+    #     rot = (gdx * gdy2 - gdx2 * gdy) / (np.hypot(gdx, gdy) * np.hypot(gdx2, gdy2))
+    #     print('rot:', rot)
+    #     th = np.arcsin(rot)
+    #     print('angle:', np.rad2deg(th))
+    #
+    #     # check:
+    #     R = np.array([[np.cos(th), np.sin(th)], [-np.sin(th), np.cos(th)]])
+    #     rx,ry = np.dot(R, np.array([gdx, gdy]))
+    #     print('Rotated gdx,gdy:', rx,ry)
+    #     print('Rotated other way:', np.dot(R.T, np.array([gdx, gdy])))
+    #
+    #     avdx = (dx1 + dx2) / 2.
+    #     avdy = (dy1 + dy2) / 2.
+    #     print('Average GIF dx,dy: %.1f, %.1f um' % (1000.*avdx, 1000.*avdy))
+    #
+    #     cx = (np.mean(GIF1.orig_x_fp) + np.mean(GIF2.orig_x_fp)) / 2.
+    #     cy = (np.mean(GIF1.orig_y_fp) + np.mean(GIF2.orig_y_fp)) / 2.
+    #     print('max dist from GIF midpoint:', np.max(np.hypot(GFA.x_fp - cx, GFA.y_fp - cy)))
+    #
+    #     def transform(x,y):
+    #         dxy = np.array([x - cx, y - cy])
+    #         print('tx: dxy', dxy)
+    #         R = np.array([[np.cos(th), np.sin(th)], [-np.sin(th), np.cos(th)]])
+    #         print('R:', R)
+    #         rxy = np.dot(R, dxy)
+    #         print('tx: rxy', rxy)
+    #         newx = cx + rxy[0] + avdx
+    #         newy = cy + rxy[1] + avdy
+    #         return newx,newy
+    #
+    #     tx,ty = transform(GIF1.orig_x_fp, GIF1.orig_y_fp)
+    #     print('Transformed GIF1: dists', np.hypot(GIF1.x_fp - tx, GIF1.y_fp - ty))
+    #     tx,ty = transform(GIF2.orig_x_fp, GIF2.orig_y_fp)
+    #     print('Transformed GIF2: dists', np.hypot(GIF2.x_fp - tx, GIF2.y_fp - ty))
+    # M.delete_column('orig_x_fp')
+    # M.delete_column('orig_y_fp')
 
     outdir = 'dm-fid-sys'
     dm.write_desimeter(outdir)
 
+    import sys
+    sys.exit(0)
 
     # Check!
     newdm = Desimeter(desimeter_dir=outdir, proc_data_dir='proc-fid-sys')

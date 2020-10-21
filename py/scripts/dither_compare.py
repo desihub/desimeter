@@ -19,6 +19,7 @@ def main():
     log = get_logger()
 
     dm = Desimeter(desimeter_dir='dm-fid-sys', proc_data_dir='proc-dither')
+    #dm = Desimeter(proc_data_dir='proc')
 
     dither_file = 'dither20200315-63224-B.fits'
 
