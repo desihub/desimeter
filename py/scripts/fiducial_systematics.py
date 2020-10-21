@@ -195,9 +195,15 @@ def main():
     from astropy.table import Table
     dm.metro = Table.read(fn)
 
-    M = Twrapper(dm.metro)
+    mcopy = dm.metro.copy()
+    M = Twrapper(mcopy)
     #M.orig_x_fp = M.x_fp.copy()
     #M.orig_y_fp = M.y_fp.copy()
+
+    del mcopy['DEVICE_ID']
+    del mcopy['BUS_ID']
+    del mcopy['CAN_ID']
+    mcopy.write('fp-metro-pre.csv', overwrite=True)
     
     applied_dx = []
     applied_dy = []
@@ -229,6 +235,9 @@ def main():
 
         M.x_fp[IM] += dx
         M.y_fp[IM] += dy
+        M.provenance[IM] = 'fiducial-systematics.py'
+
+    mcopy.write('fp-metro-post.csv', overwrite=True)
 
     # I attempted to convert the shift + rotation of the GIFs into shift + rotation of the GFAs
     # -- not complete!!
