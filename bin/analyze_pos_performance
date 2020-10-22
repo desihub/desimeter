@@ -113,7 +113,7 @@ def strip_tag(tagged_string):
     '''Get the non-tag part of string.'''
     split = tagged_string.split(tag_separator)
     assert split[-1] in TAGS
-    prefix = tag_separator.join(split[:-2])
+    prefix = tag_separator.join(split[:-1])
     return prefix
     
 def get_tag(tagged_string):
@@ -1029,7 +1029,7 @@ def histogram(table, tag, sigma):
         plot_idx =  submoves.index(submove) + 1
         ax = plt.subplot(nrows, ncols, plot_idx, sharex=ax)
         selection = get_idxs(table, submove, sigma, tag)
-        data = table[selection][add_tag(tag, 'ERR_XY')] * unit_scale
+        data = table[selection][add_tag(super_tag, 'ERR_XY')] * unit_scale
         if bins is None:
             bins = knuth_bin_width(data, return_bins=True)[1]
             bins = max(len(bins), n_bins_min)
@@ -1154,18 +1154,24 @@ if __name__ == '__main__':
         bigstr += get_description(table, submove)
         bigstr += '\n' + get_exposure_description(table)
         bigstr += '\n'
-        for tag in [TRACKED, REQUESTED]:
+        for tag in [TRACKED, REQUESTED, ACCEPTED]:
             bigstr += f'\nWith respect to {tag} targets...'
             bigstr += '\n' + meta_str(summaries[tag])
             bigstr += '\n' + get_summary_stats_str(summaries[tag], submove=submove, tag=tag)
-    for tag in [TRACKED, REQUESTED]:
+    for tag in [TRACKED, REQUESTED, ACCEPTED]:
         bigstr += f'\n\nTop {user_args.n_top_errs} errors for {tag} targets...\n'
         err_col = add_tag(tag, 'ERR_XY')
         err_col_um = err_col + '_UM'
         top_err_cols = ['DATE', 'PETAL_ID', 'POS_ID', 'POS_MOVE_INDEX', 'EXPOSURE_ID', 'EXPOSURE_ITER',
                         'SEQUENCE', 'SEQUENCE_MOVE_IDX', 'SUBMOVE'] + [err_col_um]
-        moves.sort(err_col, reverse=True)
-        display_table = moves[:user_args.n_top_errs].copy()
+        display_table = moves.copy()
+        if tag == ACCEPTED:
+            super_tag = get_super_tag(tag)
+            super_err_col = add_tag(super_tag, strip_tag(err_col))
+            display_table[err_col] = display_table[super_err_col]
+            display_table.remove_rows(np.logical_not(moves[ACCEPTED]))
+        display_table.sort(err_col, reverse=True)
+        display_table = display_table[:user_args.n_top_errs]
         for remove_if_empty in ['SEQUENCE', 'SEQUENCE_MOVE_IDX']:
             if not(any(display_table[remove_if_empty])):
                 i = top_err_cols.index(remove_if_empty)
