@@ -1080,9 +1080,11 @@ def histogram(table, tag, sigma):
             bins = knuth_bin_width(data, return_bins=True)[1]
             bins = max(len(bins), n_bins_min)
         _, bins, _ = hist(data, bins=bins, max_bins=1000)
+        max_ = max(data)
         mean = np.mean(data)
         rms = stat_funcs['rms'](data)
         vert_lims = plt.ylim()
+        plt.plot([max_, max_], vert_lims, '--', color='orange', label=f'max:{max_:7.1f}')
         plt.plot([mean, mean], vert_lims, 'r--', label=f'mean:{mean:6.1f}')
         plt.plot([rms, rms], vert_lims, 'k--', label=f'rms:{rms:7.1f}')
         if plot_idx > (nrows - 1) * ncols:  # i.e. bottom row
@@ -1180,13 +1182,9 @@ if __name__ == '__main__':
         table = moves[submove_selection]
         note1 = get_description(table, submove)
         note1 += '\n' + get_exposure_description(table)
-        
-        # 2020-09-28 [JHS] only printing out TRACKED here, perhaps figure out
-        # formatting plot to include REQUESTED as a future enhancement
-        # for now, will at least capture in bigstr (see below)
         note1 += '\n' + meta_str(summaries[TRACKED])
-        note2 = get_summary_stats_str(summaries[TRACKED], submove=submove, tag=TRACKED)
-        
+        stats_tag = TRACKED if submove == 0 else ACCEPTED
+        note2 = get_summary_stats_str(summaries[stats_tag], submove=submove, tag=stats_tag)        
         path, chart_limits = bigchart(table, note1, note2, chart_limits)
         log.info(f'Saved big chart for submove {submove} to {path}')
     
