@@ -420,13 +420,27 @@ def identify_avoidances(table):
 
 def identify_accepted(table):
     '''Identifies whether moves were "ACCEPTED" at runtime. See comments at top.
-    INPUT:  table ... astropy table including columns
+    INPUT:  table ... astropy table including columns 'FROZEN' and 'SUBMOVE'
     OUTPUT: copy of table, including new column ACCEPTED
     '''
-    new = sequential_copy(table)    
-    new[ACCEPTED] = new['FROZEN'].copy()  # 2020-10-22 [JHS] any other criteria? finite MOVE_CMD, MOVE_VAL1, MOVE_VAL2? Some inspection of FLAGS?
+    new = sequential_copy(table)
+    new[ACCEPTED] = False
+    last_submove0 = None
+    for row in new:
+        submove_accepted = not(row['FROZEN'])
+        if row['SUBMOVE'] == 0:
+            row[ACCEPTED] = submove_accepted
+            last_submove0 = row
+            found_orig_target_move = True 
+        elif last_submove0:
+            found_orig_target_move = row['EXPOSURE_ID'] == last_submove0['EXPOSURE_ID'] and \
+                                     row['MOVE_COUNTER'] - row['SUBMOVE'] == last_submove0['MOVE_COUNTER']
+            row[ACCEPTED] = submove_accepted and last_submove0[ACCEPTED]
+        else:
+            found_orig_target_move = False
+        assert found_orig_target_move, f'it appears some data has a correction move with no original target, which is invalid\n{row}'
+    new[ACCEPTED] 
     return new
-
 
 def identify_sequences(table):
     '''Identifies named target sequences.
@@ -565,6 +579,7 @@ def analyze_one_pos(table):
     new = identify_moves(new)
     new = identify_requests(new)
     new = identify_avoidances(new)
+    new = identify_accepted(new)
     new = identify_sequences(new)
     new = calc_errors(new, tag=TRACKED)
     new = calc_errors(new, tag=REQUESTED)
@@ -573,24 +588,26 @@ def analyze_one_pos(table):
     new = calc_radii(new, tag=REQUESTED)
     new = detect_num_fvc_images(new)
     stats_cols = ['POS_ID', 'SUBMOVE']
-    stats_cols += [add_tag(tag, 'N_TARGETS') for tag in [TRACKED, REQUESTED]]
-    tagged_funcs = {add_tag(tag, name): func for name, func in stat_funcs.items() for tag in [TRACKED, REQUESTED]}
+    stats_tags = [TRACKED, REQUESTED, ACCEPTED]
+    stats_cols += [add_tag(tag, 'N_TARGETS') for tag in stats_tags]
+    tagged_funcs = {add_tag(tag, name): func for name, func in stat_funcs.items() for tag in stats_tags}
     stats_cols += list(tagged_funcs)
     stats_dict = {name:[] for name in stats_cols}
     submoves = get_submove_ids(new)
     for submove in submoves:
         selection = get_idxs(new, submove)
-        err_xy_tracked = new[add_tag(TRACKED, 'ERR_XY')][selection].tolist()
-        err_xy_request = new[add_tag(REQUESTED, 'ERR_XY')][selection].tolist()
+        err_xy = {key: new[add_tag(TRACKED, 'ERR_XY')][selection].tolist() for key in [TRACKED, REQUESTED]}
+        accepted = new[ACCEPTED][selection].tolist()
+        err_xy[ACCEPTED] = [err_xy[REQUESTED][i] for i in range(len(accepted)) if accepted[i]]
         stats_dict['POS_ID'].append(posid)
         stats_dict['SUBMOVE'].append(submove)
-        stats_dict[add_tag(TRACKED, 'N_TARGETS')].append(len(err_xy_tracked))
-        stats_dict[add_tag(REQUESTED, 'N_TARGETS')].append(len(err_xy_request))
+        for tag, data in err_xy.items():
+            stats_dict[add_tag(tag, 'N_TARGETS')].append(len(data))
         for name, func in tagged_funcs.items():
-            if get_tag(name) == TRACKED:
-                stats_dict[name].append(func(err_xy_tracked))
-            else:
-                stats_dict[name].append(func(err_xy_request))
+            tag = get_tag(name)
+            data = err_xy[tag]
+            evaluated = func(data)
+            stats_dict[name].append(evaluated)
     stats = Table(stats_dict)
     log.info(f'Analyzed {posid}: {len(new)} data rows, {len(submoves)} submoves')
     return new, stats
