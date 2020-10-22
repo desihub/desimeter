@@ -11,10 +11,14 @@ retrieved using the "get_posmoves --with-calib" tool.
 #                 show whether we have control over the robots.
 #
 #   REQUESTED ... Due to anticollision, travel limits, and enabled/disabled state,
-#                 the petal has the right to refuse some targets. Hence REQUESTED
+#                 the petal has the right to refuse some targets, or "freeze" the
+#                 move prior to achieving the requested final position. Hence REQUESTED
 #                 will vary from TRACKED in these cases. Errors calculated with
 #                 respect to REQUESTED show us how well we are getting fibers to
 #                 desired locations / whether our desired locations are possible.
+#
+#    ACCEPTED ... Subset of REQUESTED, but eliminating those moves for which targets
+#                 were rejected outright at runtime.
 #
 # See "TAGS" implementation below, for how I've handled labeling to differentiate.
 
@@ -91,8 +95,9 @@ all_move_coords = abs_move_coords | rel_move_coords
 # tagging of different position value types
 TRACKED = 'TRACKED'  # refers to internally-tracked angles 'POS_T', 'POS_P'
 REQUESTED = 'REQUESTED'  # refers to user-requested target positions
+ACCEPTED = 'ACCEPTED'  # subset of requested, includes only targets which were not rejected
 MEASURED = 'MEASURED'  # refers to measured values
-TAGS = [TRACKED, REQUESTED, MEASURED]
+TAGS = [TRACKED, REQUESTED, ACCEPTED, MEASURED]
 tag_separator = '_'
 def add_tag(tag_str, other_str):
     '''Return a tagged string with standard format.'''
@@ -307,7 +312,7 @@ def identify_requests(table):
     INPUTS:  table ... astropy table containing 'POS_MOVE_INDEX', 'MOVE_CMD',
                       'EXPOSURE_ID', 'MOVE', and 'SUBMOVE'
                       
-    OUTPUT:  copy of table, with new columns 
+    OUTPUT:  copy of table, including new columns tagged as REQUESTED
              
     Note that 'MOVE' values may not be unique, if the dataset includes multiple
     tests. In such cases, uniqueness can be determined by inspecting also the
@@ -392,13 +397,14 @@ def identify_requests(table):
 def identify_avoidances(table):
     '''Identifies collision avoidance cases.
     INPUT:  table ... astropy table including column 'LOG_NOTE'
-    OUTPUT: copy of table, including new column 'NUM_COLLISION_AVOIDANCES'  
+    OUTPUT: copy of table, including new columns 'NUM_COLLISION_AVOIDANCES', 'FROZEN'
     '''
     new = sequential_copy(table)
     key = 'collision avoidance'
     sep = ': '
     log_notes = new['LOG_NOTE'].tolist()
     counts = [0] * len(log_notes)
+    frozen = [False] * len(log_notes)
     for i in range(len(log_notes)):
         tokens = tokenize_note(log_notes[i])
         for token in tokens:
@@ -407,8 +413,20 @@ def identify_avoidances(table):
                 avoidances_str = split[1]
                 avoidances = avoidances_str.strip('[').strip(']').replace("'","").replace(' ','').split(',')
                 counts[i] += len(avoidances)
+                frozen[i] = any('freeze' in string for string in avoidances)
     new['NUM_COLLISION_AVOIDANCES'] = counts
+    new['FROZEN'] = frozen
     return new
+
+def identify_accepted(table):
+    '''Identifies whether moves were "ACCEPTED" at runtime. See comments at top.
+    INPUT:  table ... astropy table including columns
+    OUTPUT: copy of table, including new column ACCEPTED
+    '''
+    new = sequential_copy(table)    
+    new[ACCEPTED] = new['FROZEN'].copy()  # 2020-10-22 [JHS] any other criteria? finite MOVE_CMD, MOVE_VAL1, MOVE_VAL2? Some inspection of FLAGS?
+    return new
+
 
 def identify_sequences(table):
     '''Identifies named target sequences.
