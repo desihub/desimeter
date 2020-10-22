@@ -424,22 +424,7 @@ def identify_accepted(table):
     OUTPUT: copy of table, including new column ACCEPTED
     '''
     new = sequential_copy(table)
-    new[ACCEPTED] = False
-    last_submove0 = None
-    for row in new:
-        submove_accepted = not(row['FROZEN'])
-        if row['SUBMOVE'] == 0:
-            row[ACCEPTED] = submove_accepted
-            last_submove0 = row
-            found_orig_target_move = True 
-        elif last_submove0:
-            found_orig_target_move = row['EXPOSURE_ID'] == last_submove0['EXPOSURE_ID'] and \
-                                     row['MOVE_COUNTER'] - row['SUBMOVE'] == last_submove0['MOVE_COUNTER']
-            row[ACCEPTED] = submove_accepted and last_submove0[ACCEPTED]
-        else:
-            found_orig_target_move = False
-        assert found_orig_target_move, f'it appears some data has a correction move with no original target, which is invalid\n{row}'
-    new[ACCEPTED] 
+    new[ACCEPTED] = [not(x) for x in new['FROZEN']]
     return new
 
 def identify_sequences(table):
