@@ -1068,7 +1068,7 @@ def histogram(table, tag, sigma):
     plt.suptitle(title, fontfamily='monospace', verticalalignment='top', fontsize='medium')    
     expids_str = get_expids_str(table, for_filename=True)
     sigma_str = get_sigma_str(sigma, for_filename=True)
-    path = os.path.join(save_dir, f'expid_{expids_str}_hist_sigma_{sigma_str}_{tag}.{img_format}')
+    path = os.path.join(save_dir, f'expid_{expids_str}_hist_{tag}_sigma_{sigma_str}.{img_format}')
     limits = finalize_plot(path, limits)
     return path
 
