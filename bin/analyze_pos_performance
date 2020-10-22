@@ -121,6 +121,12 @@ def get_tag(tagged_string):
     suffix = tagged_string.split(tag_separator)[-1]
     assert suffix in TAGS
     return suffix
+
+def get_super_tag(tag):
+    '''For tags which use a subset of another tag's data, get the super tag.'''
+    if tag == ACCEPTED:
+        return REQUESTED
+    return tag
     
 # statistics functions for summarizing errors
 stat_funcs = {'max': np.max, 'min': np.min, 'mean': np.mean, 'median': np.median,
@@ -285,9 +291,9 @@ def get_idxs(table, submove, sigma=None, tag=TRACKED):
     OUTPUT: list of row index integers
     '''
     selection = table['SUBMOVE'] == submove
-    search_tag = REQUESTED if tag == ACCEPTED else tag
+    super_tag = get_super_tag(tag)
     if sigma:
-        selection &= table[add_tag(search_tag, 'SIGMA_CEILING')] <= sigma
+        selection &= table[add_tag(super_tag, 'SIGMA_CEILING')] <= sigma
     if tag == ACCEPTED:
         selection &= table[ACCEPTED]
     sel_idxs = np.where(selection)[0].tolist()
@@ -586,8 +592,8 @@ def analyze_one_pos(table):
         err_xy = {}
         for tag in [TRACKED, REQUESTED, ACCEPTED]:
             selection = get_idxs(new, submove, tag=tag)
-            search_tag = REQUESTED if tag == ACCEPTED else tag  # because ACCEPTED is a subset of REQUESTED data
-            err_xy[tag] = new[add_tag(search_tag, 'ERR_XY')][selection].tolist()
+            super_tag = get_super_tag(tag)  # because ACCEPTED is a subset of REQUESTED data
+            err_xy[tag] = new[add_tag(super_tag, 'ERR_XY')][selection].tolist()
         stats_dict['POS_ID'].append(posid)
         stats_dict['SUBMOVE'].append(submove)
         for tag, data in err_xy.items():
@@ -1014,6 +1020,7 @@ def histogram(table, tag, sigma):
     limits = {'xfig': 9.5, 'yfig': 7.0, 'dpi': 200, 'tight_layout': False}
     init_plot(limits)
     ax = None
+    super_tag = get_super_tag(tag)
     for submove in submoves:
         plot_idx =  submoves.index(submove) + 1
         ax = plt.subplot(nrows, ncols, plot_idx, sharex=ax)
@@ -1167,8 +1174,8 @@ if __name__ == '__main__':
         
     # plot histograms
     for tag in [TRACKED, REQUESTED, ACCEPTED]:
-        sigma_search_tag = REQUESTED if tag == ACCEPTED else tag
-        sigmas = get_sigmas(moves, sigma_search_tag)
+        super_tag = get_super_tag(tag)
+        sigmas = get_sigmas(moves, super_tag)
         for sigma in sigmas:
             path = histogram(moves, tag, sigma)
             log.info(f'Saved histogram for sigma={sigma} to {path}')
