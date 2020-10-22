@@ -280,13 +280,14 @@ def identify_moves(table):
     new['SUBMOVE'] = submoves
     return new
 
-def get_idxs(table, submove, sigma=None, tag=TRACKED):
+def get_idxs(table, submove, sigma=None, tag=TRACKED, as_bool=False):
     '''Returns a list of idxs for rows associated with the argued submove.
     
     INPUT:  table ... astropy table including column 'SUBMOVE'
             submove ... integer
             sigma ... optional, like 1, 2, 3, ... math.inf or np.inf are also valid
             tag ... str, c.f. TAGS, required when arguing sigma
+            as_bool ... return an array of booleans, same length as table, instead of index numbers
             
     OUTPUT: list of row index integers
     '''
@@ -296,6 +297,8 @@ def get_idxs(table, submove, sigma=None, tag=TRACKED):
         selection &= table[add_tag(super_tag, 'SIGMA_CEILING')] <= sigma
     if tag == ACCEPTED:
         selection &= table[ACCEPTED]
+    if as_bool:
+        return selection
     sel_idxs = np.where(selection)[0].tolist()
     return sel_idxs
 
@@ -631,14 +634,15 @@ def identify_quantiles(table, tag=TRACKED, sigmas=[1,2,3,4,5,math.inf]):
     new = table.copy()
     sigma_ceiling_name = add_tag(tag, 'SIGMA_CEILING')
     quantile_ceiling_name = add_tag(tag, 'QUANTILE_CEILING')
-    err_xy_name = add_tag(tag, 'ERR_XY')
+    super_tag = get_super_tag(tag)
+    err_xy_name = add_tag(super_tag, 'ERR_XY')
     new[sigma_ceiling_name] = math.inf
     new[quantile_ceiling_name] = 1.0
     submoves = get_submove_ids(new)
     sigmas = sorted(sigmas, reverse=True)  # start with narrowest group (largest sigma), then broaden
     quantiles = {s: sigma_to_quantile(s)  for s in sigmas}
     for submove in submoves:
-        submove_selection = new['SUBMOVE'] == submove
+        submove_selection = get_idxs(new, submove, tag=tag, as_bool=True)
         for sigma in sigmas:
             quantile = quantiles[sigma]
             cutoff = np.quantile(new[err_xy_name][submove_selection], quantile, interpolation='midpoint')
@@ -1117,9 +1121,10 @@ if __name__ == '__main__':
     stats.rename_columns(list(stats.columns), [col.upper() for col in stats.columns])
     
     # binning
-    moves = identify_quantiles(moves, tag=TRACKED)
-    moves = identify_quantiles(moves, tag=REQUESTED)
-    summaries = {tag: summarize_stats(moves, tag) for tag in [TRACKED, REQUESTED, ACCEPTED]}    
+    summaries = {}
+    for tag in [TRACKED, REQUESTED, ACCEPTED]:
+        moves = identify_quantiles(moves, tag=tag)
+        summaries[tag] = summarize_stats(moves, tag)  
     
     # plot big xy charts
     chart_limits = {}
