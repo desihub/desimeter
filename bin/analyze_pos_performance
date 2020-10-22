@@ -423,7 +423,11 @@ def identify_avoidances(table):
             split = token.split(sep)
             if key == split[0]:
                 avoidances_str = split[1]
-                avoidances = avoidances_str.strip('[').strip(']').replace("'","").replace(' ','').split(',')
+                avoidances = avoidances_str.strip('[').strip(']').replace("'","").replace(' ','')
+                for possible_separator in ['||', '|', ',']:
+                    if possible_separator in avoidances:
+                        avoidances = avoidances.split(possible_separator)
+                        break
                 counts[i] += len(avoidances)
                 frozen[i] = any('freeze' in string for string in avoidances)
     new['NUM_COLLISION_AVOIDANCES'] = counts
