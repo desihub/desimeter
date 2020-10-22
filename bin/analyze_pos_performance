@@ -182,7 +182,7 @@ def remove_unused_columns(table):
     new.remove_columns(list(useless))
     return new
 
-flags_to_check = {'PINHOLE', 'POSITIONER', 'FIDUCIAL', 'GIF'}
+flags_to_ignore = {'PINHOLE', 'POSITIONER', 'FIDUCIAL', 'GIF'}
 
 def identify_posflags(table):
     '''Decodes FLAGS field. Uses any keys in flags_to_ignore.
@@ -191,19 +191,14 @@ def identify_posflags(table):
     OUTPUT:  copy of table, with new column 'FLAG_STRINGS'
     
     The human-readable key strings for any flags which are found will be stored
-    within a variable length list.
+    as comma-separated strings.
     '''
     new = sequential_copy(table)
     flags = new['FLAGS']
-    flag_strs = [posflags_mask.names(int(flag)) for flag in flags]
-    
-    # magical hack around buggy astropy handling of list types (without this
-    # you sometimes get lists, sometimes np arrays --- and no, arguing proper
-    # typecasting calls do *not* work)
-    col = Column(np.ma.array(flag_strs + [None]))
-    col = col[:-1]
-    
-    new['FLAG_STRINGS'] = col
+    flag_str_lists = [posflags_mask.names(flag) for flag in flags]
+    reduced = [[f for f in L if f not in flags_to_ignore] for L in flag_str_lists]
+    combined = [str(L).strip('[').strip(']').replace(', ',' || ').replace("'",'') for L in reduced]
+    new['FLAG_STRINGS'] = combined
     return new
 
 def remove_unmatched_rows(table):
