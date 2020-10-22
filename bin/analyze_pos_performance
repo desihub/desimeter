@@ -399,18 +399,13 @@ def identify_requests(table):
         is_abs = coord in abs_move_coords
         is_request = submove0 and is_abs
         if not submove0:
-            parent_submove0 = new['MOVE']==new['MOVE'][i]
-            parent_submove0 &= new['EXPOSURE_ID']==new['EXPOSURE_ID'][i]
+            parent_submove0 = new['POS_ID'] == new['POS_ID'][i]
+            parent_submove0 &= new['MOVE'] == new['MOVE'][i]
+            parent_submove0 &= new['EXPOSURE_ID'] == new['EXPOSURE_ID'][i]
             parent_submove0 &= new['SUBMOVE'] == 0
-        must_reconstruct_request = not submove0 and not any(parent_submove0)
-        if must_reconstruct_request:
-            t_int_0 = new['POS_T'][i-1]
-            p_int_0 = new['POS_P'][i-1]
-            t_ext_0 = pos2ptl.int2ext(t_int_0, new['OFFSET_T'][i])
-            p_ext_0 = pos2ptl.int2ext(p_int_0, new['OFFSET_P'][i])
-            x_loc_0, y_loc_0 = pos2ptl.ext2loc(t_ext_0, p_ext_0,  r1=new['LENGTH_R1'][i], r2=new['LENGTH_R2'][i])
-        if is_request or must_reconstruct_request:
-            if coord in {'QS', 'ptlXY', 'obsXY', 'obsdXdY', 'dQdS'}:
+            has_parent_request = any(parent_submove0)
+        if is_request:
+            if coord in {'QS', 'ptlXY', 'obsXY'}:
                 if coord == 'ptlXY':
                     x_ptl, y_ptl = vals0[i], vals1[i]   
                 else:
@@ -419,19 +414,6 @@ def identify_requests(table):
                         x_fp, y_fp = xy2qs.qs2xy(vals0[i], vals1[i])
                     elif coord == 'obsXY':
                         x_fp, y_fp = vals0[i], vals1[i]
-                    elif coord in {'obsdXdY', 'dQdS'}:
-                        x_flat_0 = pos2ptl.loc2flat(x_loc_0, new['OFFSET_X'][i])
-                        y_flat_0 = pos2ptl.loc2flat(y_loc_0, new['OFFSET_Y'][i])
-                        x_ptl_0, y_ptl_0 = pos2ptl.flat2ptl(x_flat_0, y_flat_0)
-                        x_fp_0, y_fp_0 = ptl2fp.ptl2fp(ptl_loc, x_ptl_0, y_ptl_0)
-                        if coord == 'obsdXdY':
-                            x_fp = vals0[i] + x_fp_0
-                            y_fp = vals1[i] + y_fp_0
-                        else:
-                            q_0, s_0 = xy2qs.xy2qs(x_fp_0, y_fp_0)
-                            q = vals0[i] + q_0
-                            s = vals1[i] + s_0
-                            x_fp, y_fp = xy2qs.qs2xy(q, s)
                     x_ptl, y_ptl, z_ptl = ptl2fp.fp2ptl(ptl_loc, x_fp, y_fp)
                 x_flat[i], y_flat[i] = pos2ptl.ptl2flat(x_ptl, y_ptl)
             elif coord in {'poslocXY', 'posintTP', 'poslocTP', 'poslocdXdY', 'dTdP'}:
@@ -451,20 +433,17 @@ def identify_requests(table):
                                                    p_ext=p_ext,
                                                    r1=new['LENGTH_R1'][i],
                                                    r2=new['LENGTH_R2'][i])
-                elif coord in 'poslocdXdY':
-                    x_loc += vals0[i]
-                    y_loc += vals1[i]
-                elif coord = 'dTdP':
-                    x_loc, y_loc = pos2ptl.ptl2int(x_ptl, y_ptl, r1, r2, t_offset, p_offset, x_offset, y_offset,
-            t_int_guess=None, t_guess_tol=xy2tp.default_t_guess_tol)
                 else:
                     assert False, f'command coordinates {coord} not recognized'
                 x_flat[i] = pos2ptl.loc2flat(x_loc, new['OFFSET_X'][i])
                 y_flat[i] = pos2ptl.loc2flat(y_loc, new['OFFSET_Y'][i])
             last_known_request_idx = i
         elif not submove0:
-            x_flat[i] = x_flat[last_known_request_idx]
-            y_flat[i] = y_flat[last_known_request_idx]
+            if has_parent_request:
+                x_flat[i] = x_flat[last_known_request_idx]
+                y_flat[i] = y_flat[last_known_request_idx]
+            else:
+                print(f'{new["POS_ID"][i]}: no parent request for expid={new["EXPOSURE_ID"][i]} move={new["MOVE"][i]} submove={new["SUBMOVE"][i]}')
         else:
             assert False, f'Unexpected case for {new["POS_ID"][i]} at row {i}. Not handled right in identify_requests(), needs debugging.'
     for vec in [x_flat, y_flat]:
