@@ -581,7 +581,7 @@ def analyze_one_pos(table):
     submoves = get_submove_ids(new)
     for submove in submoves:
         selection = get_idxs(new, submove)
-        err_xy = {key: new[add_tag(TRACKED, 'ERR_XY')][selection].tolist() for key in [TRACKED, REQUESTED]}
+        err_xy = {key: new[add_tag(key, 'ERR_XY')][selection].tolist() for key in [TRACKED, REQUESTED]}
         accepted = new[ACCEPTED][selection].tolist()
         err_xy[ACCEPTED] = [err_xy[REQUESTED][i] for i in range(len(accepted)) if accepted[i]]
         stats_dict['POS_ID'].append(posid)
