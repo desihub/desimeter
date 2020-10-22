@@ -27,7 +27,7 @@ parser.add_argument('-o', '--outdir', type = str, default = "None", required = T
 parser.add_argument('-c', '--with-calib', action = 'store_true', help="add matching calib from db")
 parser.add_argument('-t', '--tp-updates', action='store_true', help="include rows where no move was done but POS_T, POS_P was updated")
 parser.add_argument('--recent-rehome-exposure-ids', type= str, required=False, default=None, help="comma separated list of exposure ids where the positioners have been recently rehomed")
-parser.add_argument('-comma', '--comma-replacement', type=str, default='|', help='replace commas in data strings with this in output csv files)')
+parser.add_argument('-comma', '--comma-replacement', type=str, default='||', help='replace commas in data strings with this in output csv files)')
 
 args  = parser.parse_args()
 
