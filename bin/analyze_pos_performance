@@ -280,13 +280,16 @@ def get_idxs(table, submove, sigma=None, tag=TRACKED):
     INPUT:  table ... astropy table including column 'SUBMOVE'
             submove ... integer
             sigma ... optional, like 1, 2, 3, ... math.inf or np.inf are also valid
-            tag ... str, c.f. TAGS, only needed when arguing sigma
+            tag ... str, c.f. TAGS, required when arguing sigma
             
     OUTPUT: list of row index integers
     '''
     selection = table['SUBMOVE'] == submove
+    search_tag = REQUESTED if tag == ACCEPTED else tag
     if sigma:
-        selection &= table[add_tag(tag, 'SIGMA_CEILING')] <= sigma
+        selection &= table[add_tag(search_tag, 'SIGMA_CEILING')] <= sigma
+    if tag == ACCEPTED:
+        selection &= table[ACCEPTED]
     sel_idxs = np.where(selection)[0].tolist()
     return sel_idxs
 
@@ -580,10 +583,11 @@ def analyze_one_pos(table):
     stats_dict = {name:[] for name in stats_cols}
     submoves = get_submove_ids(new)
     for submove in submoves:
-        selection = get_idxs(new, submove)
-        err_xy = {key: new[add_tag(key, 'ERR_XY')][selection].tolist() for key in [TRACKED, REQUESTED]}
-        accepted = new[ACCEPTED][selection].tolist()
-        err_xy[ACCEPTED] = [err_xy[REQUESTED][i] for i in range(len(accepted)) if accepted[i]]
+        err_xy = {}
+        for tag in [TRACKED, REQUESTED, ACCEPTED]:
+            selection = get_idxs(new, submove, tag=tag)
+            search_tag = REQUESTED if tag == ACCEPTED else tag  # because ACCEPTED is a subset of REQUESTED data
+            err_xy[tag] = new[add_tag(search_tag, 'ERR_XY')][selection].tolist()
         stats_dict['POS_ID'].append(posid)
         stats_dict['SUBMOVE'].append(submove)
         for tag, data in err_xy.items():
@@ -655,6 +659,8 @@ def summarize_stats(table, tag=TRACKED, stat_names=stat_funcs.keys()):
                      and columns corresponding to the uppercased names of the argued
                      stats functions. Table includes metadata: n_positioners, n_targets
     '''
+    reduce_to_accepted = tag == ACCEPTED
+    tag = REQUESTED if reduce_to_accepted else tag
     missing_funcs = set(stat_names) - set(stat_funcs)
     assert not(any(missing_funcs)), f'undefined stat funcs {missing_funcs}'
     uppercase_names = {key: key.upper() for key in stat_names}
@@ -668,6 +674,8 @@ def summarize_stats(table, tag=TRACKED, stat_names=stat_funcs.keys()):
     min_radius = math.inf
     for submove in submoves:
         submove_selection = table['SUBMOVE'] == submove
+        if reduce_to_accepted:
+            submove_selection = np.logical_and(submove_selection, table[ACCEPTED])
         radii = table[add_tag(tag, 'RADIUS')][submove_selection].tolist()
         max_radius = max(max_radius, max(radii))
         min_radius = min(min_radius, min(radii))
@@ -992,7 +1000,7 @@ def histogram(table, tag, sigma):
     '''Make a histogram of positioning errors.
     
     INPUT:  table ... astropy table including 'ERR_XY', 'SUBMOVE', and 'S'
-            tag ... TRACKED or REQUESTED
+            tag ... TRACKED, REQUESTED, or ACCEPTED
             sigma ... which cut to plot
             
     OUTPUT: path ... path to output plot file
@@ -1104,7 +1112,7 @@ if __name__ == '__main__':
     # binning
     moves = identify_quantiles(moves, tag=TRACKED)
     moves = identify_quantiles(moves, tag=REQUESTED)
-    summaries = {tag: summarize_stats(moves, tag) for tag in [TRACKED, REQUESTED]}    
+    summaries = {tag: summarize_stats(moves, tag) for tag in [TRACKED, REQUESTED, ACCEPTED]}    
     
     # plot big xy charts
     chart_limits = {}
@@ -1158,8 +1166,9 @@ if __name__ == '__main__':
         bigstr += '\n'
         
     # plot histograms
-    for tag in [TRACKED, REQUESTED]:
-        sigmas = get_sigmas(moves, tag)
+    for tag in [TRACKED, REQUESTED, ACCEPTED]:
+        sigma_search_tag = REQUESTED if tag == ACCEPTED else tag
+        sigmas = get_sigmas(moves, sigma_search_tag)
         for sigma in sigmas:
             path = histogram(moves, tag, sigma)
             log.info(f'Saved histogram for sigma={sigma} to {path}')
@@ -1175,7 +1184,7 @@ if __name__ == '__main__':
     stats.write(stats_path, overwrite=True)
     log.info(f'Saved positioner-by-positioner performance stats to {stats_path}')
     for tag, summary in summaries.items():
-        summary_path_base = os.path.join(save_dir, f'{expids_str}_{tag}_stats_summary')
+        summary_path_base = os.path.join(save_dir, f'{expids_str}_stats_summary_{tag}')
         ecsv_path = summary_path_base + '.ecsv'
         summary.write(ecsv_path, overwrite=True, delimiter=',')
         log.info(f'Saved overall summary stats + metadata to {ecsv_path}')
