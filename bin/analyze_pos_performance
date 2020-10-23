@@ -1224,11 +1224,11 @@ if __name__ == '__main__':
         bigstr += get_description(table, submove)
         bigstr += '\n' + get_exposure_description(table)
         bigstr += '\n'
-        for tag in [TRACKED, REQUESTED, ACCEPTED]:
+        for tag in [ACCEPTED, TRACKED, REQUESTED]:
             bigstr += f'\nWith respect to {tag} targets...'
             bigstr += '\n' + meta_str(summaries[tag])
             bigstr += '\n' + get_summary_stats_str(summaries[tag], submove=submove, tag=tag)
-    for tag in [TRACKED, REQUESTED, ACCEPTED]:
+    for tag in [ACCEPTED, TRACKED, REQUESTED]:
         bigstr += f'\n\nTop {user_args.n_top_errs} errors for {tag} targets...\n'
         err_col = add_tag(tag, 'ERR_XY')
         err_col_um = err_col + '_UM'
