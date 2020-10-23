@@ -210,7 +210,7 @@ def remove_unmatched_rows(table):
     new = table.copy()
     unmatched = [not('MATCHED' in flags) for flags in new['FLAG_STRINGS']]
     new.remove_rows(unmatched)
-    return new    
+    return new
 
 def read(path):
     '''Read in data from disk. If data has multiple posids, their respective data
@@ -319,6 +319,31 @@ def identify_moves(table):
     new['SUBMOVE'] = submoves
     return new
 
+def remove_orphan_submoves(table):
+    '''Deletes rows for which submoves >= 1 exist, but no submove == 0. This may
+    occur for example, when submove0 is rejected. As of this writing (2020-10-22)
+    in such cases no information about the desired user request gets written to
+    the logs, hence the orphans don't fit into the analysis framework.
+    
+    INPUT:  table ... astropy table including POS_ID, MOVE, EXPOSURE_ID, and SUBMOVE
+    OUTPUT: copy of table, may have fewer rows
+    '''
+    new = sequential_copy(table)
+    orphans = []
+    for i in range(len(new)):
+        if new['SUBMOVE'][i] > 0:
+            parent_submove0 = new['POS_ID'] == new['POS_ID'][i]
+            parent_submove0 &= new['MOVE'] == new['MOVE'][i]
+            parent_submove0 &= new['EXPOSURE_ID'] == new['EXPOSURE_ID'][i]
+            parent_submove0 &= new['SUBMOVE'] == 0
+            has_parent = any(parent_submove0)
+            if not has_parent:
+                orphans.append(i)
+                print(f'{new["POS_ID"][i]}: no parent request for expid={new["EXPOSURE_ID"][i]} move={new["MOVE"][i]} submove={new["SUBMOVE"][i]}, row  will be deleted')
+    if orphans:
+        new.remove_rows(orphans)
+    return new
+
 def get_idxs(table, submove, sigma=None, tag=TRACKED, as_bool=False):
     '''Returns a list of idxs for rows associated with the argued submove.
     
@@ -398,12 +423,6 @@ def identify_requests(table):
         submove0 = new['SUBMOVE'][i] == 0
         is_abs = coord in abs_move_coords
         is_request = submove0 and is_abs
-        if not submove0:
-            parent_submove0 = new['POS_ID'] == new['POS_ID'][i]
-            parent_submove0 &= new['MOVE'] == new['MOVE'][i]
-            parent_submove0 &= new['EXPOSURE_ID'] == new['EXPOSURE_ID'][i]
-            parent_submove0 &= new['SUBMOVE'] == 0
-            has_parent_request = any(parent_submove0)
         if is_request:
             if coord in {'QS', 'ptlXY', 'obsXY'}:
                 if coord == 'ptlXY':
@@ -439,11 +458,8 @@ def identify_requests(table):
                 y_flat[i] = pos2ptl.loc2flat(y_loc, new['OFFSET_Y'][i])
             last_known_request_idx = i
         elif not submove0:
-            if has_parent_request:
-                x_flat[i] = x_flat[last_known_request_idx]
-                y_flat[i] = y_flat[last_known_request_idx]
-            else:
-                print(f'{new["POS_ID"][i]}: no parent request for expid={new["EXPOSURE_ID"][i]} move={new["MOVE"][i]} submove={new["SUBMOVE"][i]}')
+            x_flat[i] = x_flat[last_known_request_idx]
+            y_flat[i] = y_flat[last_known_request_idx]
         else:
             assert False, f'Unexpected case for {new["POS_ID"][i]} at row {i}. Not handled right in identify_requests(), needs debugging.'
     for vec in [x_flat, y_flat]:
@@ -629,6 +645,7 @@ def analyze_one_pos(table):
     posid = posids.pop()
     new = identify_posflags(new)
     new = identify_moves(new)
+    new = remove_orphan_submoves(new)
     new = identify_requests(new)
     new = identify_avoidances(new)
     new = identify_accepted(new)
