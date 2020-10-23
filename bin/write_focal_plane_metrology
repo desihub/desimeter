@@ -91,6 +91,22 @@ for i,row in enumerate(gfa_patch):
 
 spots = vstack([spots, gfa_patch])
 
+log.info('applying empirical cheat patch to GFA pixel X_FP, Y_FP')
+filename = resource_filename('desimeter', 'data/fp-metrology-cheat-patch.csv')
+log.info(' from {}'.format(filename))
+cheat_patch = Table.read(filename, format='csv')
+
+for i, row in enumerate(cheat_patch):
+    m = ((spots['DEVICE_TYPE'] == row['DEVICE_TYPE']) &
+         (spots['PINHOLE_ID'] == row['PINHOLE_ID']) &
+         (spots['PETAL_LOC'] == row['PETAL_LOC']))
+    ind = np.flatnonzero(m)
+    if len(ind) > 1:
+        raise ValueError('Error applying cheat patch; multiple matches.')
+    j = ind[0]
+    spots['X_FP'][j] = row['X_FP']
+    spots['Y_FP'][j] = row['Y_FP']
+
 
 log.info("add columns with PETAL_ID, DEVICE_ID")
 # first version of this file copied from desimodel/data/focalplane/desi-focalplane_2020-03-06T00:00:00.ecsv
