@@ -18,7 +18,9 @@ retrieved using the "get_posmoves --with-calib" tool.
 #                 desired locations / whether our desired locations are possible.
 #
 #    ACCEPTED ... Subset of REQUESTED, but eliminating those moves for which targets
-#                 were rejected outright at runtime.
+#                 were rejected, generally because we had to "freeze" the robot
+#                 prior to reaching the target position, as a final measure to
+#                 prevent ollision.
 #
 # See "TAGS" implementation below, for how I've handled labeling to differentiate.
 
@@ -96,7 +98,7 @@ all_move_coords = abs_move_coords | rel_move_coords
 # tagging of different position value types
 TRACKED = 'TRACKED'  # refers to internally-tracked angles 'POS_T', 'POS_P'
 REQUESTED = 'REQUESTED'  # refers to user-requested target positions
-ACCEPTED = 'ACCEPTED'  # subset of requested, includes only targets which were not rejected
+ACCEPTED = 'ACCEPTED'  # subset of requested, includes only targets we thought we actually achieved
 MEASURED = 'MEASURED'  # refers to measured values
 TAGS = [TRACKED, REQUESTED, ACCEPTED, MEASURED]
 tag_separator = '_'
