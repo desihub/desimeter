@@ -188,25 +188,29 @@ def main():
         plt.ylabel('Fiducial offset (um)')
         plt.savefig('fid-%s.png' % k)
 
-    # We're going to re-read the metrology table, because all the positions have been updated
-    # during dm.measure_spots.
+    # We re-read the metrology table before updating, because all the
+    # positions were updated during dm.measure_spots, and we only want
+    # to change the FIFs and GIFs.
 
     fn = dm.find_file('metrology')
     from astropy.table import Table
     dm.metro = Table.read(fn)
+    M = Twrapper(dm.metro)
 
+    # For double-checking, write out a "pre" update metrology file,
+    # with columns matched to what are in the fp-metrology-patch.csv
+    # file.
     mcopy = dm.metro.copy()
-    M = Twrapper(mcopy)
-    #M.orig_x_fp = M.x_fp.copy()
-    #M.orig_y_fp = M.y_fp.copy()
-
     del mcopy['DEVICE_ID']
     del mcopy['BUS_ID']
     del mcopy['CAN_ID']
-    mcopy.write('fp-metro-pre.csv', overwrite=True)
-    
+    I = np.lexsort((mcopy['PINHOLE_ID'], mcopy['DEVICE_LOC'], mcopy['PETAL_ID']))
+    mcopy[I].write('fp-metro-pre.csv', overwrite=True)
+    del mcopy
+
     applied_dx = []
     applied_dy = []
+    all_changed = []
 
     devids = np.unique(fids.devid)
     for d in devids:
@@ -237,7 +241,22 @@ def main():
         M.y_fp[IM] += dy
         M.provenance[IM] = 'fiducial-systematics.py'
 
-    mcopy.write('fp-metro-post.csv', overwrite=True)
+        all_changed.append(IM)
+
+    # For double-checking, the "post" metrology file.
+    mcopy = dm.metro.copy()
+    del mcopy['DEVICE_ID']
+    del mcopy['BUS_ID']
+    del mcopy['CAN_ID']
+    I = np.lexsort((mcopy['PINHOLE_ID'], mcopy['DEVICE_LOC'], mcopy['PETAL_ID']))
+    mcopy[I].write('fp-metro-post.csv', overwrite=True)
+
+    # Now just a "diff" version (containing only FIFs and GIFs that
+    # have changed) that can be appended to fp-metrology-patch.csv
+    all_changed = np.hstack(all_changed)
+    delta = mcopy[all_changed]
+    I = np.lexsort((delta['PINHOLE_ID'], delta['DEVICE_LOC'], delta['PETAL_ID']))
+    delta[I].write('fp-metro-diff.csv', overwrite=True)
 
     # I attempted to convert the shift + rotation of the GIFs into shift + rotation of the GFAs
     # -- not complete!!

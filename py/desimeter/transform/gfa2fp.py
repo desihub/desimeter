@@ -92,7 +92,7 @@ def fit_gfa2fp(metrology):
             corr = SimpleCorr()
             corr.fit(xgfa, ygfa, xfp, yfp)
 
-            print('xyz fp:', xfp, yfp, zfp)
+            #print('xyz fp:', xfp, yfp, zfp)
 
             #- measure norm of plane
             x01 =  np.array( [ xfp[1]-xfp[0], yfp[1]-yfp[0], zfp[1]-zfp[0] ] )
