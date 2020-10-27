@@ -75,6 +75,8 @@ parser.add_argument('--turbulence-correction', action = 'store_true',
                     help = 'turbulence correction assuming offsets between measured and expected coordinates are not spatially correlated. Only used in conjunction with option --expected-positions.')
 parser.add_argument('--turbulence-correction-with-pol', action = 'store_true',
                     help = 'turbulence correction using local polynomial fit instead of Gaussian processes.')
+parser.add_argument('--make-directory', action='store_true',
+                    help='Make directory for output if needed.')
 
 args  = parser.parse_args()
 log   = get_logger()
@@ -141,6 +143,17 @@ else :
     log.info("sorry, I don't know what to do with input file {} because not .fits nor .csv".format(filename))
     sys.exit(12)
 
+
+if args.make_directory:
+    directory, fn = os.path.split(args.outfile)
+    if directory != '':
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+    if args.output_transform is not None:
+        directory, fn = os.path.split(args.outfile)
+        if directory != '':
+            if not os.path.exists(directory):
+                os.makedirs(directory)
 
 for seqid,spots in enumerate(spots_list) :
 

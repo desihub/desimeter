@@ -19,6 +19,8 @@ parser.add_argument('-o','--outfile', type = str, default = None, required = Tru
 parser.add_argument('--fits-header', type = str, default = None, required = True,
                     help = 'path to file with fits header to read time and sky coordinates')
 parser.add_argument('--plot', action = 'store_true')
+parser.add_argument('--make-directory', action='store_true',
+                    help='Make directory for output if needed.')
 
 args  = parser.parse_args()
 log   = get_logger()
@@ -53,6 +55,12 @@ fm.lst  = mjd2lst(fm.mjd) # mjd is set when reading catalog or above
 fm.fit_tancorr(catalog)
 
 # save it
+if args.make_directory:
+    directory, fn = os.path.split(args.outfile)
+    if directory != '':
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
 with open(args.outfile, 'w') as file:
     file.write(fm.tojson())
 print("wrote",args.outfile)
