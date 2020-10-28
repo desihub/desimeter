@@ -26,3 +26,18 @@ pos2ptl_test_data.json
 --------------------------------------
 * generated using postransforms.py from SVN
 * used to validate equivalency of pos2ptl coordinate transformations
+
+desi_positioner_indexes.csv
+--------------------------------------
+* DEVICE_ID and PETAL_ID
+* copied from online/Positioner/PositionerIndexTable/trunk/index_files
+* latest: desi_positioner_indexes_20200123.csv
+
+fp-metrology-patch.csv
+--------------------------------------
+* Updated positions of fiducials (FIFs and GIFs) based on consistent residuals
+  in sequences on 2020-03-14/15 (expnums in [55353, 55692])
+    - In commit 512b1339 (`update-fiducials` branch)
+    - PR https://github.com/desihub/desimeter/pull/148
+    - script: `script/fiducial_systematics.py` (`objorient` branch)
+    - slides: .. _`DESI-5894`: https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=5894
