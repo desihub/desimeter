@@ -88,6 +88,10 @@ class FVC2FP(object):
         params['offset_y'] = self.offset_y
         params['zbpolids'] = [int(polid) for polid in self.zbpolids]
         params['zbcoeffs'] = list(self.zbcoeffs)
+        params['meandistance'] = self.meandistance
+        params['mediandistance'] = self.mediandistance
+        params['rmsdistance'] = self.rmsdistance
+        params['nmatch'] = self.nmatch
         return json.dumps(params)
 
     def __str__(self) :
@@ -115,10 +119,12 @@ class FVC2FP(object):
         else :
             raise RuntimeError("don't know version {}".format(params['version']))
 
-        if 'xfvc_scale' in params  : tx.xfvc_scale = params['xfvc_scale']
-        if 'yfvc_scale' in params  : tx.yfvc_scale = params['yfvc_scale']
-        if 'xfvc_offset' in params : tx.xfvc_offset = params['xfvc_offset']
-        if 'yfvc_offset' in params : tx.yfvc_offset = params['yfvc_offset']
+        add_fields = ['xfvc_scale', 'yfvc_scale', 'xfvc_offset', 'yfvc_offset',
+                      'meandistance', 'mediandistance', 'rmsdistance',
+                      'nmatch']
+        for field in add_fields:
+            if field in params:
+                setattr(tx, field, params[field])
 
         return tx
 
@@ -181,8 +187,12 @@ class FVC2FP(object):
         dx = (metrology['X_FP'] - xfp_fidmeas)
         dy = (metrology['Y_FP'] - yfp_fidmeas)
         dr = np.sqrt(dx**2 + dy**2)
+        self.meandistance = 1000*np.mean(dr)
+        self.mediandistance = 1000*np.median(dr)
+        self.rmsdistance = 1000*np.sqrt(np.mean(dr**2))
+        self.nmatch = len(fidspots)
         log.info('Mean, median, RMS distance = {:.1f}, {:.1f}, {:.1f} um'.format(
-            1000*np.mean(dr), 1000*np.median(dr), 1000*np.sqrt(np.mean(dr**2))))
+            self.meandistance, self.mediandistance, self.rmsdistance))
 
         if update_spots:
             xfp_meas, yfp_meas = self.fvc2fp(spots['XPIX'], spots['YPIX'])
