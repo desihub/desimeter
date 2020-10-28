@@ -118,7 +118,7 @@ example:
 
 
     xpix,ypix = fvc2fp.fp2fvc(x_fp,y_fp)
-
+    
     with open(filename,"w") as ofile :
         for i in range(xpix.size) :
             ofile.write("{} {:4.3f} {:4.3f} 12.000 0.001 {}\n".format(location[i],xpix[i],ypix[i],flags[i]))
@@ -233,7 +233,7 @@ def _write_spotmatch_reference_pos_file(filename,fvc2fp=None) :
 
     print("wrote",filename)
 
-def spotmatch(xpix,ypix,expected_x_fp=None,expected_y_fp=None,expected_location=None,verbose=0,match_radius_pixels=70) :
+def spotmatch(xpix,ypix,expected_x_fp=None,expected_y_fp=None,expected_location=None,verbose=0,match_radius_pixels=70,fvc2fp=None) :
     """
     Wrapper to spotmatch in desimeter. Calls the C executable 'match_positions' that has to be in the path. All inputs
     to match_positions are generated in this call using desimeter metrology table, the default fvc2fp transform and the inputs
@@ -248,6 +248,7 @@ def spotmatch(xpix,ypix,expected_x_fp=None,expected_y_fp=None,expected_location=
        expected_location :  1D numpy array with targets location index ( = petal_loc*10000+device_loc)
        verbose : 0 or 1
        match_radius_pixels : match radius in pixels
+       fvc2fp : desimeter.transform.fvc2fp.FVC2FP object
 
     returns :
        an astropy.table.Table object with at least the columns
@@ -277,7 +278,8 @@ def spotmatch(xpix,ypix,expected_x_fp=None,expected_y_fp=None,expected_location=
 
     tmp_dir=tempfile.gettempdir()
 
-    fvc2fp = FVC2FP.read(fvc2fp_filename())
+    if fvc2fp is None :
+        fvc2fp = FVC2FP.read(fvc2fp_filename())
     exp_pixel_scale = _compute_pixel_scale(fvc2fp)
 
 
