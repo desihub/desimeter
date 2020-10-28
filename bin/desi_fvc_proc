@@ -75,6 +75,7 @@ parser.add_argument('--turbulence-correction', action = 'store_true',
                     help = 'turbulence correction assuming offsets between measured and expected coordinates are not spatially correlated. Only used in conjunction with option --expected-positions.')
 parser.add_argument('--turbulence-correction-with-pol', action = 'store_true',
                     help = 'turbulence correction using local polynomial fit instead of Gaussian processes.')
+parser.add_argument('--spotmatch-match-radius-pixels', type = float, default = 70, required = False, help = "spotmatch matching radius")
 
 args  = parser.parse_args()
 log   = get_logger()
@@ -164,7 +165,7 @@ for seqid,spots in enumerate(spots_list) :
         continue
 
     if args.use_spotmatch :
-        spots = spotmatch(spots["XPIX"],spots["YPIX"])
+        spots = spotmatch(spots["XPIX"],spots["YPIX"],match_radius_pixels=args.spotmatch_match_radius_pixels)
         # drop pinholes, keep only center
         spots = spots[(spots["PINHOLE_ID"]==0)|(spots["PINHOLE_ID"]==99)]
         n_matched_fiducials = np.sum(spots['PINHOLE_ID'] == 99)
@@ -202,6 +203,13 @@ for seqid,spots in enumerate(spots_list) :
     if args.expected_positions is not None :
         log.info("reading expected positions in {}".format(args.expected_positions))
         expected_pos = Table.read(args.expected_positions) # auto-magically guess format
+
+        if (not "X_FP" in expected_pos.keys()) and "X_FP_EXP" in expected_pos.keys() :
+            log.warning("Rename X_FP_EXP,Y_FP_EXP -> X_FP,Y_FP")
+            expected_pos.rename_column("X_FP_EXP","X_FP")
+            expected_pos.rename_column("Y_FP_EXP","Y_FP")
+            
+
         if not "X_FP" in expected_pos.keys() :
             if "EXP_Q_0" in  expected_pos.keys() :
                 log.info("EXP_Q_0,EXP_S_0 -> X_FP,Y_FP")
@@ -230,27 +238,64 @@ for seqid,spots in enumerate(spots_list) :
     # select spots that are not already matched
     selection  = (spots["LOCATION"]==-1)
 
-    # match
-    indices_of_expected_pos,distances = match_same_system(spots["X_FP"][selection],spots["Y_FP"][selection],expected_pos["X_FP"],expected_pos["Y_FP"])
+    if args.use_spotmatch :
+        spots = spotmatch(spots["XPIX"],spots["YPIX"],expected_x_fp=expected_pos["X_FP"],expected_y_fp=expected_pos["Y_FP"],expected_location=expected_pos["LOCATION"],fvc2fp=tx,match_radius_pixels=args.spotmatch_match_radius_pixels)
+        #spots = spotmatch(spots["XPIX"],spots["YPIX"],expected_x_fp=expected_pos["X_FP"],expected_y_fp=expected_pos["Y_FP"],expected_location=expected_pos["LOCATION"],fvc2fp=None,match_radius_pixels=args.spotmatch_match_radius_pixels)
+        
 
-    is_matched = (distances<args.max_match_distance)&(indices_of_expected_pos>=0)
-    ii=np.where(selection)[0]
-    selection[ii]          &=  is_matched
-    indices_of_expected_pos = indices_of_expected_pos[is_matched]
-    distances               = distances[is_matched]
+        # add info
+        nspots = len(spots["LOCATION"])
+        for k in ["X_FP","Y_FP","X_FP_EXP","Y_FP_EXP","X_FP_METRO","Y_FP_METRO"] :
+            if k not in spots.dtype.names :
+                spots[k] = np.zeros(nspots,dtype=float)
+        
+        spots["X_FP"],spots["Y_FP"] = tx.fvc2fp(spots["XPIX"],spots["YPIX"])
+        
+        is_matched = (spots["LOCATION"]>=0)
+        loc2i = {loc:i for i,loc in enumerate(spots["LOCATION"])}
 
-    # add columns after matching fibers
-    for k1,k2 in zip(["X_FP","Y_FP"],["X_FP_EXP","Y_FP_EXP"]) :
-        if k2 not in spots.keys() : spots[k2] = np.zeros(len(spots))
-        spots[k2][selection]=expected_pos[k1][indices_of_expected_pos]
-    for k in ["EXP_Q_0","EXP_S_0","PETAL_LOC","DEVICE_LOC","DEVICE_ID","DEVICE_TYPE","LOCATION"] :
-        if k in expected_pos.keys() :
-            if k not in spots.keys() :
-                if k in ["DEVICE_ID","DEVICE_TYPE"] :
-                    spots[k] = np.repeat("None           ",len(spots))
-                else :
-                    spots[k] = np.zeros(len(spots))
-            spots[k][selection]=expected_pos[k][indices_of_expected_pos]
+        ii=[]
+        jj=[]
+        for j,loc in enumerate(expected_pos["LOCATION"]) :
+            if loc in loc2i :
+                ii.append(loc2i[loc])
+                jj.append(j)
+        spots["X_FP_EXP"][ii]=expected_pos["X_FP"][jj]
+        spots["Y_FP_EXP"][ii]=expected_pos["Y_FP"][jj]
+        
+        metrology = load_metrology()
+        ii=[]
+        jj=[]
+        for j,loc in enumerate(metrology["LOCATION"]) :
+            if loc in loc2i :
+                ii.append(loc2i[loc])
+                jj.append(j)
+        spots["X_FP_METRO"][ii]=metrology["X_FP"][jj]
+        spots["Y_FP_METRO"][ii]=metrology["Y_FP"][jj]
+        
+            
+    else :
+        
+        # match
+        indices_of_expected_pos,distances = match_same_system(spots["X_FP"][selection],spots["Y_FP"][selection],expected_pos["X_FP"],expected_pos["Y_FP"])
+        is_matched = (distances<args.max_match_distance)&(indices_of_expected_pos>=0)
+        ii=np.where(selection)[0]
+        selection[ii]          &=  is_matched
+        indices_of_expected_pos = indices_of_expected_pos[is_matched]
+        distances               = distances[is_matched]
+
+        # add columns after matching fibers
+        for k1,k2 in zip(["X_FP","Y_FP"],["X_FP_EXP","Y_FP_EXP"]) :
+            if k2 not in spots.keys() : spots[k2] = np.zeros(len(spots))
+            spots[k2][selection]=expected_pos[k1][indices_of_expected_pos]
+        for k in ["EXP_Q_0","EXP_S_0","PETAL_LOC","DEVICE_LOC","DEVICE_ID","DEVICE_TYPE","LOCATION"] :
+            if k in expected_pos.keys() :
+                if k not in spots.keys() :
+                    if k in ["DEVICE_ID","DEVICE_TYPE"] :
+                        spots[k] = np.repeat("None           ",len(spots))
+                    else :
+                        spots[k] = np.zeros(len(spots))
+                spots[k][selection]=expected_pos[k][indices_of_expected_pos]
 
     if args.expected_positions is not None and ( args.turbulence_correction or args.turbulence_correction_with_pol ):
 
@@ -273,11 +318,12 @@ for seqid,spots in enumerate(spots_list) :
         spots["X_FP"][selection] = new_x
         spots["Y_FP"][selection] = new_y
 
-    # for spots with metrology X_FP_EXP=X_FP_METRO
-    selection = (spots["X_FP_METRO"]!=0)
-    spots["X_FP_EXP"][selection]=spots["X_FP_METRO"][selection]
-    selection = (spots["Y_FP_METRO"]!=0)
-    spots["Y_FP_EXP"][selection]=spots["Y_FP_METRO"][selection]
+    if "X_FP_METRO" in spots :
+        # for spots with metrology X_FP_EXP=X_FP_METRO
+        selection = (spots["X_FP_METRO"]!=0)
+        spots["X_FP_EXP"][selection]=spots["X_FP_METRO"][selection]
+        selection = (spots["Y_FP_METRO"]!=0)
+        spots["Y_FP_EXP"][selection]=spots["Y_FP_METRO"][selection]
 
     # write transfo
     if args.output_transform is not None :
