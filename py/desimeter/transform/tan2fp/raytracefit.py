@@ -145,9 +145,16 @@ class TAN2FP_RayTraceFit(object) :
         dadc_array[dadc_array<0] += 360.
         sorted_indices=np.argsort(dadc_array)
         dadc_array = dadc_array[sorted_indices]
-        dadc_arg   = (adc2-adc1)
-        if dadc_arg < 0 : dadc_arg = 0.
-        elif dadc_arg > 180 : dadc_arg = 180.
+
+        dadc_arg   = put360(adc2 - adc1)
+        # In principle, the two ADCs could be *set* to the same angle
+        # but *measured* to be ADC2 - ADC1 = -1 degrees -> 359
+        # degrees.  Convert that to zero, with an arbitrary limit of 1
+        # degree error.
+        if dadc_arg > 359:
+            dadc_arg = 0.
+        dadc_arg = np.clip(dadc_arg, 0., 180.)
+
         scale    = interp1d(dadc_array,self.scale[sorted_indices],'cubic')(dadc_arg)
         rotation = interp1d(dadc_array,self.rotation[sorted_indices],'cubic')(dadc_arg)
         offset_x = interp1d(dadc_array,self.offset_x[sorted_indices],'cubic')(dadc_arg)
