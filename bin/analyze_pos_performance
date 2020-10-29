@@ -494,9 +494,8 @@ def identify_avoidances(table):
                 separator = separator_options[0]
                 avoidances = avoidances.split(separator)
                 counts[i] += len(avoidances)
-                frozen[i] = any('freeze' in string for string in avoidances)
         if 'FROZEN' in new['FLAG_STRINGS'][i]:
-            frozen[i] = True  # redundant check, in case of discrepancy in log note parsing
+            frozen[i] = True
     new['NUM_COLLISION_AVOIDANCES'] = counts
     new['FROZEN'] = frozen
     return new
