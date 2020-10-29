@@ -8,6 +8,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 
 from desimeter.transform.zhaoburge import getZhaoBurgeXY, transform, fitZhaoBurge
+from desimeter.trig import average_angles_deg, put360
 
 #- Utility transforms to/from reduced [-1,1] coordinates
 def _reduce_xyfp(x, y):
@@ -163,7 +164,7 @@ class TAN2FP_RayTraceFit(object) :
         """
         scale,rotation,offset_x,offset_y,zbcoeffs = self.interpolate_coeffs(adc1,adc2)
 
-        mean_adc_rad = np.deg2rad((adc1+adc2)/2.)
+        mean_adc_rad = np.deg2rad(average_angles_deg(adc1, adc2))
         ca = np.cos(mean_adc_rad)
         sa = np.sin(mean_adc_rad)
 
@@ -189,7 +190,7 @@ class TAN2FP_RayTraceFit(object) :
 
         scale,rotation,offset_x,offset_y,zbcoeffs = self.interpolate_coeffs(adc1, adc2)
 
-        mean_adc_rad = np.deg2rad((adc1+adc2)/2.)
+        mean_adc_rad = np.deg2rad(average_angles_deg(adc1, adc2))
         ca = np.cos(mean_adc_rad)
         sa = np.sin(mean_adc_rad)
 
