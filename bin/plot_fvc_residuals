@@ -47,7 +47,7 @@ else :
     ym = table["Y_FP_METRO"][ii]
     pid = table["PINHOLE_ID"][ii]
 
-selection = (table["LOCATION"]>0)&(table["X_FP_EXP"]!=0)&(table["PINHOLE_ID"]>0)
+selection = (table["LOCATION"]>=0)&(table["X_FP_EXP"]!=0)&(table["PINHOLE_ID"]>0)
 number_of_fiducials = np.unique(table["LOCATION"][selection]).size
 print("Number of fiducials that are ON=",number_of_fiducials)
 
@@ -58,8 +58,12 @@ fig = plt.figure(figsize=(6,6))
 a = plt.subplot(1,1,1)
 a.set_title(os.path.basename(filename))
 
-a.plot(table["X_FP"],table["Y_FP"],".",alpha=0.5,label="all spots")
+a.plot(table["X_FP"],table["Y_FP"],".",alpha=0.5,label="all measured spots")
+#a.plot(table["X_FP_EXP"],table["Y_FP_EXP"],"x",alpha=0.5,label="X,Y_FP_EXP")
+#a.plot(table["X_FP_METRO"],table["Y_FP_METRO"],"+",alpha=0.5,label="X,Y_FP_METRO")
+#plt.legend(loc="upper left")
 
+#plt.show()
 if not args.expected : # plotting match to fiducials
     # plotting all of FIF and GIF
     metrology = load_metrology()
@@ -75,40 +79,40 @@ if args.expected :
 else :
     label = "matched metrology"
     marker = "o"
-a.scatter(xm,ym,marker=marker,edgecolors="orange",facecolors="none",label=label)
-if args.expected :
-    from desimeter.transform.fvc2fp import FVC2FP
-    from desimeter.io import fvc2fp_filename,load_metrology
-    metrology = load_metrology()
-    input_tx = FVC2FP.read_jsonfile(fvc2fp_filename())
-    xpix=np.array([2000.,]) ; ypix=np.array([0.,])
-    xfp1,yfp1 = input_tx.fvc2fp(xpix,ypix)
-    xfp2,yfp2 = input_tx.fvc2fp(xpix+1,ypix)
-    pixel2fp  = np.hypot(xfp2-xfp1, yfp2-yfp1)[0] # mm
 
-    match_radius_pixels = 70
-    match_radius_mm = pixel2fp*match_radius_pixels
-    print("draw match radius = {} pixels = {} mm".format(match_radius_pixels,match_radius_mm))
+a.scatter(xm,ym,marker=marker,edgecolors="orange",facecolors="none",label=label)
+
+if args.expected :
+    radius_mm = 6. #pixel2fp*match_radius_pixels
     angle=np.linspace(0,2*np.pi,50)
-    ca=match_radius_mm*np.cos(angle)
-    sa=match_radius_mm*np.sin(angle)
-    for xxm,yym,xx,yy,ppid in zip(xm,ym,x,y,pid) :
-        if ppid==0 : # a positioner
-            a.plot(xxm+ca,yym+sa,"-",color="orange")
-            a.plot([xxm,xx],[yym,yy],"-",color="orange")
+    ca=radius_mm*np.cos(angle)
+    sa=radius_mm*np.sin(angle)
+    if "X_FP_METRO" in table.dtype.names and "DEVICE_TYPE" in table.dtype.names :
+        ok=table["DEVICE_TYPE"]=="POS"
+        for xx,yy in zip(table["X_FP_METRO"][ok],table["Y_FP_METRO"][ok]) :
+            a.plot(xx+ca,yy+sa,"-",color="gray",alpha=0.4)
+    # also display unmatched
+    metrology = load_metrology()
+    unmatched = ~np.in1d(metrology["LOCATION"],table["LOCATION"])
+    unmatched_positioners = unmatched & (metrology["DEVICE_TYPE"]=="POS")
+    print("unmatched positioners = {}".format(list(metrology["DEVICE_ID"][unmatched_positioners])))
+    for xx,yy in zip(metrology["X_FP"][unmatched_positioners],metrology["Y_FP"][unmatched_positioners]):
+        a.plot(xx+ca,yy+sa,"-",color="red",alpha=0.4)
+    
 
 dx=xm-x
 dy=ym-y
 
 if args.posids is not None :
     posids=args.posids.split(",")
+    metrology = load_metrology()
     for posid in posids :
-        i=np.where(table["DEVICE_ID"]==posid)[0]
+        i=np.where(metrology["DEVICE_ID"]==posid)[0]
         if len(i)==0 :
-            print(posid,"not matched")
+            print(posid,"not in metrology")
             continue
         i=i[0]
-        plt.plot(table["X_FP"][i],table["Y_FP"][i],"o",label=posid)
+        plt.plot(metrology["X_FP"][i],metrology["Y_FP"][i],"o",alpha=0.6,markersize=10,label=posid)
 
 
 
@@ -119,13 +123,16 @@ elif jj.size > 0 : # sadly
     print("Large residuals")
     for j in jj :
         i=ii[j]
-        line = "dx={:4.3f}mm dy={:4.3f}mm".format(dx[j],dy[j])
-        for k in table.dtype.names :
+        line=""
+        #for k in table.dtype.names :
+        for k in ["DEVICE_ID","X_FP","Y_FP"] :
+            if not k in table.dtype.names : continue
             if k=="XERR" or k=="YERR" : continue
             try :
-                line += " {}={:4.3f}".format(k,table[k][i])
+                line += " {}={:4.2f}".format(k,table[k][i])
             except ValueError :
                 line += " {}={}".format(k,table[k][i])
+        line += " dX={:4.2f}mm dY={:4.2f}mm".format(dx[j],dy[j])
         print(line)
         label=None
         if j==jj[0]: label="large residual"
@@ -138,19 +145,16 @@ a.set_ylabel("Y_FP (mm)")
 
 dist=np.sqrt(dx**2+dy**2)
 
-rms=np.sqrt(np.mean(dist[dist<0.2]**2))
-blabla="rms(2D) = {:3.1f} um".format(rms*1000.)
+rms1=np.sqrt(np.mean(dist[dist<0.2]**2))
+blabla="rms(2D) (<200um):{:3.1f} um".format(rms1*1000.)
+rms2=np.sqrt(np.mean(dist[dist<6.]**2))
+blabla+= ", all:{:3.1f} mm".format(rms2)
 print(blabla)
 a.legend(loc="upper left",title=blabla)
 
 a2=fig.add_subplot(666)
 a2.hist(dist[dist<0.1]*1000.)
 a2.set_xlabel("dist. (um)")
-if args.expected :
-    plt.figure("dist")
-    plt.hist(dist)
-    plt.xlabel("dist. (mm)")
-    print("max(dist)=",np.max(dist))
 
 if False :
     print("Write coordinates of missing or incorrect fiducials")
