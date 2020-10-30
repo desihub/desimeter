@@ -248,6 +248,7 @@ for seqid,spots in enumerate(spots_list) :
         ii = np.where(expected_pos["PINHOLE_ID"]==0)[0]
         expected_pos = expected_pos[:][ii]
 
+    
     # select spots that are not already matched
     selection  = (spots["LOCATION"]==-1)
 
@@ -310,6 +311,7 @@ for seqid,spots in enumerate(spots_list) :
                         spots[k] = np.zeros(len(spots))
                 spots[k][selection]=expected_pos[k][indices_of_expected_pos]
 
+    
     if args.expected_positions is not None and ( args.turbulence_correction or args.turbulence_correction_with_pol ):
 
         if args.turbulence_correction_with_pol :
@@ -330,8 +332,8 @@ for seqid,spots in enumerate(spots_list) :
             # apply it anyway because there might be a good reason for this
         spots["X_FP"][selection] = new_x
         spots["Y_FP"][selection] = new_y
-
-    if "X_FP_METRO" in spots :
+    
+    if "X_FP_METRO" in spots.dtype.names :
         # for spots with metrology X_FP_EXP=X_FP_METRO
         selection = (spots["X_FP_METRO"]!=0)
         spots["X_FP_EXP"][selection]=spots["X_FP_METRO"][selection]
@@ -346,7 +348,6 @@ for seqid,spots in enumerate(spots_list) :
             tx.write_jsonfile(args.output_transform)
             print("wrote transform in {}".format(args.output_transform))
 
-
     if args.field_model is not None :
         log.info("Reading field model in {}".format(args.field_model))
         with open(args.field_model) as file :
@@ -358,13 +359,10 @@ for seqid,spots in enumerate(spots_list) :
         spots["RA"][ii]  = ra
         spots["DEC"][ii] = dec
 
-
-
     if not args.sequence :
         outfile=args.outfile
     else :
         outfile=args.outfile.replace(".csv","-F{:04d}.csv".format(seqid))
-
 
     # write spots
     spots.write(outfile,format="csv",overwrite=True)
