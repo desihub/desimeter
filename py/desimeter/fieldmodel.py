@@ -475,7 +475,7 @@ def fieldrot(ra,dec,mjd,lst_deg,hexrot_deg=0) :
     fm.hexrot_deg=hexrot_deg
     return fm.compute_fieldrot()
 
-def dfieldrotdt(ra,dec,mjd,lst_deg) :
+def dfieldrotdt_physical_model(ra,dec,mjd,lst_deg) :
     """
     Computes the derivative with time of the field rotation in arcsec per minute.
 
@@ -491,3 +491,54 @@ def dfieldrotdt(ra,dec,mjd,lst_deg) :
     """
     one_minute_in_degrees = 1./60./24.*360 #
     return 3600.*(fieldrot(ra,dec,mjd,lst_deg+one_minute_in_degrees,hexrot_deg=0) - fieldrot(ra,dec,mjd,lst_deg,hexrot_deg=0))
+
+
+def dfieldrotdt_empirical_model(ra,dec,mjd,lst_deg) :
+    """
+    Computes the derivative with time of the field rotation in arcsec per minute.
+
+    Args:
+      ra: scalar, float, RA in degrees
+      dec: scalar, float, Dec in degrees
+      mjd: scalar, float, MJD in days
+      lst_deg: scalar, float, LST in degrees (ha = lst_deg - ra)
+
+    Returns:
+      field rotation angle derivative with time in arcsec per minute
+
+    """
+
+
+    """
+    based on the output of the script desi_fit_field_rotation_rate
+    rms =  0.11484479854902968 arcsec/min
+    rms/error   =  0.9591804555363781 arcsec/min
+    max dev     =  0.41773910457308133 arcsec/min
+    chi2/ndf    = 119.64597960405285/(130-10) = 0.9970498300337738 , proba = 0.4919473310637237
+    """
+
+    ha = lst_deg - ra
+    x=ha/60.
+    y=(dec-30)/30.
+
+    rotation_rate_arcsec_per_min = -0.384 + 0.0*x + 0.186*y + 0.319*x*y + 0.172*x**2 -0.092*y**2 + 0.211*x**3 -0.787*x**2*y + 0.133*x*y**2 -0.151*y**3
+    return rotation_rate_arcsec_per_min
+
+
+def dfieldrotdt(ra,dec,mjd,lst_deg) :
+    """
+    Computes the derivative with time of the field rotation in arcsec per minute.
+
+    Args:
+      ra: scalar, float, RA in degrees
+      dec: scalar, float, Dec in degrees
+      mjd: scalar, float, MJD in days
+      lst_deg: scalar, float, LST in degrees (ha = lst_deg - ra)
+
+    Returns:
+      field rotation angle derivative with time in arcsec per minute
+
+    """
+
+    # choose to use the totally empirical model
+    return dfieldrotdt_empirical_model(ra,dec,mjd,lst_deg)

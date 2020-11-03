@@ -1,0 +1,159 @@
+#!/usr/bin/env python
+
+import sys
+import numpy as np
+from scipy.stats import chi2
+import matplotlib.pyplot as plt
+from astropy.table import Table
+from astropy.time import Time
+from pkg_resources import resource_filename
+
+from desimeter.fieldmodel import dfieldrotdt
+from desimeter.transform.radec2tan import hadec2altaz
+from desimeter.log import get_logger
+
+log=get_logger()
+log.info("reading guide data")
+filename = resource_filename('desimeter',"data/guide_data_20200415.csv")
+log.info(" in {}".format(filename))
+t=Table.read(filename)
+
+# we turned on field rotation on Feb XX
+mjd_split = Time("2020-02-19 12:32:13.414007", format='iso', scale='utc').mjd
+
+if "mjd" not in t.dtype.names :
+    times = Time(t["date"], format='iso', scale='utc')
+    mjd   = times.mjd
+    t["mjd"] = times.mjd
+
+if "lst" not in t.dtype.names :
+    t["lst"]=t["mountha"]+t["ra"]
+
+
+ii=np.where((t["mjd"]<mjd_split)&(t["field_rotation_rate"]!=0)&(t["guide_rms"]<200.)&(t["n_iterations"]>30)&(t["field_rotation_rate_slope_std"]<0.2))[0]
+x=t["mountha"][ii]
+y=t["dec"][ii]
+z=t["field_rotation_rate"][ii]
+ze=t["field_rotation_rate_slope_std"][ii]
+
+xr=x/60.
+yr=(y-30)/30.
+
+h=np.array((np.ones(xr.size),xr,yr,xr*yr,xr**2,yr**2,xr**3,xr**2*yr,yr**2*xr,yr**3))
+a=h.dot(h.T)
+b=h.dot(z)
+ai=np.linalg.inv(a)
+p=ai.dot(b)
+
+
+for i in range(p.size) :
+    p[i] = int(p[i]*1000)/1000
+line = "{}".format(p[0])
+line += " + {} x".format(p[1])
+line += " + {} y".format(p[2])
+line += " + {} x y".format(p[3])
+line += " + {} x**2".format(p[4])
+line += " + {} y**2".format(p[5])
+line += " + {} x**3".format(p[6])
+line += " + {} x**2 y".format(p[7])
+line += " + {} x y**2".format(p[8])
+line += " + {} y**3".format(p[9])
+print(line)
+
+zm=h.T.dot(p)
+
+
+
+angle=t["field_rotation_init"][ii]
+
+plt.figure("measured_rotation")
+plt.subplot(111,title="measurement")
+plt.scatter(x,y,c=angle)
+plt.xlabel("HA (deg)")
+plt.ylabel("Dec (deg)")
+cbar = plt.colorbar()
+cbar.set_label('rotation angle', rotation=270, labelpad=10.)
+
+plt.figure("measured_rotation_rate")
+plt.subplot(111,title="measurement")
+plt.scatter(x,y,c=z)
+plt.xlabel("HA (deg)")
+plt.ylabel("Dec (deg)")
+cbar = plt.colorbar()
+cbar.set_label('rotation rate (arcsec/min)', rotation=270, labelpad=10.)
+
+plt.figure("polynomial_rotation_rate")
+plt.subplot(111,title="model")
+plt.scatter(x,y,c=zm)
+plt.xlabel("HA (deg)")
+plt.ylabel("Dec (deg)")
+cbar = plt.colorbar()
+cbar.set_label('rotation rate (arcsec/min)', rotation=270, labelpad=10.)
+
+plt.figure("polynomial_residuals")
+plt.subplot(111,title="residuals")
+plt.scatter(x,y,c=(z-zm))
+plt.xlabel("HA (deg)")
+plt.ylabel("Dec (deg)")
+
+plt.figure("polynomial-residuals-vs-ha")
+plt.errorbar(x,z-zm,ze,fmt="o",color="k")
+plt.xlabel("HA (deg)")
+plt.ylabel("residual rotation (arcsec/min)")
+plt.grid()
+#cbar = plt.colorbar()
+#cbar.set_label('Dec (deg)', rotation=270, labelpad=10.)
+
+plt.figure("polynomial-residuals-vs-dec")
+plt.errorbar(y,z-zm,ze,fmt="o",color="k")
+plt.xlabel("Dec (deg)")
+plt.ylabel("residual rotation (arcsec/min)")
+plt.grid()
+print("rms = ",np.std(z-zm))
+print("rms/error   = ",np.std((z-zm)/ze))
+print("max dev     = ",np.max(np.abs(z-zm)))
+print("max dev/err = ",np.max(np.abs((z-zm)/ze)))
+chi2v=np.sum(((z-zm)/ze)**2)
+npar=b.size
+ndata=z.size
+ndf=ndata-npar
+prob=1.-chi2.cdf(chi2v,ndf)
+print("chi2/ndf    = {}/({}-{}) = {} , proba = {}".format(chi2v,ndata,npar,chi2v/(ndata-npar),prob))
+
+
+plt.figure("polynomial-vs-dec")
+
+for ha in [-60,-40,-20,0,20,+40,+60] :
+
+    x   = ha/60.
+    dec = np.linspace(-30,90,200)
+    alt,az = hadec2altaz(ha,dec)
+    ok=(alt>30.)
+    y   = (dec-30)/30.
+    print(x)
+    rate= -0.384+0.0*x+0.186*y+0.319*x*y+0.172*x**2-0.092*y**2+0.211*x**3-0.787*x**2*y+0.133*x*y**2 - 0.151*y**3
+    plt.plot(dec[ok],rate[ok],"-",label="HA = {} deg".format(ha))
+
+plt.grid()
+plt.xlabel("Dec (deg)")
+plt.ylabel("Rotation rate (arcsec/min)")
+plt.legend()
+
+plt.figure("polynomial-vs-ha")
+
+for dec in [-20,0,30,60,90] :
+
+    y   = (dec-30)/30.
+    ha  = np.linspace(-60,60,200)
+    alt,az = hadec2altaz(ha,dec)
+    ok=(alt>30.)
+    x   = ha/60.
+    rate= -0.384+0.0*x+0.186*y+0.319*x*y+0.172*x**2-0.092*y**2+0.211*x**3-0.787*x**2*y+0.133*x*y**2 - 0.151*y**3
+    plt.plot(ha[ok],rate[ok],"-",label="Dec = {} deg".format(dec))
+
+plt.grid()
+plt.xlabel("HA (deg)")
+plt.ylabel("Rotation rate (arcsec/min)")
+plt.legend()
+
+plt.show();
