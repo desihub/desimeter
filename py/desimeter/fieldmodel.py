@@ -509,12 +509,14 @@ def dfieldrotdt_empirical_model(ra,dec,mjd,lst_deg) :
     """
 
 
-    """
-    based on the output of the script desi_fit_field_rotation_rate
-    rms         =  0.12 arcsec/min
-    max dev     =  0.42 arcsec/min
-    chi2/ndf    = 119.6/(130-10) = 0.99
-    """
+
+    # Empirical polynomial model
+    # based on the output of the script desi_fit_field_rotation_rate.
+    # Result of fit on data/guide_data_20200415.csv :
+    # rms         =  0.12 arcsec/min
+    # max dev     =  0.42 arcsec/min
+    # chi2/ndf    = 119.6/(130-10) = 0.99
+
 
     ha = (lst_deg - ra)
     if not dec >= -90. or not dec <= 90. :
