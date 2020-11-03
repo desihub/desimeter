@@ -8,7 +8,7 @@ import numpy as np
 from desimeter.transform.radec2tan import xy2hadec,hadec2xy,tan2radec,radec2tan
 from desimeter.transform.tan2fp import tan2fp,fp2tan
 from desimeter.transform.gfa2fp import gfa2fp
-from desimeter.trig import cosd, arctan2d, rot2deg
+from desimeter.trig import cosd, sind, arctan2d, rot2deg
 
 from desimeter.log import get_logger
 from astropy.table import Table
@@ -511,17 +511,28 @@ def dfieldrotdt_empirical_model(ra,dec,mjd,lst_deg) :
 
     """
     based on the output of the script desi_fit_field_rotation_rate
-    rms =  0.11484479854902968 arcsec/min
-    rms/error   =  0.9591804555363781 arcsec/min
-    max dev     =  0.41773910457308133 arcsec/min
-    chi2/ndf    = 119.64597960405285/(130-10) = 0.9970498300337738 , proba = 0.4919473310637237
+    rms         =  0.12 arcsec/min
+    max dev     =  0.42 arcsec/min
+    chi2/ndf    = 119.6/(130-10) = 0.99
     """
 
-    ha = lst_deg - ra
-    x=ha/60.
+    ha = (lst_deg - ra)
+    if not dec >= -90. or not dec <= 90. :
+        raise ValueError("Unphysical Dec in degrees: {}".format(dec))
+
+    x=sind(ha)
     y=(dec-30)/30.
 
-    rotation_rate_arcsec_per_min = -0.384 + 0.0*x + 0.186*y + 0.319*x*y + 0.172*x**2 -0.092*y**2 + 0.211*x**3 -0.787*x**2*y + 0.133*x*y**2 -0.151*y**3
+    rotation_rate_arcsec_per_min = -0.386 -0.031*x + 0.193*y + 0.33*x*y + 0.206*x**2 -0.094*y**2 + 0.341*x**3 -0.863*x**2*y + 0.125*x*y**2 -0.151*y**3
+
+    # saturation to avoid crazy values if we run outside of the validity range of the polynomial
+    min_val = -1.5
+    max_val = 1.5
+    if rotation_rate_arcsec_per_min<min_val :
+        rotation_rate_arcsec_per_min = min_val
+    elif rotation_rate_arcsec_per_min>max_val :
+        rotation_rate_arcsec_per_min = max_val
+
     return rotation_rate_arcsec_per_min
 
 

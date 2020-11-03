@@ -11,6 +11,7 @@ from pkg_resources import resource_filename
 from desimeter.fieldmodel import dfieldrotdt
 from desimeter.transform.radec2tan import hadec2altaz
 from desimeter.log import get_logger
+from desimeter.trig import sind,cosd
 
 log=get_logger()
 log.info("reading guide data")
@@ -36,7 +37,7 @@ y=t["dec"][ii]
 z=t["field_rotation_rate"][ii]
 ze=t["field_rotation_rate_slope_std"][ii]
 
-xr=x/60.
+xr=sind(x)
 yr=(y-30)/30.
 
 h=np.array((np.ones(xr.size),xr,yr,xr*yr,xr**2,yr**2,xr**3,xr**2*yr,yr**2*xr,yr**3))
