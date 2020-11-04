@@ -162,6 +162,7 @@ for petalid in petalids :
         if args.enabled_history:
             selection = np.array([False]*len(otable))
             selection[0] = True  # by default, include the first row
+            otable.sort('DATE')
             for key in enable_keys:
                 selection[1:] |= otable[key][1:] != otable[key][:-1]  # detect changes
             otable = otable[selection]
