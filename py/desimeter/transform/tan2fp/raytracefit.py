@@ -10,6 +10,32 @@ from scipy.interpolate import interp1d
 from desimeter.transform.zhaoburge import getZhaoBurgeXY, transform, fitZhaoBurge
 from desimeter.trig import average_angles_deg, put360
 
+
+def average_angles_adc(adc1, adc2):
+    """Return the mean angle of the ADC.
+
+    This is basically (ADC1+ADC2)/2, but generalized to behave correctly
+    in cases where angles may wrap around the sphere.  This also
+    correctly averages the "skinny ends" of the ADCs, so that the mean angle
+    is halfway between the two skinny ends.
+
+    (adc1 - adc2) % 360 == 0 is special cased.  Here we define the average
+    angle to be adc1 in that case.  average_angles_deg would return
+    arctan2(0, 0) in that case, which isn't helpful.
+    """
+    if ((adc1 - adc2) % 360) == 0:
+        return adc1 % 360
+    return average_angles_deg(adc1+90, adc2-90)
+
+
+def delta_angles_adc(adc1, adc2):
+    """Return the difference of the ADC angles.
+
+    This is ADC2-ADC1, brought back to [0, 360).
+    """
+    return put360(adc2-adc1)
+
+
 #- Utility transforms to/from reduced [-1,1] coordinates
 def _reduce_xyfp(x, y):
     """
@@ -141,19 +167,14 @@ class TAN2FP_RayTraceFit(object) :
 
     def interpolate_coeffs(self,adc1, adc2):
         # interpolate transform parameters
+        # not delta_angles_adc.  We want to preserve the duplicated dang=0 and
+        # dang = 360 case here, so that the 1D interpolation is nicely behaved
+        # just short of 360.
         dadc_array = self.adc2-self.adc1
-        dadc_array[dadc_array<0] += 360.
         sorted_indices=np.argsort(dadc_array)
         dadc_array = dadc_array[sorted_indices]
 
-        dadc_arg   = put360(adc2 - adc1)
-        # In principle, the two ADCs could be *set* to the same angle
-        # but *measured* to be ADC2 - ADC1 = -1 degrees -> 359
-        # degrees.  Convert that to zero, with an arbitrary limit of 1
-        # degree error.
-        if dadc_arg > 359:
-            dadc_arg = 0.
-        dadc_arg = np.clip(dadc_arg, 0., 180.)
+        dadc_arg   = delta_angles_adc(adc1, adc2)
 
         scale    = interp1d(dadc_array,self.scale[sorted_indices],'cubic')(dadc_arg)
         rotation = interp1d(dadc_array,self.rotation[sorted_indices],'cubic')(dadc_arg)
@@ -171,7 +192,7 @@ class TAN2FP_RayTraceFit(object) :
         """
         scale,rotation,offset_x,offset_y,zbcoeffs = self.interpolate_coeffs(adc1,adc2)
 
-        mean_adc_rad = np.deg2rad(average_angles_deg(adc1, adc2))
+        mean_adc_rad = np.deg2rad(average_angles_adc(adc1, adc2))
         ca = np.cos(mean_adc_rad)
         sa = np.sin(mean_adc_rad)
 
@@ -197,7 +218,7 @@ class TAN2FP_RayTraceFit(object) :
 
         scale,rotation,offset_x,offset_y,zbcoeffs = self.interpolate_coeffs(adc1, adc2)
 
-        mean_adc_rad = np.deg2rad(average_angles_deg(adc1, adc2))
+        mean_adc_rad = np.deg2rad(average_angles_adc(adc1, adc2))
         ca = np.cos(mean_adc_rad)
         sa = np.sin(mean_adc_rad)
 

@@ -7,6 +7,8 @@ import RT185v2    # needs DESI-ADC-2.OPT.CSV  DESI-ADC-2.RAY.CSV  DESI-ADC-2.MED
 # These files give us up to 680 rays, 8 wavelengths.
 from desimeter.trig import sind
 
+nthread = 19
+
 refwave = np.array([3650,   4360,   4860,   5880,   6380,   6560,   8520,  10140]) #A
 
 def incoming_rays(adc1=0.,adc2=0., dangle=0.2) :
@@ -37,34 +39,33 @@ def trace(wuv12):                # TASK 10
     resultsList.append(arrayNine)
     return resultsList  # adc1, adc2, ngood, xave, yave, zave, xrms, yrms, zrms
 
+
+def work(adc2):
+    result = []
+    adc1 = -adc2
+    rays=incoming_rays(adc1=adc1,adc2=adc2,dangle=0.1)
+    xfp = np.zeros((rays.shape[0]))
+    yfp = np.zeros((rays.shape[0]))
+    zfp = np.zeros((rays.shape[0]))
+    for i,ray in enumerate(rays) :
+        adc1, adc2, ngood, xfp[i] , yfp[i], zfp[i], xrms, yrms, _ = RT185v2.getNine(ray)
+
+    wave = refwave[ rays[:,0].astype(int) ]
+    xtan = rays[:,1]
+    ytan = rays[:,2]
+    for i in range(len(rays)) :
+        result.append([adc1,adc2,xtan[i],ytan[i],xfp[i],yfp[i],zfp[i],wave[i]])
+    return result
+
+
 def main() :
 
 
     result=[]
-    for adc2 in np.linspace(0.,90.,10) :
-        adc1 = -adc2
-        rays=incoming_rays(adc1=adc1,adc2=adc2,dangle=0.1)
-        xfp = np.zeros((rays.shape[0]))
-        yfp = np.zeros((rays.shape[0]))
-        zfp = np.zeros((rays.shape[0]))
-        for i,ray in enumerate(rays) :
-            adc1, adc2, ngood, xfp[i] , yfp[i], zfp[i], xrms, yrms, zrms = RT185v2.getNine(ray)
-            # avoid unused-var warning
-            del zrms
-
-        wave = refwave[ rays[:,0].astype(int) ]
-        xtan = rays[:,1]
-        ytan = rays[:,2]
-        for i in range(len(rays)) :
-            result.append([adc1,adc2,xtan[i],ytan[i],xfp[i],yfp[i],zfp[i],wave[i]])
-
-        #plt.figure("tan")
-        #plt.plot(xtan,ytan,".")
-        #plt.figure("fp")
-        #plt.plot(xfp,yfp,".")
-        #plt.show()
-
-    result = np.array(result)
+    from multiprocessing.pool import Pool
+    pool = Pool(nthread)
+    result = pool.map(work, np.linspace(0., 180., 19))
+    result = np.concatenate(result)
     print(result.shape)
 
     # make a table
