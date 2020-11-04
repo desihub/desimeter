@@ -51,9 +51,14 @@ recent_rehome_exposure_ids=list()
 if args.recent_rehome_exposure_ids is not None :
     recent_rehome_exposure_ids=[int(val) for val in args.recent_rehome_exposure_ids.split(",")]
 
-enable_keys = enable_keys_moves
-if args.with_calib:
-    enable_keys |= enable_keys_calib
+if args.enabled_history:
+    enable_keys = enable_keys_moves
+    if args.with_calib:
+        enable_keys |= enable_keys_calib
+    desired_fields = {'moves': 'time_recorded, pos_id, petal_id, device_loc, bus_id, ctrl_enabled, move_cmd, move_val1, move_val2, log_note, exposure_id, exposure_iter, flags',
+                      'calib': 'time_recorded, device_classified_nonfunctional, fiber_intact, calib_note'}
+else:
+    desired_fields = {'moves': '*', 'calib': '*'}
 
 otables = []
 for petalid in petalids :
@@ -87,7 +92,7 @@ for petalid in petalids :
                 max_idx = max(result['pos_move_index'])
                 max_idx += 1  # capture any tp_updates from just after the exposure or exp iteration
                 cmd_tp = f"log_note like '%tp_update%' and pos_move_index >= {min_idx} and pos_move_index <= {max_idx}"
-        cmd = f'select * {from_where} {posid_date}'
+        cmd = f'select {desired_fields["moves"]} {from_where} {posid_date}'
         if cmd_exp and cmd_tp:
             combined = f'({cmd_exp}) or ({cmd_tp})'
             cmd += f' and ({combined})'
@@ -111,7 +116,7 @@ for petalid in petalids :
         if args.with_calib :
 
             # adding calib info
-            cmd="select * from posmovedb.positioner_calibration_p{} where pos_id='{}' order by time_recorded".format(int(petalid),posid)
+            cmd = f'select {desired_fields["calib"]} from posmovedb.positioner_calibration_p{petalid} where pos_id=\'{posid}\' order by time_recorded'
             print(cmd)
             calib=dbquery(comm,cmd)
 
