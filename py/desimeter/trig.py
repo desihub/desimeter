@@ -22,8 +22,8 @@ def rot2deg(deg):
 def tand(degrees):
     return np.tan(D2R*degrees)
 
-def put360(degrees): # Puts an angle into range 0 to 360.
-    return np.fmod(720.+degrees, 360)
+def put360(degrees):  # Puts an angle into range 0 to 360.
+    return degrees % 360
 
 def arctan2d(y, x):
     return put360(np.arctan2(y, x)*R2D)
