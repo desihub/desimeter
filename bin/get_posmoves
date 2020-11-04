@@ -3,13 +3,16 @@
 import os
 import psycopg2
 import numpy as np
-from astropy.table import Table
+from astropy.table import Table, vstack
 import argparse
 import time
 start_time = time.time()
 
 from desimeter.util import parse_fibers
 from desimeter.dbutil import dbquery,get_petal_ids,get_pos_ids,get_petal_loc
+
+enable_keys_moves = {'CTRL_ENABLED'}
+enable_keys_calib = {'DEVICE_CLASSIFIED_NONFUNCTIONAL', 'FIBER_INTACT'}
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Retrieve data from posmove DB and save to disk as CSV table""")
@@ -28,6 +31,8 @@ parser.add_argument('-c', '--with-calib', action = 'store_true', help="add match
 parser.add_argument('-t', '--tp-updates', action='store_true', help="include rows where no move was done but POS_T, POS_P was updated")
 parser.add_argument('--recent-rehome-exposure-ids', type= str, required=False, default=None, help="comma separated list of exposure ids where the positioners have been recently rehomed")
 parser.add_argument('-comma', '--comma-replacement', type=str, default='||', help='replace commas in data strings with this in output csv files)')
+parser.add_argument('-e', '--enabled-history', action='store_true', help=f'filter the data down to just those rows in which a change occurred to one of {enable_keys_moves | enable_keys_calib}')
+parser.add_argument('-m', '--merge', action='store_true', help='merge all data into one CSV file (rather than separate files per positioner)')
 
 args  = parser.parse_args()
 
@@ -46,7 +51,19 @@ recent_rehome_exposure_ids=list()
 if args.recent_rehome_exposure_ids is not None :
     recent_rehome_exposure_ids=[int(val) for val in args.recent_rehome_exposure_ids.split(",")]
 
+if args.enabled_history:
+    enable_keys = enable_keys_moves
+    if args.with_calib:
+        enable_keys |= enable_keys_calib
+    desired_fields = {'moves': 'time_recorded, pos_id, petal_id, device_loc, bus_id, ctrl_enabled, move_cmd, move_val1, move_val2, log_note, exposure_id, exposure_iter, flags',
+                      'calib': 'time_recorded, device_classified_nonfunctional, fiber_intact, calib_note'}
+else:
+    desired_fields = {'moves': '*', 'calib': '*'}
+
+otables = []
+i_ptl = 0
 for petalid in petalids :
+    i_ptl += 1
 
     if args.pos_ids in {None, 'movers'}:
         posids = get_pos_ids(comm, petalid)
@@ -55,7 +72,9 @@ for petalid in petalids :
 
     petal_loc = get_petal_loc(petalid)
 
+    i_pos = 0
     for posid in posids :
+        i_pos += 1
 
         # read data from db
         from_where = f'from posmovedb.positioner_moves_p{int(petalid)} where'
@@ -77,7 +96,7 @@ for petalid in petalids :
                 max_idx = max(result['pos_move_index'])
                 max_idx += 1  # capture any tp_updates from just after the exposure or exp iteration
                 cmd_tp = f"log_note like '%tp_update%' and pos_move_index >= {min_idx} and pos_move_index <= {max_idx}"
-        cmd = f'select * {from_where} {posid_date}'
+        cmd = f'select {desired_fields["moves"]} {from_where} {posid_date}'
         if cmd_exp and cmd_tp:
             combined = f'({cmd_exp}) or ({cmd_tp})'
             cmd += f' and ({combined})'
@@ -101,8 +120,7 @@ for petalid in petalids :
         if args.with_calib :
 
             # adding calib info
-            cmd="select * from posmovedb.positioner_calibration_p{} where pos_id='{}' order by time_recorded".format(int(petalid),posid)
-            print(cmd)
+            cmd = f'select {desired_fields["calib"]} from posmovedb.positioner_calibration_p{petalid} where pos_id=\'{posid}\' order by time_recorded'
             calib=dbquery(comm,cmd)
 
             # get time stamps to match
@@ -148,11 +166,29 @@ for petalid in petalids :
             otable[k2]=np.array(posmoves[k])
 
         otable["RECENT_REHOME"]=np.in1d(otable["EXPOSURE_ID"],recent_rehome_exposure_ids).astype(int)
+        
+        if args.enabled_history:
+            selection = np.array([False]*len(otable))
+            selection[0] = True  # by default, include the first row
+            otable.sort('DATE')
+            for key in enable_keys:
+                selection[1:] |= otable[key][1:] != otable[key][:-1]  # detect changes
+            otable = otable[selection]
 
-        if not os.path.isdir(args.outdir) :
+        if not os.path.isdir(args.outdir):
             os.makedirs(args.outdir)
-        ofilename="{}/{}.csv".format(args.outdir,posid)
-        otable.write(ofilename,overwrite=True)
-        print("wrote",ofilename)
-
+        
+        status_str = f'positioner {i_pos} of {len(posids)} on petal {i_ptl} of {len(petalids)}'
+        if args.merge:
+            otables.append(otable)
+            print(f'retrieved data for {posid}, {status_str}')
+        else:
+            ofilename="{}/{}.csv".format(args.outdir,posid)
+            otable.write(ofilename,overwrite=True)
+            print("wrote", ofilename, status_str)
+if args.merge:
+    merged = vstack(otables)
+    name = time.strftime('%Y%m%dT%H%M%S%z') + '_posdata.csv'
+    path = os.path.join(args.outdir, name)
+    merged.write(path)
 print(f'Total elapsed time: {time.time() - start_time:.1f} sec')
