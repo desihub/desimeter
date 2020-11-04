@@ -11,7 +11,8 @@ start_time = time.time()
 from desimeter.util import parse_fibers
 from desimeter.dbutil import dbquery,get_petal_ids,get_pos_ids,get_petal_loc
 
-enable_related = {'CTRL_ENABLED', 'DEVICE_CLASSIFIED_NONFUNCTIONAL', 'FIBER_INTACT'}
+enable_keys_moves = {'CTRL_ENABLED'}
+enable_keys_calib = {'DEVICE_CLASSIFIED_NONFUNCTIONAL', 'FIBER_INTACT'}
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Retrieve data from posmove DB and save to disk as CSV table""")
@@ -30,7 +31,7 @@ parser.add_argument('-c', '--with-calib', action = 'store_true', help="add match
 parser.add_argument('-t', '--tp-updates', action='store_true', help="include rows where no move was done but POS_T, POS_P was updated")
 parser.add_argument('--recent-rehome-exposure-ids', type= str, required=False, default=None, help="comma separated list of exposure ids where the positioners have been recently rehomed")
 parser.add_argument('-comma', '--comma-replacement', type=str, default='||', help='replace commas in data strings with this in output csv files)')
-parser.add_argument('-e', '--enabled-history', action='store_true', help=f'filter the data down to just those rows in which a change occurred to one of {enable_related}')
+parser.add_argument('-e', '--enabled-history', action='store_true', help=f'filter the data down to just those rows in which a change occurred to one of {enable_keys_moves | enable_keys_calib}')
 parser.add_argument('-m', '--merge', action='store_true', help='merge all data into one CSV file (rather than separate files per positioner)')
 
 args  = parser.parse_args()
@@ -49,6 +50,10 @@ else :
 recent_rehome_exposure_ids=list()
 if args.recent_rehome_exposure_ids is not None :
     recent_rehome_exposure_ids=[int(val) for val in args.recent_rehome_exposure_ids.split(",")]
+
+enable_keys = enable_keys_moves
+if args.with_calib:
+    enable_keys |= enable_keys_calib
 
 otables = []
 for petalid in petalids :
@@ -157,7 +162,7 @@ for petalid in petalids :
         if args.enabled_history:
             selection = np.array([False]*len(otable))
             selection[0] = True  # by default, include the first row
-            for key in enable_related:
+            for key in enable_keys:
                 selection[1:] |= otable[key][1:] != otable[key][:-1]  # detect changes
             otable = otable[selection]
 
