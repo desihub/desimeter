@@ -31,6 +31,7 @@ parser.add_argument('-t', '--tp-updates', action='store_true', help="include row
 parser.add_argument('--recent-rehome-exposure-ids', type= str, required=False, default=None, help="comma separated list of exposure ids where the positioners have been recently rehomed")
 parser.add_argument('-comma', '--comma-replacement', type=str, default='||', help='replace commas in data strings with this in output csv files)')
 parser.add_argument('-e', '--enabled-history', action='store_true', help=f'filter the data down to just those rows in which a change occurred to one of {enable_related}')
+parser.add_argument('-m', '--merge', action='store_true', help='merge all data into one CSV file (rather than separate files per positioner)')
 
 args  = parser.parse_args()
 
@@ -152,7 +153,14 @@ for petalid in petalids :
             otable[k2]=np.array(posmoves[k])
 
         otable["RECENT_REHOME"]=np.in1d(otable["EXPOSURE_ID"],recent_rehome_exposure_ids).astype(int)
-        if not os.path.isdir(args.outdir) :
+        
+        if args.enabled_history:
+            selection = np.array([False]*len(otable))
+            selection[0] = True  # by default, include the first row
+            for key in enable_related:
+                selection[1:] |= otable[key][1:] != otable[key[:-1]]  # detect changes
+            otable = otable[selection]
+
         if not os.path.isdir(args.outdir):
             os.makedirs(args.outdir)
         if args.merge:
