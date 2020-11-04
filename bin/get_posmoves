@@ -3,13 +3,15 @@
 import os
 import psycopg2
 import numpy as np
-from astropy.table import Table
+from astropy.table import Table, vstack
 import argparse
 import time
 start_time = time.time()
 
 from desimeter.util import parse_fibers
 from desimeter.dbutil import dbquery,get_petal_ids,get_pos_ids,get_petal_loc
+
+enable_related = {'CTRL_ENABLED', 'DEVICE_CLASSIFIED_NONFUNCTIONAL', 'FIBER_INTACT'}
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Retrieve data from posmove DB and save to disk as CSV table""")
@@ -28,6 +30,7 @@ parser.add_argument('-c', '--with-calib', action = 'store_true', help="add match
 parser.add_argument('-t', '--tp-updates', action='store_true', help="include rows where no move was done but POS_T, POS_P was updated")
 parser.add_argument('--recent-rehome-exposure-ids', type= str, required=False, default=None, help="comma separated list of exposure ids where the positioners have been recently rehomed")
 parser.add_argument('-comma', '--comma-replacement', type=str, default='||', help='replace commas in data strings with this in output csv files)')
+parser.add_argument('-e', '--enabled-history', action='store_true', help=f'filter the data down to just those rows in which a change occurred to one of {enable_related}')
 
 args  = parser.parse_args()
 
@@ -46,6 +49,7 @@ recent_rehome_exposure_ids=list()
 if args.recent_rehome_exposure_ids is not None :
     recent_rehome_exposure_ids=[int(val) for val in args.recent_rehome_exposure_ids.split(",")]
 
+otables = []
 for petalid in petalids :
 
     if args.pos_ids in {None, 'movers'}:
@@ -148,11 +152,18 @@ for petalid in petalids :
             otable[k2]=np.array(posmoves[k])
 
         otable["RECENT_REHOME"]=np.in1d(otable["EXPOSURE_ID"],recent_rehome_exposure_ids).astype(int)
-
         if not os.path.isdir(args.outdir) :
+        if not os.path.isdir(args.outdir):
             os.makedirs(args.outdir)
-        ofilename="{}/{}.csv".format(args.outdir,posid)
-        otable.write(ofilename,overwrite=True)
-        print("wrote",ofilename)
-
+        if args.merge:
+            otables.append(otable)
+        else:
+            ofilename="{}/{}.csv".format(args.outdir,posid)
+            otable.write(ofilename,overwrite=True)
+            print("wrote",ofilename)
+if args.merge:
+    merged = vstack(otables)
+    name = time.strftime('%Y%m%dT%H%M%S%z') + '_posdata.csv'
+    path = os.path.join(args.outdir, name)
+    merged.write(path)
 print(f'Total elapsed time: {time.time() - start_time:.1f} sec')
