@@ -117,7 +117,6 @@ for petalid in petalids :
 
             # adding calib info
             cmd = f'select {desired_fields["calib"]} from posmovedb.positioner_calibration_p{petalid} where pos_id=\'{posid}\' order by time_recorded'
-            print(cmd)
             calib=dbquery(comm,cmd)
 
             # get time stamps to match
@@ -176,10 +175,11 @@ for petalid in petalids :
             os.makedirs(args.outdir)
         if args.merge:
             otables.append(otable)
+            print(f'retrieved data for {posid}')
         else:
             ofilename="{}/{}.csv".format(args.outdir,posid)
             otable.write(ofilename,overwrite=True)
-            print("wrote",ofilename)
+            print("wrote", ofilename)
 if args.merge:
     merged = vstack(otables)
     name = time.strftime('%Y%m%dT%H%M%S%z') + '_posdata.csv'
