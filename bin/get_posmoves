@@ -158,7 +158,7 @@ for petalid in petalids :
             selection = np.array([False]*len(otable))
             selection[0] = True  # by default, include the first row
             for key in enable_related:
-                selection[1:] |= otable[key][1:] != otable[key[:-1]]  # detect changes
+                selection[1:] |= otable[key][1:] != otable[key][:-1]  # detect changes
             otable = otable[selection]
 
         if not os.path.isdir(args.outdir):
