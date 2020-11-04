@@ -61,7 +61,9 @@ else:
     desired_fields = {'moves': '*', 'calib': '*'}
 
 otables = []
+i_ptl = 0
 for petalid in petalids :
+    i_ptl += 1
 
     if args.pos_ids in {None, 'movers'}:
         posids = get_pos_ids(comm, petalid)
@@ -70,7 +72,9 @@ for petalid in petalids :
 
     petal_loc = get_petal_loc(petalid)
 
+    i_pos = 0
     for posid in posids :
+        i_pos += 1
 
         # read data from db
         from_where = f'from posmovedb.positioner_moves_p{int(petalid)} where'
@@ -173,13 +177,15 @@ for petalid in petalids :
 
         if not os.path.isdir(args.outdir):
             os.makedirs(args.outdir)
+        
+        status_str = f'positioner {i_pos} of {len(posids)} on petal {i_ptl} of {len(petalids)}'
         if args.merge:
             otables.append(otable)
-            print(f'retrieved data for {posid}')
+            print(f'retrieved data for {posid}, {status_str}')
         else:
             ofilename="{}/{}.csv".format(args.outdir,posid)
             otable.write(ofilename,overwrite=True)
-            print("wrote", ofilename)
+            print("wrote", ofilename, status_str)
 if args.merge:
     merged = vstack(otables)
     name = time.strftime('%Y%m%dT%H%M%S%z') + '_posdata.csv'
