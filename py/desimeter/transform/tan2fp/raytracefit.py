@@ -8,6 +8,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 
 from desimeter.transform.zhaoburge import getZhaoBurgeXY, transform, fitZhaoBurge
+from desimeter.trig import average_angles_deg, put360
 
 #- Utility transforms to/from reduced [-1,1] coordinates
 def _reduce_xyfp(x, y):
@@ -144,9 +145,16 @@ class TAN2FP_RayTraceFit(object) :
         dadc_array[dadc_array<0] += 360.
         sorted_indices=np.argsort(dadc_array)
         dadc_array = dadc_array[sorted_indices]
-        dadc_arg   = (adc2-adc1)
-        if dadc_arg < 0 : dadc_arg = 0.
-        elif dadc_arg > 180 : dadc_arg = 180.
+
+        dadc_arg   = put360(adc2 - adc1)
+        # In principle, the two ADCs could be *set* to the same angle
+        # but *measured* to be ADC2 - ADC1 = -1 degrees -> 359
+        # degrees.  Convert that to zero, with an arbitrary limit of 1
+        # degree error.
+        if dadc_arg > 359:
+            dadc_arg = 0.
+        dadc_arg = np.clip(dadc_arg, 0., 180.)
+
         scale    = interp1d(dadc_array,self.scale[sorted_indices],'cubic')(dadc_arg)
         rotation = interp1d(dadc_array,self.rotation[sorted_indices],'cubic')(dadc_arg)
         offset_x = interp1d(dadc_array,self.offset_x[sorted_indices],'cubic')(dadc_arg)
@@ -163,7 +171,7 @@ class TAN2FP_RayTraceFit(object) :
         """
         scale,rotation,offset_x,offset_y,zbcoeffs = self.interpolate_coeffs(adc1,adc2)
 
-        mean_adc_rad = np.deg2rad((adc1+adc2)/2.)
+        mean_adc_rad = np.deg2rad(average_angles_deg(adc1, adc2))
         ca = np.cos(mean_adc_rad)
         sa = np.sin(mean_adc_rad)
 
@@ -172,7 +180,7 @@ class TAN2FP_RayTraceFit(object) :
         # rotate then derotate to account
         # for average ADC angle
         # this leave 20 microns residuals, I don't understand why ...
-        rrxtan = ca*rxtan + sa*rytan
+        rrxtan =  ca*rxtan + sa*rytan
         rrytan = -sa*rxtan + ca*rytan
         rrxfp, rryfp   = transform(rrxtan, rrytan, scale, rotation, offset_x, offset_y, self.zbpolids, zbcoeffs)
         rxfp = ca*rrxfp - sa*rryfp
@@ -189,14 +197,14 @@ class TAN2FP_RayTraceFit(object) :
 
         scale,rotation,offset_x,offset_y,zbcoeffs = self.interpolate_coeffs(adc1, adc2)
 
-        mean_adc_rad = np.deg2rad((adc1+adc2)/2.)
+        mean_adc_rad = np.deg2rad(average_angles_deg(adc1, adc2))
         ca = np.cos(mean_adc_rad)
         sa = np.sin(mean_adc_rad)
 
         rxfp, ryfp = _reduce_xyfp(xfp, yfp)
 
         # average ADC rotation
-        rrxfp = ca*rxfp + sa*ryfp
+        rrxfp =  ca*rxfp + sa*ryfp
         rryfp = -sa*rxfp + ca*ryfp
 
         #- first undo Zhao-Burge terms
@@ -225,7 +233,7 @@ class TAN2FP_RayTraceFit(object) :
         ryy -= offset_y
 
         # undo average ADC rotation
-        xx = ca*rxx - sa*ryy
+        xx =  ca*rxx - sa*ryy
         yy = +sa*rxx + ca*ryy
 
         xtan, ytan = _expand_xytan(xx, yy)
@@ -244,7 +252,6 @@ def get_raytracefit() :
 
 def tan2fp(xtan, ytan, adc1, adc2):
     return get_raytracefit().tan2fp(xtan, ytan, adc1, adc2)
-
 
 def fp2tan(xtan, ytan, adc1, adc2):
     return get_raytracefit().fp2tan(xtan, ytan, adc1, adc2)

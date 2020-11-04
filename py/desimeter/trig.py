@@ -39,3 +39,11 @@ def getNorm(xyz):
 
 def getNormalized(xyz):
     return xyz/getNorm(xyz)
+
+def average_angles_deg(a1, a2):
+    '''Computes the average of two angles (in degrees),
+    handling wrap-around.  That is, if the two angles are thought of as
+    directions in the plane, this gives the midpoint between them.'''
+    x = cosd(a1) + cosd(a2)
+    y = sind(a1) + sind(a2)
+    return arctan2d(y, x)
