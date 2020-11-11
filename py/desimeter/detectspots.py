@@ -151,11 +151,11 @@ def detectspots(fvcimage,min_counts_per_pixel=500,min_counts_per_spot=5000,nsig=
     mval=np.median(vals)
     #- normalized median absolute deviation as robust version of RMS
     #- see https://en.wikipedia.org/wiki/Median_absolute_deviation
-    rms=1.4826*np.median(np.abs(vals-mval))
-    ok=np.abs(vals-mval)<4*rms
+    convolved_image_rms=1.4826*np.median(np.abs(vals-mval))
+    ok=np.abs(vals-mval)<4*convolved_image_rms
     mval=np.mean(vals[ok])
-    rms=np.std(vals[ok])
-    log.info("pedestal={:4.2f} rms={:4.2f}".format(mval,rms))
+    convolved_image_rms=np.std(vals[ok])
+    log.info("convolved image pedestal={:4.2f} rms={:4.2f}".format(mval,convolved_image_rms))
     # remove mean; if fvcimage was integer input, this will cast to float64
     fvcimage = fvcimage - mval
     convolved_image      -= mval
@@ -165,9 +165,9 @@ def detectspots(fvcimage,min_counts_per_pixel=500,min_counts_per_spot=5000,nsig=
     #plt.show()
 
     if min_counts_per_pixel is None:
-        threshold=nsig*rms
+        threshold=nsig*convolved_image_rms
     else:
-        threshold=max(min_counts_per_pixel,nsig*rms)
+        threshold=max(min_counts_per_pixel,nsig*convolved_image_rms)
 
     peaks=np.zeros((n0,n1))
     peaks[1:-1,1:-1] = ((convolved_image[1:-1, 1:-1] > convolved_image[:-2, 1:-1]) *
@@ -200,11 +200,22 @@ def detectspots(fvcimage,min_counts_per_pixel=500,min_counts_per_spot=5000,nsig=
     if xoffset == 0 and yoffset == 0:
         log.debug("Here center of first pixel has coord=(0,0); so we expect offsets of 1 with respect to coordinates in .pos files.")
 
+    # compute noise in original image
+    vals=fvcimage[ii0,ii1].ravel()
+    mval=np.median(vals)
+    fvcimage_rms=1.4826*np.median(np.abs(vals-mval))
+    ok=np.abs(vals-mval)<4*fvcimage_rms
+    mval=np.mean(vals[ok])
+    fvcimage_rms=np.std(vals[ok])
+    log.info("fvc image pedestal={:4.2f} rms={:4.2f}".format(mval,fvcimage_rms))
+
+
+
     for j,index in enumerate(peakindices):
         i0=index//n1
         i1=index%n1
         if 1: #try :
-            x,y,ex,ey,c=fitcentroid(fvcimage[i0-hw:i0+hw+1,i1-hw:i1+hw+1],noise=rms)
+            x,y,ex,ey,c=fitcentroid(fvcimage[i0-hw:i0+hw+1,i1-hw:i1+hw+1],noise=fvcimage_rms)
             xpix[j] = x + i1 + xoffset #  x is along axis=1 in python , also adding offset (definition of pixel coordinates)
             ypix[j] = y + i0 + yoffset #  y is along axis=0 in python , also adding offset (definition of pixel coordinates)
             xerr[j] = ex
