@@ -493,14 +493,13 @@ def dfieldrotdt_physical_model(ra,dec,mjd,lst_deg) :
     return 3600.*(fieldrot(ra,dec,mjd,lst_deg+one_minute_in_degrees,hexrot_deg=0) - fieldrot(ra,dec,mjd,lst_deg,hexrot_deg=0))
 
 
-def dfieldrotdt_empirical_model(ra,dec,mjd,lst_deg) :
+def dfieldrotdt_empirical_model(ra,dec,lst_deg) :
     """
     Computes the derivative with time of the field rotation in arcsec per minute.
 
     Args:
       ra: scalar, float, RA in degrees
       dec: scalar, float, Dec in degrees
-      mjd: scalar, float, MJD in days
       lst_deg: scalar, float, LST in degrees (ha = lst_deg - ra)
 
     Returns:
@@ -553,5 +552,5 @@ def dfieldrotdt(ra,dec,mjd,lst_deg) :
 
     """
 
-    # choose to use the totally empirical model
-    return dfieldrotdt_empirical_model(ra,dec,mjd,lst_deg)
+    # choose to use the totally empirical model, ignore mjd
+    return dfieldrotdt_empirical_model(ra,dec,lst_deg)

@@ -13,7 +13,7 @@ class TestFieldRot(unittest.TestCase):
                 lst_deg=ha
                 angle = fieldrot(ra=ra,dec=dec,mjd=mjd,lst_deg=lst_deg,hexrot_deg=hexrot_deg)
                 rate1 = dfieldrotdt_physical_model(ra=ra,dec=dec,mjd=mjd,lst_deg=lst_deg)
-                rate2 = dfieldrotdt_empirical_model(ra=ra,dec=dec,mjd=mjd,lst_deg=lst_deg)
+                rate2 = dfieldrotdt_empirical_model(ra=ra,dec=dec,lst_deg=lst_deg)
                 print("HA={} Dec={} ANGLE={:4.3f} deg RATE1={:3.2f} arcsec/min RATE2={:3.2f} arcsec/min  DIFF={:4.3f} arcsec/min".format(ha,dec,angle,rate1,rate2,rate1-rate2))
 
 if __name__ == '__main__' :
