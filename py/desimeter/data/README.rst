@@ -41,3 +41,10 @@ fp-metrology-patch.csv
     - PR https://github.com/desihub/desimeter/pull/148
     - script: `script/fiducial_systematics.py` (`objorient` branch)
     - slides: .. _`DESI-5894`: https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=5894
+
+guide_data_20200415.csv
+--------------------------------------
+* Guide data used to fit the field rotation rate in
+  the script `desi_fit_field_rotation_rate`.
+* The resulting polynomial as a function of HA and Dec is
+  used in the routine `desimeter.fieldmodel.dfieldrotdt`.

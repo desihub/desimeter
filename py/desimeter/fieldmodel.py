@@ -8,7 +8,7 @@ import numpy as np
 from desimeter.transform.radec2tan import xy2hadec,hadec2xy,tan2radec,radec2tan
 from desimeter.transform.tan2fp import tan2fp,fp2tan
 from desimeter.transform.gfa2fp import gfa2fp
-from desimeter.trig import cosd, arctan2d, rot2deg
+from desimeter.trig import cosd, sind, arctan2d, rot2deg
 
 from desimeter.log import get_logger
 from astropy.table import Table
@@ -475,7 +475,7 @@ def fieldrot(ra,dec,mjd,lst_deg,hexrot_deg=0) :
     fm.hexrot_deg=hexrot_deg
     return fm.compute_fieldrot()
 
-def dfieldrotdt(ra,dec,mjd,lst_deg) :
+def dfieldrotdt_physical_model(ra,dec,mjd,lst_deg) :
     """
     Computes the derivative with time of the field rotation in arcsec per minute.
 
@@ -491,3 +491,66 @@ def dfieldrotdt(ra,dec,mjd,lst_deg) :
     """
     one_minute_in_degrees = 1./60./24.*360 #
     return 3600.*(fieldrot(ra,dec,mjd,lst_deg+one_minute_in_degrees,hexrot_deg=0) - fieldrot(ra,dec,mjd,lst_deg,hexrot_deg=0))
+
+
+def dfieldrotdt_empirical_model(ra,dec,lst_deg) :
+    """
+    Computes the derivative with time of the field rotation in arcsec per minute.
+
+    Args:
+      ra: scalar, float, RA in degrees
+      dec: scalar, float, Dec in degrees
+      lst_deg: scalar, float, LST in degrees (ha = lst_deg - ra)
+
+    Returns:
+      field rotation angle derivative with time in arcsec per minute
+
+    """
+
+
+
+    # Empirical polynomial model
+    # based on the output of the script desi_fit_field_rotation_rate.
+    # Result of fit on data/guide_data_20200415.csv :
+    # rms         =  0.12 arcsec/min
+    # max dev     =  0.42 arcsec/min
+    # chi2/ndf    = 119.6/(130-10) = 0.99
+
+
+    ha = (lst_deg - ra)
+    if not dec >= -90. or not dec <= 90. :
+        raise ValueError("Unphysical Dec in degrees: {}".format(dec))
+
+    x=sind(ha)
+    y=(dec-30)/30.
+
+    rotation_rate_arcsec_per_min = -0.386 -0.031*x + 0.193*y + 0.33*x*y + 0.206*x**2 -0.094*y**2 + 0.341*x**3 -0.863*x**2*y + 0.125*x*y**2 -0.151*y**3
+
+    # saturation to avoid crazy values if we run outside of the validity range of the polynomial
+    min_val = -1.5
+    max_val = 1.5
+    if rotation_rate_arcsec_per_min<min_val :
+        rotation_rate_arcsec_per_min = min_val
+    elif rotation_rate_arcsec_per_min>max_val :
+        rotation_rate_arcsec_per_min = max_val
+
+    return rotation_rate_arcsec_per_min
+
+
+def dfieldrotdt(ra,dec,mjd,lst_deg) :
+    """
+    Computes the derivative with time of the field rotation in arcsec per minute.
+
+    Args:
+      ra: scalar, float, RA in degrees
+      dec: scalar, float, Dec in degrees
+      mjd: scalar, float, MJD in days
+      lst_deg: scalar, float, LST in degrees (ha = lst_deg - ra)
+
+    Returns:
+      field rotation angle derivative with time in arcsec per minute
+
+    """
+
+    # choose to use the totally empirical model, ignore mjd
+    return dfieldrotdt_empirical_model(ra,dec,lst_deg)
