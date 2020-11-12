@@ -300,11 +300,11 @@ def check_fit_error(table, tol, key, set_enabling):
     if set_enabling:
         new[disable_key] = failures
         for row in new:
-            action = f'{disable_key} set to {new[disable_key]} due to'
+            action = f'{disable_key} set to {row[disable_key]} due to'
             sign = '>' if row[disable_key] else 'within'
             row[disable_rationale_key] = f'{action} {fit_err_key}={row[fit_err_key]:.3f} {sign} tol={tol}'
-            if new[disable_key]:
-                logger.warning(new[disable_rationale_key])
+            if row[disable_key]:
+                logger.warning(row[disable_rationale_key])
     else:
         for i in np.flatnonzero(failures):
             logger.warning(f'Row for {new["POS_ID"][i]} removed due to {fit_err_key}={fit_errs[i]} > tol={tol}')
