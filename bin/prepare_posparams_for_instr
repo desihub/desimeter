@@ -279,15 +279,17 @@ def check_arm_lengths(table, tol):
     new.remove_rows(list(delete_idxs))        
     return new
 
-def check_static_fit_error(table, tol):
-    '''Checks overall goodness of fit for STATIC parameters. Argument 'tol' is
-    a value in rms mm. Rows outside this tolerance will be eliminated from the
-    output.
+def check_fit_error(table, tol, key, disable):
+    '''Checks overall goodness of fit for.
+        tol ... value in rms mm
+        key ... 'STATIC' or 'DYNAMIC'
+        disable ... True --> usual behavior of eliminating rows if not within tol
+                    False --> keep row and mark DEVICE_CLASSIFIED_NONFUNCTIONAL = True
     
     Internal details: Returns a copy of table.
     '''
     new = table.copy()
-    fit_err_key = 'FIT_ERROR_STATIC'
+    fit_err_key = 'FIT_ERROR_STATIC' if 'STATIC' in key else 'FIT_ERROR_DYNAMIC'
     fit_errs = new[fit_err_key]
     delete_idxs = fit_errs > tol
     for i in np.flatnonzero(delete_idxs):
@@ -295,18 +297,6 @@ def check_static_fit_error(table, tol):
                        f'{fit_errs[i]} > tol={tol}')
     new.remove_rows(delete_idxs)
     return new
-
-def check_dynamic_fit_error(table, tol):
-    '''Checks overall goodness of fit for DYNAMIC parameters. Argument 'tol' is
-    a value in rms mm. Rows outside this tolerance will be eliminated from the
-    output.
-    
-    Internal details: Returns a copy of table.
-    '''
-    # As of 2020-06-16, not implemented. The purpose of this check would be
-    # if we want to start using the SCALE_T and SCALE_P parameters. Then this
-    # check would become important.
-    return table.copy()  # not yet implemented
 
 def check_recent_rehome(table):
     '''Searches for "recent rehome" criterion. This indicates that OFFSET_T and
@@ -430,9 +420,9 @@ class Check(object):
         return output
 
 # set up and run checks
-checks = [Check(check_static_fit_error, tol=0.03)]
+checks = [Check(check_fit_error, tol=0.03, key='STATIC')]
 if args.allow_scale:
-    checks += [Check(check_dynamic_fit_error, tol=0.03)]
+    checks += [Check(check_fit_error, tol=0.03, key='DYNAMIC')]
 checks += [Check(check_flags)]
 checks += [Check(check_static_fit_bounds, tighten_factor=0.001)]
 checks += [Check(check_xy_offsets, tol=0.5)]
