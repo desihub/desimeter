@@ -7,6 +7,8 @@ output_prefix = time.strftime(filename_timestamp_format, time.gmtime())
 output_suffix = '_posparams_for_instr'
 output_name = output_prefix + output_suffix + '.csv'
 log_name = output_prefix + output_suffix + '.log'
+disable_key = 'DEVICE_CLASSIFIED_NONFUNCTIONAL'
+commit_prefix = 'COMMIT_'
 
 __doc__ = f'''
 Inspects paramfits csv table and prepares a version of the table which is
@@ -24,6 +26,20 @@ As of this writing (2020-06-12) the typical sequence is:
     5. set_calibrations.py ... (managed in SVN) push data to the online DB
     
 See DESI-5732 for data model and procedures.
+
+Important note regarding '--set-enabling' ('-s') argument:
+    
+    The default behavior is that positioners which fail the fit error threshold
+    check will simply be removed from the output file. Thus no changes will be
+    pushed to DB for these. This is the appropriate behavior, for example, if
+    the fit fails due to a math error, noise, or bad measurement data.
+    
+    If you do '--set-enabling', then the behavior is different. The output file
+    will include a column {disable_key}. It will have True/False values reflecting
+    pass/fail of the fit error threshold test. Then set_calibrations.py can batch
+    enable or disable positioners accordingly. Like all the other parameters, you
+    will still be offered a redundant option to set {commit_prefix + disable_key}
+    to False, which would prevent any enable/disable from being actually performed.
 '''
 
 force_no_scale = True
@@ -42,8 +58,7 @@ import argparse
 from argparse import RawTextHelpFormatter  # for making --help option respect newline characters
 parser = argparse.ArgumentParser(description=__doc__, formatter_class=RawTextHelpFormatter)
 parser.add_argument('-i', '--infile', type=str, required=True, help='path to input csv file (like "all_paramfits.csv")')
-parser.add_argument('-d', '--disable-bad-performers', action='store_true', help='for positioners which fail the fit error threshold, set ' + 
-                    'DEVICE_CLASSIFIED_NONFUNCTIONAL = True (rather than the usual behavior, of simply removing them from the prepared data file)')
+parser.add_argument('-e', '--set-enabling', action='store_true', help=f'set {disable_key} when checking fit error threshold')
 parser.add_argument('-a', '--allow-scale', action='store_true', help='whether to allow updating of SCALE_T and SCALE_P, defaults to False')
 
 args = parser.parse_args()
@@ -77,27 +92,21 @@ for header in input_table.columns:
             if match_found:
                 keys_in_to_out[header] = key
 keys_out_to_in = {val:key for key,val in keys_in_to_out.items()}
-new_table = input_table.copy()
 for key_in, key_out in keys_in_to_out.items():
     new_table[key_out] = new_table[key_in]
     
+# special setup for columns related to enabling/disabling
+if
+    
 # cast any boolean strings to true bools, where necessary
-commit_prefix = 'COMMIT_'
 possible_bools = {'True', 'true', 'TRUE', True, 1, 'Yes', 'yes', 'YES'}
 for key in new_table.columns:
-    is_boolean = commit_prefix in key
-    if is_boolean:
+    cast_as_boolean = commit_prefix in key or disable_key in key
+    if cast_as_boolean:
         new = [True if x in possible_bools else False for x in new_table[key]]
         new_table[key] = new
         
-# set up a log file
-script_name = os.path.basename(__file__)
-out_dir = os.path.dirname(args.infile)
-log_path = os.path.join(out_dir, log_name)
-logger = get_logger(level=None, path=log_path, timestamps=True)
-logger.info(f'Running {script_name} to prepare positioner calibration parameters for use on instrument.')
-logger.info(f'Input file is: {args.infile}')
-logger.info(f'Table contains {len(input_table)} rows')
+
 
 # user interaction wrappers
 def input2(message):
@@ -433,7 +442,8 @@ logger.info('All checks complete')
 #   there is no specific intent to ever recalibrate them (would require work to
 #   demonstrate anticollision safety).
 valid_keys = ['LENGTH_R1', 'LENGTH_R2', 'OFFSET_T', 'OFFSET_P', 'OFFSET_X', 'OFFSET_Y',
-              'SCALE_T', 'SCALE_P', 'PHYSICAL_RANGE_T', 'PHYSICAL_RANGE_P']
+              'SCALE_T', 'SCALE_P', 'PHYSICAL_RANGE_T', 'PHYSICAL_RANGE_P',
+              'DEVICE_CLASSIFIED_NONFUNCTIONAL']
 commit_keys = {key: commit_prefix + key for key in valid_keys}
 
 # currently unused params (as of 2020-06-16), included for completeness of interface
