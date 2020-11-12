@@ -70,6 +70,7 @@ if force_no_scale and args.allow_scale:
 from desimeter.posparams.movemask import movemask
 from astropy.table import Table
 input_table = Table.read(args.infile)
+new_table = input_table.copy()  # leave original input_table untouched in memory just for ease of comparison when debugging
 
 # import other modules
 import numpy as np
@@ -79,10 +80,19 @@ import desimeter.posparams.fitter as fitter
 import desimeter.io
 import desimeter.transform.pos2ptl as pos2ptl
 
+# set up a log file
+script_name = os.path.basename(__file__)
+out_dir = os.path.dirname(args.infile)
+log_path = os.path.join(out_dir, log_name)
+logger = get_logger(level=None, path=log_path, timestamps=True)
+logger.info(f'Running {script_name} to prepare positioner calibration parameters for use on instrument.')
+logger.info(f'Input file is: {args.infile}')
+logger.info(f'Table contains {len(input_table)} rows')
+
 # detect "static" and "dynamic" suffixes in data headers
 # generate a key mapping for which of these options to push to the output table
 keys_in_to_out = {}
-for header in input_table.columns:
+for header in new_table.columns:
     keys_in_to_out[header] = header
     cases = {'STATIC': fitter.static_keys,
              'DYNAMIC': fitter.dynamic_keys}
