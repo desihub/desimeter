@@ -76,6 +76,7 @@ new_table = input_table.copy()  # leave original input_table untouched in memory
 # import other modules
 import numpy as np
 import os
+import sys
 from desimeter.log import get_logger
 import desimeter.posparams.fitter as fitter
 import desimeter.io
@@ -134,13 +135,16 @@ def yesnohelp(message):
     '''Wrapper for user input which cleans up human-entered values and returns
     a string of exactly 'yes', 'no', or 'help'.
     '''
-    answer =  input2(f'{message} (y/n/help)')
+    answer =  input2(f'{message} (y/n/help/exit)')
     if answer.lower() in {'h', 'help', 'doc', 'man'}:
         return 'help'
     if answer.lower() in {'n', 'no', 'false'}:
         return 'no'
     if answer.lower() in {'y', 'yes', 'true'}:
         return 'yes'
+    if answer.lower() in {'exit'}:
+        logger.info('Exiting at user request.')
+        sys.exit(0)
     return yesnohelp(message)
 
 def str2float(s):
@@ -409,9 +413,12 @@ class Check(object):
         for key, val in self.kwargs.items():
             old_kwargs = self.kwargs.copy()
             while True:
-                response = input2(f'Enter new {key} value (currently {val}), or blank to skip:')
+                response = input2(f'Enter new {key} value (currently {val}), blank to skip, or \'exit\':')
                 if response in blank_responses:
                     break
+                if response == 'exit':
+                    logger.info('Exiting at user request.')
+                    sys.exit(0)
                 number = str2float(response)
                 if number != None:
                     self.kwargs[key] = float(response)
