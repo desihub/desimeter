@@ -8,6 +8,7 @@ output_suffix = '_posparams_for_instr'
 output_name = output_prefix + output_suffix + '.csv'
 log_name = output_prefix + output_suffix + '.log'
 disable_key = 'DEVICE_CLASSIFIED_NONFUNCTIONAL'
+disable_rationale_key = 'ENABLE_DISABLE_RATIONALE'
 commit_prefix = 'COMMIT_'
 
 __doc__ = f'''
@@ -49,7 +50,7 @@ in the online DB. The 'allow-scale' option will be ignored.
 
 Implementation details: In the future, especially if we determine that some failed
 positioners can be recovered this way, then the line force_no_scale would be
-the first thing to change in the code. Then search for the args.allow_scale
+the first thing to change in the code. Then search for the uargs.allow_scale
 property to find all the places you need to think about the SCALE issues.
 '''
 
@@ -61,15 +62,15 @@ parser.add_argument('-i', '--infile', type=str, required=True, help='path to inp
 parser.add_argument('-e', '--set-enabling', action='store_true', help=f'set {disable_key} when checking fit error threshold')
 parser.add_argument('-a', '--allow-scale', action='store_true', help='whether to allow updating of SCALE_T and SCALE_P, defaults to False')
 
-args = parser.parse_args()
-if force_no_scale and args.allow_scale:
-    args.allow_scale = False
+uargs = parser.parse_args()
+if force_no_scale and uargs.allow_scale:
+    uargs.allow_scale = False
     print(force_scale_explanation)
 
 # import data
 from desimeter.posparams.movemask import movemask
-from astropy.table import Table
-input_table = Table.read(args.infile)
+from astropy.table import Table, Column
+input_table = Table.read(uargs.infile)
 new_table = input_table.copy()  # leave original input_table untouched in memory just for ease of comparison when debugging
 
 # import other modules
@@ -82,11 +83,11 @@ import desimeter.transform.pos2ptl as pos2ptl
 
 # set up a log file
 script_name = os.path.basename(__file__)
-out_dir = os.path.dirname(args.infile)
+out_dir = os.path.dirname(uargs.infile)
 log_path = os.path.join(out_dir, log_name)
 logger = get_logger(level=None, path=log_path, timestamps=True)
 logger.info(f'Running {script_name} to prepare positioner calibration parameters for use on instrument.')
-logger.info(f'Input file is: {args.infile}')
+logger.info(f'Input file is: {uargs.infile}')
 logger.info(f'Table contains {len(input_table)} rows')
 
 # detect "static" and "dynamic" suffixes in data headers
@@ -105,9 +106,6 @@ keys_out_to_in = {val:key for key,val in keys_in_to_out.items()}
 for key_in, key_out in keys_in_to_out.items():
     new_table[key_out] = new_table[key_in]
     
-# special setup for columns related to enabling/disabling
-if
-    
 # cast any boolean strings to true bools, where necessary
 possible_bools = {'True', 'true', 'TRUE', True, 1, 'Yes', 'yes', 'YES'}
 for key in new_table.columns:
@@ -115,8 +113,10 @@ for key in new_table.columns:
     if cast_as_boolean:
         new = [True if x in possible_bools else False for x in new_table[key]]
         new_table[key] = new
-        
 
+# special setup for columns related to enabling/disabling
+new_table[disable_key] = False
+new_table[disable_rationale_key] = Column(['']*len(new_table), dtype=object) # astropy hack for variable length strings!
 
 # user interaction wrappers
 def input2(message):
@@ -421,7 +421,7 @@ class Check(object):
 
 # set up and run checks
 checks = [Check(check_fit_error, tol=0.03, key='STATIC')]
-if args.allow_scale:
+if uargs.allow_scale:
     checks += [Check(check_fit_error, tol=0.03, key='DYNAMIC')]
 checks += [Check(check_flags)]
 checks += [Check(check_static_fit_bounds, tighten_factor=0.001)]
@@ -442,13 +442,12 @@ logger.info('All checks complete')
 #   there is no specific intent to ever recalibrate them (would require work to
 #   demonstrate anticollision safety).
 valid_keys = ['LENGTH_R1', 'LENGTH_R2', 'OFFSET_T', 'OFFSET_P', 'OFFSET_X', 'OFFSET_Y',
-              'SCALE_T', 'SCALE_P', 'PHYSICAL_RANGE_T', 'PHYSICAL_RANGE_P',
-              'DEVICE_CLASSIFIED_NONFUNCTIONAL']
+              'SCALE_T', 'SCALE_P', 'PHYSICAL_RANGE_T', 'PHYSICAL_RANGE_P', disable_key]
 commit_keys = {key: commit_prefix + key for key in valid_keys}
 
 # currently unused params (as of 2020-06-16), included for completeness of interface
 skip = {'PHYSICAL_RANGE_T', 'PHYSICAL_RANGE_P'}
-if not args.allow_scale:
+if not uargs.allow_scale:
     skip |= {'SCALE_T', 'SCALE_P'}
 
 # give user specific decision over whether to commit each field
