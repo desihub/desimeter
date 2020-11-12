@@ -279,23 +279,32 @@ def check_arm_lengths(table, tol):
     new.remove_rows(list(delete_idxs))        
     return new
 
-def check_fit_error(table, tol, key, disable):
+def check_fit_error(table, tol, key, set_enabling):
     '''Checks overall goodness of fit for.
         tol ... value in rms mm
         key ... 'STATIC' or 'DYNAMIC'
-        disable ... True --> usual behavior of eliminating rows if not within tol
-                    False --> keep row and mark DEVICE_CLASSIFIED_NONFUNCTIONAL = True
+        set_enabling ... True  --> usual behavior of eliminating rows if not within tol
+                         False --> keep row and mark DEVICE_CLASSIFIED_NONFUNCTIONAL to
+                                   True or False depending on whether threshold was met
     
     Internal details: Returns a copy of table.
     '''
     new = table.copy()
     fit_err_key = 'FIT_ERROR_STATIC' if 'STATIC' in key else 'FIT_ERROR_DYNAMIC'
     fit_errs = new[fit_err_key]
-    delete_idxs = fit_errs > tol
-    for i in np.flatnonzero(delete_idxs):
-        logger.warning(f'Row for {new["POS_ID"][i]} removed due to {fit_err_key}=' +
-                       f'{fit_errs[i]} > tol={tol}')
-    new.remove_rows(delete_idxs)
+    failures = fit_errs > tol
+    if set_enabling:
+        new[disable_key] = failures
+        for row in new:
+            action = f'{disable_key} set to {new[disable_key]} due to'
+            sign = '>' if row[disable_key] else 'within'
+            row[disable_rationale_key] = f'{action} {fit_err_key}={row[fit_err_key]:.3f} {sign} tol={tol}'
+            if new[disable_key]:
+                logger.warning(new[disable_rationale_key])
+    else:
+        for i in np.flatnonzero(failures):
+            logger.warning(f'Row for {new["POS_ID"][i]} removed due to {fit_err_key}={fit_errs[i]} > tol={tol}')
+        new.remove_rows(failures)
     return new
 
 def check_recent_rehome(table):
@@ -420,9 +429,9 @@ class Check(object):
         return output
 
 # set up and run checks
-checks = [Check(check_fit_error, tol=0.03, key='STATIC')]
+checks = [Check(check_fit_error, tol=0.03, key='STATIC', set_enabling=uargs.set_enabling)]
 if uargs.allow_scale:
-    checks += [Check(check_fit_error, tol=0.03, key='DYNAMIC')]
+    checks += [Check(check_fit_error, tol=0.03, key='DYNAMIC', set_enabling=uargs.set_enabling)]
 checks += [Check(check_flags)]
 checks += [Check(check_static_fit_bounds, tighten_factor=0.001)]
 checks += [Check(check_xy_offsets, tol=0.5)]
