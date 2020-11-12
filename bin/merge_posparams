@@ -5,9 +5,10 @@ utility script to merge individual posparams fits back into a single table,
 using the last entry from each of the individual fits
 """
 
-import sys, os, argparse
+import sys, argparse
 import numpy as np
-from astropy.table import Table, Column, vstack, join
+from astropy.table import Table, vstack
+import glob
 
 import desimeter.io
 from desimeter.log import get_logger
@@ -16,8 +17,8 @@ parser = argparse.ArgumentParser(
     usage = "merge_posparams -i M*.csv -o posparams.csv",
     description = 'Merge individual M*.csv posparams files into a single table, '
                   'optionally also merging metrology information')
-parser.add_argument("-i", "--input", type=str, nargs='*', required=True,
-                    help="individual posparams fit files")
+parser.add_argument("-i", "--input", type=str, required=True,
+                    help="individual posparams fit files, regex expression ok")
 parser.add_argument("-o", "--output", type=str, required=True,
                     help="output merged table file")
 parser.add_argument("--no-check", action="store_true",
@@ -31,7 +32,8 @@ log = get_logger()
 log.info(f'Loading {len(args.input)} individual posparams files')
 
 tables=list()
-for filename in args.input :
+filenames = glob.glob(args.input)
+for filename in filenames:
     t=Table.read(filename)
     if len(t)==0 : continue
 
