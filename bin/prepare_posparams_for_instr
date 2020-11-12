@@ -155,7 +155,7 @@ def _eliminate_rows(table, elim, rationale):
     n_elim_rows = len(np.flatnonzero(elim_bool))  # flatnonzero is like argwhere but better
     n_elim_posids = len(posids_eliminated)
     logger.warning(f'{n_elim_rows} of {n_rows} rows have {rationale}. These' +
-                   f' rows will be excluded from the output table. This eliminates' +
+                   ' rows will be excluded from the output table. This eliminates' +
                    f' the following {n_elim_posids} positioners from the table:' +
                    f' {sorted(posids_eliminated)}')
     output = table.copy()
@@ -411,13 +411,13 @@ class Check(object):
         return output
 
 # set up and run checks
-checks = [Check(check_flags)]
+checks = [Check(check_static_fit_error, tol=0.03)]
+if args.allow_scale:
+    checks += [Check(check_dynamic_fit_error, tol=0.03)]
+checks += [Check(check_flags)]
 checks += [Check(check_static_fit_bounds, tighten_factor=0.001)]
 checks += [Check(check_xy_offsets, tol=0.5)]
 checks += [Check(check_arm_lengths, tol=0.4)]
-checks += [Check(check_static_fit_error, tol=0.03)]
-if args.allow_scale:
-    checks += [Check(check_dynamic_fit_error, tol=0.03)]
 #checks += [Check(check_recent_rehome)]
 checks += [Check(check_uniqueness)]
 for check in checks:
