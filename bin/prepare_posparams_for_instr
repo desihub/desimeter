@@ -286,9 +286,9 @@ def check_fit_error(table, tol, key, set_enabling):
     if set_enabling:
         new[disable_key] = failures
         for row in new:
-            action = f'{disable_key} set to {row[disable_key]} due to'
-            sign = '>' if row[disable_key] else 'within'
-            row[disable_rationale_key] = f'{action} {fit_err_key}={row[fit_err_key]:.3f} {sign} tol={tol}'
+            action = f'{disable_key}={row[disable_key]} because'
+            sign = '>' if row[disable_key] else '<='
+            row[disable_rationale_key] = f'{action} {fit_err_key}={row[fit_err_key]:.6f} {sign} tol={tol}'
             if row[disable_key]:
                 logger.warning(row[disable_rationale_key])
     else:
@@ -421,10 +421,23 @@ class Check(object):
             user_not_done = was_adjusted
         return output
 
+# additional user help for cases where we are possibly disabling positioners
+fit_err_tol = 0.03
+if uargs.set_enabling:
+    pos_perform_tol = 0.1
+    input2('Option "set-enabling" is on. In this mode, rather than determining mathematical ' +
+           'quality of best fit parameters (for which we typically start with a fit error tol ' +
+           f'value like {fit_err_tol} mm), we are more interested here in determining ' + 
+           f'positioner performance. For this, we use tolerance = {pos_perform_tol} mm. The ' +
+           'recommendation is that you *not* change this value, unless it has been discussed ' +
+           'among the focal plane experts team and agreed to. Press enter to acknowledge:')
+    fit_err_tol = pos_perform_tol
+    logger.info(f'fit_err_tol updated to {fit_err_tol} mm')
+
 # set up and run checks
-checks = [Check(check_fit_error, tol=0.03, key='STATIC', set_enabling=uargs.set_enabling)]
+checks = [Check(check_fit_error, tol=fit_err_tol, key='STATIC', set_enabling=uargs.set_enabling)]
 if uargs.allow_scale:
-    checks += [Check(check_fit_error, tol=0.03, key='DYNAMIC', set_enabling=uargs.set_enabling)]
+    checks += [Check(check_fit_error, tol=fit_err_tol, key='DYNAMIC', set_enabling=uargs.set_enabling)]
 checks += [Check(check_flags)]
 checks += [Check(check_static_fit_bounds, tighten_factor=0.001)]
 checks += [Check(check_xy_offsets, tol=0.5)]
