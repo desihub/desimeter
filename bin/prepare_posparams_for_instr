@@ -80,7 +80,6 @@ import sys
 from desimeter.log import get_logger
 import desimeter.posparams.fitter as fitter
 import desimeter.io
-import desimeter.transform.pos2ptl as pos2ptl
 
 # set up a log file
 script_name = os.path.basename(__file__)
