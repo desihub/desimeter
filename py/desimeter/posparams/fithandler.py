@@ -33,6 +33,9 @@ output_keys = {'POS_ID': False,
                }
 output_keys.update({key:True for key in fitter.all_keys})
 
+# columns to keep in the output file (though not necessarily used in fitting)
+passthru_keys = ['PETAL_ID', 'PETAL_LOC', 'DEVICE_LOC']
+
 def write_failed_fit(posid,savedir,flag) :
     filepath = os.path.join(savedir, posid + '_paramfits.csv')
     filepath = os.path.realpath(filepath)
@@ -147,6 +150,10 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
     # MERGED STATIC + DYNAMIC
     same_keys = [key for key, is_variable in output_keys.items() if not is_variable]
     merged = join(static_out, dynamic_out, keys=same_keys)
+    for key in passthru_keys:
+        values = set(table[key])
+        assert len(values) == 1, f'unexpected unique values {values} for {key}'
+        merged[key] = values.pop()
     merged.sort(['POS_ID','DATA_END_DATE_SEC'])
     merged_filepath = os.path.join(savedir, posid + '_paramfits.csv')
     merged_filepath = os.path.realpath(merged_filepath)
