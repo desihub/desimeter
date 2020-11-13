@@ -230,34 +230,21 @@ def check_xy_offsets(table, tol):
     Internal details: Returns a copy of table.
     '''
     new = table.copy()
-    expected_centers = desimeter.io.load_metrology()
+    expected_centers = desimeter.io.load_nominal_positioner_locations()
     delete_idxs = set()
     for i in range(len(new)):
         device_selection = expected_centers['DEVICE_LOC'] == new['DEVICE_LOC'][i]
-        petal_id = new['PETAL_ID'][i]
-        petal_selection = expected_centers['PETAL_ID'] == petal_id
-        err_msg = f'No xy offset check values loaded for PETAL_ID={petal_id}, please check that' \
-                  f' the DESIMETER_DATA environment variable (currently set to directory' \
-                  f' "{desimeter.io.desimeter_data_dir()}" is correct on your machine. Hint, for' \
-                  ' test petals in the lab, we sometimes use a subdirectory, with an alternative' \
-                  ' fp-metrology.csv file.'
-        assert any(petal_selection), err_msg
-        selection = device_selection & petal_selection
-        assert len(np.flatnonzero(selection)) == 1, 'error, didn\'t select down to 1 positioner'
-        x_ptl = float(expected_centers[selection]['X_PTL'])
-        y_ptl = float(expected_centers[selection]['Y_PTL'])
-        x_flat, y_flat = pos2ptl.ptl2flat(x_ptl, y_ptl)
-        xy_exp = {'X': x_flat, 'Y': y_flat}
-        for u, exp in xy_exp.items():
+        for u in ['X', 'Y']:
+            expected_key = u + '_FLAT'
             offset_key = 'OFFSET_' + u
+            expected = expected_centers[device_selection][expected_key]
             offset = new[offset_key][i]
-            err = offset - exp
+            err = offset - expected
             if abs(err) > tol:
                 delete_idxs.add(i)
-                u_ptl = x_ptl if u == 'X' else y_ptl
                 logger.warning(f'Row for {new["POS_ID"][i]} removed due to {offset_key}=' +
-                               f'{offset:.4f} outside tol={tol} of nominal ptl2flat(' +
-                               f'{u + "_PTL"}={u_ptl:.4f})={exp:.4f} by {offset-exp:.4f}')
+                               f'{offset:.4f} outside tol={tol} of nominal {expected:.4f} ' +
+                               f'by {offset-expected:.4f}')
     new.remove_rows(list(delete_idxs))        
     return new
 
