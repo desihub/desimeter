@@ -237,7 +237,7 @@ def check_xy_offsets(table, tol):
         for u in ['X', 'Y']:
             expected_key = u + '_FLAT'
             offset_key = 'OFFSET_' + u
-            expected = expected_centers[device_selection][expected_key]
+            expected = float(expected_centers[device_selection][expected_key])
             offset = new[offset_key][i]
             err = offset - expected
             if abs(err) > tol:
