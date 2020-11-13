@@ -8,6 +8,10 @@ UMT-DESI-5421.csv
 --------------------------------------
 metrology of petals, from `DESI-5421`_ , currently v11 (using UMT.csv)
 
+positioner_locations_0530v18.csv
+--------------------------------------
+nominal center locations, from `DESI-0530`_
+
 fp-metrology.csv
 --------------------------------------
 * metrology of petals + 2 columns, XFP,YFP, mapping positioners
@@ -48,3 +52,4 @@ guide_data_20200415.csv
   the script `desi_fit_field_rotation_rate`.
 * The resulting polynomial as a function of HA and Dec is
   used in the routine `desimeter.fieldmodel.dfieldrotdt`.
+
