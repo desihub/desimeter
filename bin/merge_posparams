@@ -5,14 +5,7 @@ utility script to merge individual posparams fits back into a single table,
 using the last entry from each of the individual fits
 """
 
-import os, sys, argparse
-import numpy as np
-from astropy.table import Table, vstack
-import glob
-
-import desimeter.io
-from desimeter.log import get_logger
-
+import argparse
 parser = argparse.ArgumentParser(
     usage = "merge_posparams -i M*.csv -o posparams.csv",
     description = 'Merge individual M*.csv posparams files into a single table, '
@@ -25,8 +18,14 @@ parser.add_argument("--no-check", action="store_true",
                     help="do not check indices agains metrology")
 parser.add_argument("--no-metrology", action="store_true",
                     help="do not merge indices from metrology if missing")
-
 args = parser.parse_args()
+
+import os, sys
+import numpy as np
+from astropy.table import Table, vstack
+import desimeter.io
+from desimeter.log import get_logger
+
 filenames = []
 if os.name == 'nt':  # windows needs extra help with file path parsing
     import glob
