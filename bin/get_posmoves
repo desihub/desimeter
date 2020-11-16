@@ -190,6 +190,11 @@ if args.merge:
     empty = [i for i in range(len(otables)) if len(otables[i]) == 0]
     for i in reversed(empty):
         del otables[i]
+    cast_types_for_stupid_astropy_merge = {key: object for key in {'POSTSCRIPT', 'BUS_ID', 'CALIB_NOTE', 'LOG_NOTE', 'MOVE_CMD', 'MOVE_VAL1', 'MOVE_VAL2'}}
+    cast_types_for_stupid_astropy_merge.update({key: bool for key in {'CTRL_ENABLED', 'CLASSIFIED_AS_RETRACTED', 'DEVICE_CLASSIFIED_NONFUNCTIONAL', 'FIBER_INTACT'}})
+    for key, cast in cast_types_for_stupid_astropy_merge.items():
+        for table in otables:
+            table[key] = Column(table[key].tolist(), dtype=object)
     merged = vstack(otables)
     name = time.strftime('%Y%m%dT%H%M%S%z') + '_posdata.csv'
     path = os.path.join(args.outdir, name)
