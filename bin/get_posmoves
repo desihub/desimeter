@@ -3,7 +3,7 @@
 import os
 import psycopg2
 import numpy as np
-from astropy.table import Table, vstack
+from astropy.table import Table, vstack, Column
 import argparse
 import time
 start_time = time.time()
@@ -210,6 +210,9 @@ for petalid in petalids :
             otable.write(ofilename,overwrite=True)
             print("wrote", ofilename, status_str)
 if args.merge:
+    empty = [i for i in range(len(otables)) if len(otables[i]) == 0]
+    for i in reversed(empty):
+        del otables[i]
     merged = vstack(otables)
     name = time.strftime('%Y%m%dT%H%M%S%z') + '_posdata.csv'
     path = os.path.join(args.outdir, name)
