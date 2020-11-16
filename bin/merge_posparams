@@ -5,7 +5,7 @@ utility script to merge individual posparams fits back into a single table,
 using the last entry from each of the individual fits
 """
 
-import sys, argparse
+import os, sys, argparse
 import numpy as np
 from astropy.table import Table, vstack
 import glob
@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser(
     usage = "merge_posparams -i M*.csv -o posparams.csv",
     description = 'Merge individual M*.csv posparams files into a single table, '
                   'optionally also merging metrology information')
-parser.add_argument("-i", "--input", type=str, required=True,
+parser.add_argument("-i", "--input", type=str, nargs='*', required=True,
                     help="individual posparams fit files, regex expression ok")
 parser.add_argument("-o", "--output", type=str, required=True,
                     help="output merged table file")
@@ -26,13 +26,20 @@ parser.add_argument("--no-check", action="store_true",
 parser.add_argument("--no-metrology", action="store_true",
                     help="do not merge indices from metrology if missing")
 
-
 args = parser.parse_args()
+filenames = []
+if os.name == 'nt':  # windows needs extra help with file path parsing
+    import glob
+    for path_str in args.input:
+        globbed = glob.glob(path_str)
+        filenames += globbed
+else:
+    filenames = args.input
+
 log = get_logger()
-log.info(f'Loading {len(args.input)} individual posparams files')
+log.info(f'Loading {len(filenames)} individual posparams files')
 
 tables=list()
-filenames = glob.glob(args.input)
 for filename in filenames:
     t=Table.read(filename)
     if len(t)==0 : continue
