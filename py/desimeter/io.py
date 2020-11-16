@@ -63,3 +63,25 @@ def fvc2fp_filename():
 
 def fvc_bias_filename():
     return os.path.join(desimeter_data_dir(),'bias.fits')
+
+def load_nominal_positioner_locations():
+    directory = resource_filename('desimeter', 'data')
+    filename = 'positioner_locations_0530v18.csv'
+    path = os.path.join(directory, filename)
+    table = Table.read(path)
+    
+    # so that we can use identical copy as in svn plate_control/petal, but with
+    # more desimeter-like nomenclature
+    names_map = {'device_location_id': 'DEVICE_LOC',
+                 'device_type': 'DEVICE_TYPE',
+                 'X': 'X_PTL',
+                 'Y': 'Y_PTL',
+                 'Z': 'Z_PTL',
+                 'FLAT_X': 'X_FLAT',
+                 'FLAT_Y': 'Y_FLAT',
+                 }
+    for n1, n2 in names_map.items():
+        table.rename_column(n1, n2)
+    
+    return table
+    

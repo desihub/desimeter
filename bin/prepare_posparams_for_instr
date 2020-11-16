@@ -7,6 +7,9 @@ output_prefix = time.strftime(filename_timestamp_format, time.gmtime())
 output_suffix = '_posparams_for_instr'
 output_name = output_prefix + output_suffix + '.csv'
 log_name = output_prefix + output_suffix + '.log'
+disable_key = 'DEVICE_CLASSIFIED_NONFUNCTIONAL'
+disable_rationale_key = 'ENABLE_DISABLE_RATIONALE'
+commit_prefix = 'COMMIT_'
 
 __doc__ = f'''
 Inspects paramfits csv table and prepares a version of the table which is
@@ -24,6 +27,20 @@ As of this writing (2020-06-12) the typical sequence is:
     5. set_calibrations.py ... (managed in SVN) push data to the online DB
     
 See DESI-5732 for data model and procedures.
+
+Important note regarding '--set-enabling' ('-s') argument:
+    
+    The default behavior is that positioners which fail the fit error threshold
+    check will simply be removed from the output file. Thus no changes will be
+    pushed to DB for these. This is the appropriate behavior, for example, if
+    the fit fails due to a math error, noise, or bad measurement data.
+    
+    If you do '--set-enabling', then the behavior is different. The output file
+    will include a column {disable_key}. It will have True/False values reflecting
+    pass/fail of the fit error threshold test. Then set_calibrations.py can batch
+    enable or disable positioners accordingly. Like all the other parameters, you
+    will still be offered a redundant option to set {commit_prefix + disable_key}
+    to False, which would prevent any enable/disable from being actually performed.
 '''
 
 force_no_scale = True
@@ -33,7 +50,7 @@ in the online DB. The 'allow-scale' option will be ignored.
 
 Implementation details: In the future, especially if we determine that some failed
 positioners can be recovered this way, then the line force_no_scale would be
-the first thing to change in the code. Then search for the args.allow_scale
+the first thing to change in the code. Then search for the uargs.allow_scale
 property to find all the places you need to think about the SCALE issues.
 '''
 
@@ -42,29 +59,41 @@ import argparse
 from argparse import RawTextHelpFormatter  # for making --help option respect newline characters
 parser = argparse.ArgumentParser(description=__doc__, formatter_class=RawTextHelpFormatter)
 parser.add_argument('-i', '--infile', type=str, required=True, help='path to input csv file (like "all_paramfits.csv")')
-parser.add_argument('--allow-scale', action='store_true', help='whether to allow updating of SCALE_T and SCALE_P, defaults to False')
-args = parser.parse_args()
-if force_no_scale and args.allow_scale:
-    args.allow_scale = False
+parser.add_argument('-e', '--set-enabling', action='store_true', help=f'set {disable_key} when checking fit error threshold')
+parser.add_argument('-a', '--allow-scale', action='store_true', help='whether to allow updating of SCALE_T and SCALE_P, defaults to False')
+
+uargs = parser.parse_args()
+if force_no_scale and uargs.allow_scale:
+    uargs.allow_scale = False
     print(force_scale_explanation)
 
 # import data
 from desimeter.posparams.movemask import movemask
-from astropy.table import Table
-input_table = Table.read(args.infile)
+from astropy.table import Table, Column
+input_table = Table.read(uargs.infile)
+new_table = input_table.copy()  # leave original input_table untouched in memory just for ease of comparison when debugging
 
 # import other modules
 import numpy as np
 import os
+import sys
 from desimeter.log import get_logger
 import desimeter.posparams.fitter as fitter
 import desimeter.io
-import desimeter.transform.pos2ptl as pos2ptl
+
+# set up a log file
+script_name = os.path.basename(__file__)
+out_dir = os.path.dirname(uargs.infile)
+log_path = os.path.join(out_dir, log_name)
+logger = get_logger(level=None, path=log_path, timestamps=True)
+logger.info(f'Running {script_name} to prepare positioner calibration parameters for use on instrument.')
+logger.info(f'Input file is: {uargs.infile}')
+logger.info(f'Table contains {len(input_table)} rows')
 
 # detect "static" and "dynamic" suffixes in data headers
 # generate a key mapping for which of these options to push to the output table
 keys_in_to_out = {}
-for header in input_table.columns:
+for header in new_table.columns:
     keys_in_to_out[header] = header
     cases = {'STATIC': fitter.static_keys,
              'DYNAMIC': fitter.dynamic_keys}
@@ -74,27 +103,20 @@ for header in input_table.columns:
             if match_found:
                 keys_in_to_out[header] = key
 keys_out_to_in = {val:key for key,val in keys_in_to_out.items()}
-new_table = input_table.copy()
 for key_in, key_out in keys_in_to_out.items():
     new_table[key_out] = new_table[key_in]
     
 # cast any boolean strings to true bools, where necessary
-commit_prefix = 'COMMIT_'
 possible_bools = {'True', 'true', 'TRUE', True, 1, 'Yes', 'yes', 'YES'}
 for key in new_table.columns:
-    is_boolean = commit_prefix in key
-    if is_boolean:
+    cast_as_boolean = commit_prefix in key or disable_key in key
+    if cast_as_boolean:
         new = [True if x in possible_bools else False for x in new_table[key]]
         new_table[key] = new
-        
-# set up a log file
-script_name = os.path.basename(__file__)
-out_dir = os.path.dirname(args.infile)
-log_path = os.path.join(out_dir, log_name)
-logger = get_logger(level=None, path=log_path, timestamps=True)
-logger.info(f'Running {script_name} to prepare positioner calibration parameters for use on instrument.')
-logger.info(f'Input file is: {args.infile}')
-logger.info(f'Table contains {len(input_table)} rows')
+
+# special setup for columns related to enabling/disabling
+new_table[disable_key] = False
+new_table[disable_rationale_key] = Column(['']*len(new_table), dtype=object) # astropy hack for variable length strings!
 
 # user interaction wrappers
 def input2(message):
@@ -112,13 +134,16 @@ def yesnohelp(message):
     '''Wrapper for user input which cleans up human-entered values and returns
     a string of exactly 'yes', 'no', or 'help'.
     '''
-    answer =  input2(f'{message} (y/n/help)')
+    answer =  input2(f'{message} (y/n/help/exit)')
     if answer.lower() in {'h', 'help', 'doc', 'man'}:
         return 'help'
     if answer.lower() in {'n', 'no', 'false'}:
         return 'no'
     if answer.lower() in {'y', 'yes', 'true'}:
         return 'yes'
+    if answer.lower() in {'exit'}:
+        logger.info('Exiting at user request.')
+        sys.exit(0)
     return yesnohelp(message)
 
 def str2float(s):
@@ -152,7 +177,7 @@ def _eliminate_rows(table, elim, rationale):
     n_elim_rows = len(np.flatnonzero(elim_bool))  # flatnonzero is like argwhere but better
     n_elim_posids = len(posids_eliminated)
     logger.warning(f'{n_elim_rows} of {n_rows} rows have {rationale}. These' +
-                   f' rows will be excluded from the output table. This eliminates' +
+                   ' rows will be excluded from the output table. This eliminates' +
                    f' the following {n_elim_posids} positioners from the table:' +
                    f' {sorted(posids_eliminated)}')
     output = table.copy()
@@ -204,34 +229,21 @@ def check_xy_offsets(table, tol):
     Internal details: Returns a copy of table.
     '''
     new = table.copy()
-    expected_centers = desimeter.io.load_metrology()
+    expected_centers = desimeter.io.load_nominal_positioner_locations()
     delete_idxs = set()
     for i in range(len(new)):
         device_selection = expected_centers['DEVICE_LOC'] == new['DEVICE_LOC'][i]
-        petal_id = new['PETAL_ID'][i]
-        petal_selection = expected_centers['PETAL_ID'] == petal_id
-        err_msg = f'No xy offset check values loaded for PETAL_ID={petal_id}, please check that' \
-                  f' the DESIMETER_DATA environment variable (currently set to directory' \
-                  f' "{desimeter.io.desimeter_data_dir()}" is correct on your machine. Hint, for' \
-                  ' test petals in the lab, we sometimes use a subdirectory, with an alternative' \
-                  ' fp-metrology.csv file.'
-        assert any(petal_selection), err_msg
-        selection = device_selection & petal_selection
-        assert len(np.flatnonzero(selection)) == 1, 'error, didn\'t select down to 1 positioner'
-        x_ptl = float(expected_centers[selection]['X_PTL'])
-        y_ptl = float(expected_centers[selection]['Y_PTL'])
-        x_flat, y_flat = pos2ptl.ptl2flat(x_ptl, y_ptl)
-        xy_exp = {'X': x_flat, 'Y': y_flat}
-        for u, exp in xy_exp.items():
+        for u in ['X', 'Y']:
+            expected_key = u + '_FLAT'
             offset_key = 'OFFSET_' + u
+            expected = float(expected_centers[device_selection][expected_key])
             offset = new[offset_key][i]
-            err = offset - exp
+            err = offset - expected
             if abs(err) > tol:
                 delete_idxs.add(i)
-                u_ptl = x_ptl if u == 'X' else y_ptl
                 logger.warning(f'Row for {new["POS_ID"][i]} removed due to {offset_key}=' +
-                               f'{offset:.4f} outside tol={tol} of nominal ptl2flat(' +
-                               f'{u + "_PTL"}={u_ptl:.4f})={exp:.4f} by {offset-exp:.4f}')
+                               f'{offset:.4f} outside tol={tol} of nominal {expected:.4f} ' +
+                               f'by {offset-expected:.4f}')
     new.remove_rows(list(delete_idxs))        
     return new
 
@@ -257,34 +269,33 @@ def check_arm_lengths(table, tol):
     new.remove_rows(list(delete_idxs))        
     return new
 
-def check_static_fit_error(table, tol):
-    '''Checks overall goodness of fit for STATIC parameters. Argument 'tol' is
-    a value in rms mm. Rows outside this tolerance will be eliminated from the
-    output.
+def check_fit_error(table, tol, key, set_enabling):
+    '''Checks overall goodness of fit for.
+        tol ... value in rms mm
+        key ... 'STATIC' or 'DYNAMIC'
+        set_enabling ... True  --> usual behavior of eliminating rows if not within tol
+                         False --> keep row and mark DEVICE_CLASSIFIED_NONFUNCTIONAL to
+                                   True or False depending on whether threshold was met
     
     Internal details: Returns a copy of table.
     '''
     new = table.copy()
-    fit_err_key = 'FIT_ERROR_STATIC'
+    fit_err_key = 'FIT_ERROR_STATIC' if 'STATIC' in key else 'FIT_ERROR_DYNAMIC'
     fit_errs = new[fit_err_key]
-    delete_idxs = fit_errs > tol
-    for i in np.flatnonzero(delete_idxs):
-        logger.warning(f'Row for {new["POS_ID"][i]} removed due to {fit_err_key}=' +
-                       f'{fit_errs[i]} > tol={tol}')
-    new.remove_rows(delete_idxs)
+    failures = fit_errs > tol
+    if set_enabling:
+        new[disable_key] = failures
+        for row in new:
+            action = f'{disable_key}={row[disable_key]} because'
+            sign = '>' if row[disable_key] else '<='
+            row[disable_rationale_key] = f'{action} {fit_err_key}={row[fit_err_key]:.6f} {sign} tol={tol}'
+            if row[disable_key]:
+                logger.warning(row[disable_rationale_key])
+    else:
+        for i in np.flatnonzero(failures):
+            logger.warning(f'Row for {new["POS_ID"][i]} removed due to {fit_err_key}={fit_errs[i]} > tol={tol}')
+        new.remove_rows(failures)
     return new
-
-def check_dynamic_fit_error(table, tol):
-    '''Checks overall goodness of fit for DYNAMIC parameters. Argument 'tol' is
-    a value in rms mm. Rows outside this tolerance will be eliminated from the
-    output.
-    
-    Internal details: Returns a copy of table.
-    '''
-    # As of 2020-06-16, not implemented. The purpose of this check would be
-    # if we want to start using the SCALE_T and SCALE_P parameters. Then this
-    # check would become important.
-    return table.copy()  # not yet implemented
 
 def check_recent_rehome(table):
     '''Searches for "recent rehome" criterion. This indicates that OFFSET_T and
@@ -388,9 +399,12 @@ class Check(object):
         for key, val in self.kwargs.items():
             old_kwargs = self.kwargs.copy()
             while True:
-                response = input2(f'Enter new {key} value (currently {val}), or blank to skip:')
+                response = input2(f'Enter new {key} value (currently {val}), blank to skip, or \'exit\':')
                 if response in blank_responses:
                     break
+                if response == 'exit':
+                    logger.info('Exiting at user request.')
+                    sys.exit(0)
                 number = str2float(response)
                 if number != None:
                     self.kwargs[key] = float(response)
@@ -407,14 +421,27 @@ class Check(object):
             user_not_done = was_adjusted
         return output
 
+# additional user help for cases where we are possibly disabling positioners
+fit_err_tol = 0.03
+if uargs.set_enabling:
+    pos_perform_tol = 0.1
+    input2('Option "set-enabling" is on. In this mode, rather than determining mathematical ' +
+           'quality of best fit parameters (for which we typically start with a fit error tol ' +
+           f'value like {fit_err_tol} mm), we are more interested here in determining ' + 
+           f'positioner performance. For this, we use tolerance = {pos_perform_tol} mm. The ' +
+           'recommendation is that you *not* change this value, unless it has been discussed ' +
+           'among the focal plane experts team and agreed to. Press enter to acknowledge:')
+    fit_err_tol = pos_perform_tol
+    logger.info(f'fit_err_tol updated to {fit_err_tol} mm')
+
 # set up and run checks
-checks = [Check(check_flags)]
+checks = [Check(check_fit_error, tol=fit_err_tol, key='STATIC', set_enabling=uargs.set_enabling)]
+if uargs.allow_scale:
+    checks += [Check(check_fit_error, tol=fit_err_tol, key='DYNAMIC', set_enabling=uargs.set_enabling)]
+checks += [Check(check_flags)]
 checks += [Check(check_static_fit_bounds, tighten_factor=0.001)]
 checks += [Check(check_xy_offsets, tol=0.5)]
 checks += [Check(check_arm_lengths, tol=0.4)]
-checks += [Check(check_static_fit_error, tol=0.03)]
-if args.allow_scale:
-    checks += [Check(check_dynamic_fit_error, tol=0.03)]
 #checks += [Check(check_recent_rehome)]
 checks += [Check(check_uniqueness)]
 for check in checks:
@@ -430,12 +457,12 @@ logger.info('All checks complete')
 #   there is no specific intent to ever recalibrate them (would require work to
 #   demonstrate anticollision safety).
 valid_keys = ['LENGTH_R1', 'LENGTH_R2', 'OFFSET_T', 'OFFSET_P', 'OFFSET_X', 'OFFSET_Y',
-              'SCALE_T', 'SCALE_P', 'PHYSICAL_RANGE_T', 'PHYSICAL_RANGE_P']
+              'SCALE_T', 'SCALE_P', 'PHYSICAL_RANGE_T', 'PHYSICAL_RANGE_P', disable_key]
 commit_keys = {key: commit_prefix + key for key in valid_keys}
 
 # currently unused params (as of 2020-06-16), included for completeness of interface
 skip = {'PHYSICAL_RANGE_T', 'PHYSICAL_RANGE_P'}
-if not args.allow_scale:
+if not uargs.allow_scale:
     skip |= {'SCALE_T', 'SCALE_P'}
 
 # give user specific decision over whether to commit each field
