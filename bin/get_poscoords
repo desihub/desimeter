@@ -21,7 +21,7 @@ parser.add_argument('--host', type= str, required=False, default='db.replicator.
 parser.add_argument('--port', type= int, required=False, default=60042, help="60042 for kpno or 5432 for petaltest")
 parser.add_argument('--password', type= str, required=False, default=None, help="nothing for kpno")
 parser.add_argument('--petal-ids', type= str, required=False, default=None, help="comma separated list of petal ids")
-parser.add_argument('--exposure-id', type= int, required=True, default=None, help="exposure id")
+parser.add_argument('--exposure-id', type= int, required=False, default=None, help="exposure id")
 parser.add_argument('--exposure-iter', type= int, required=False, default=0, help="exposure iter")
 parser.add_argument('-o', '--outfile', type = str, required = True, default=None,  help="output csv file name")
 parser.add_argument('--plot', action = 'store_true',  help="plot")
@@ -45,9 +45,19 @@ otable = None
 for petalid in petalids :
 
     petal_loc = get_petal_loc(petalid)
-    cmd  = "select * from posmovedb.positioner_moves_p{} where exposure_id={} and exposure_iter={}".format(int(petalid),args.exposure_id,args.exposure_iter)
+    if args.exposure_id is not None :
+        cmd  = "select * from posmovedb.positioner_moves_p{} where exposure_id={} and exposure_iter={}".format(int(petalid),args.exposure_id,args.exposure_iter)
+    else :
+        print("use most recent entry ...")
+        cmd  = "select time_recorded from posmovedb.positioner_moves_p{} order by time_recorded desc limit 1".format(int(petalid))
+        vals = dbquery(comm, cmd)
+        date = vals["time_recorded"][0]
+        print(date)
+        cmd  = "select * from posmovedb.positioner_moves_p{} where time_recorded = '{}'".format(int(petalid),date)
+
+
     posmoves = dbquery(comm, cmd)
-    
+
     # add petal loc
     posmoves["PETAL_LOC"] = np.repeat(petal_loc,len(posmoves["petal_id"]))
 
@@ -63,13 +73,13 @@ for petalid in petalids :
 
         # adding calib info
         cmd="select pos_calib_index, length_r1, length_r2, offset_x, offset_y, offset_t, offset_p, physical_range_t, physical_range_p, gear_calib_t, gear_calib_p, total_limit_seeks_t, total_limit_seeks_p, last_primary_hardstop_dir_t, last_primary_hardstop_dir_p, keepout_expansion_phi_radial, keepout_expansion_phi_angular, keepout_expansion_theta_radial, keepout_expansion_theta_angular, classified_as_retracted, time_recorded from posmovedb.positioner_calibration_p{} where pos_id='{}' order by time_recorded".format(int(petalid),posid)
-        
+
         calib=dbquery(comm,cmd)
 
         # get time stamps to match
         tstamp_calib     =  np.array([d.timestamp() for d in calib["time_recorded"]])
         tstamp_posmovedb =  np.array([d.timestamp() for d in posmoves["time_recorded"]])
-        
+
         for k in calib.keys() :
             if k == 'time_recorded' : continue
             if k not in posmoves :
@@ -80,7 +90,7 @@ for petalid in petalids :
             for k in calib.keys() :
                 if k == 'time_recorded' : continue
                 posmoves[k][postableindex] = calib[k][j]
- 
+
     # by default convert keys to upper case,
     # but with special cases (of course),
     rename_keys={
@@ -103,10 +113,11 @@ for petalid in petalids :
     if otable is None :
         otable = table
     else :
-        otable = vstack(otable,table)
+        otable = vstack([otable,table])
 
 # now compute expected positions
 t=otable
+npos=len(t)
 t["X_PTL_EXP"] = np.zeros(npos)
 t["Y_PTL_EXP"] = np.zeros(npos)
 t["X_FP_EXP"] = np.zeros(npos)
