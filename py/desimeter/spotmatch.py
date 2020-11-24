@@ -67,7 +67,8 @@ def _write_spotmatch_fiducial_config_file(filename) :
 
             ofile.write("{} {:4.3f} {:4.3f} 000.0 0.001 {:05d} 8\n".format(location,0.,0.,0))
             for i in range(dx.size) :
-                ofile.write("{} {:4.3f} {:4.3f} 000.0 0.001 {:05d} 2\n".format(location,dx[i],dy[i],pinid[i]))
+                if pinid[i]<=4 :
+                    ofile.write("{} {:4.3f} {:4.3f} 000.0 0.001 {:05d} 2\n".format(location,dx[i],dy[i],pinid[i]))
     print("wrote",filename)
 
 def _write_spotmatch_targets_file(x_fp,y_fp,location,filename,fvc2fp=None) :
@@ -229,7 +230,8 @@ def _write_spotmatch_reference_pos_file(filename,fvc2fp=None) :
 
     with open(filename,"w") as ofile :
         for i in range(xpix.size) :
-            ofile.write(" {} {:4.3f} {:4.3f} 12.000 {} 2.000 pinhole\n".format(locations[i],xpix[i],ypix[i],num[pinhole_ids[i]]))
+            if pinhole_ids[i] in num.keys() :
+                ofile.write(" {} {:4.3f} {:4.3f} 12.000 {} 2.000 pinhole\n".format(locations[i],xpix[i],ypix[i],num[pinhole_ids[i]]))
 
     print("wrote",filename)
 
@@ -391,6 +393,7 @@ def spotmatch(xpix,ypix,expected_x_fp=None,expected_y_fp=None,expected_location=
 
     # use metrology to get more info
     metrology = load_metrology()
+    
     locmap = {loc:index for index,loc in enumerate(metrology["LOCATION"])}
     matched_index   = np.where(res["LOCATION"]>=0)[0]
     metrology_index = [locmap[loc] for loc in res["LOCATION"][matched_index]]
