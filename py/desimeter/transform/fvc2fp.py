@@ -88,10 +88,12 @@ class FVC2FP(object):
         params['offset_y'] = self.offset_y
         params['zbpolids'] = [int(polid) for polid in self.zbpolids]
         params['zbcoeffs'] = list(self.zbcoeffs)
-        params['meandistance'] = self.meandistance
-        params['mediandistance'] = self.mediandistance
-        params['rmsdistance'] = self.rmsdistance
-        params['nmatch'] = self.nmatch
+        optional_fields = ['meandistance', 'mediandistance', 'rmsdistance',
+                           'nmatch']
+        for field in optional_fields:
+            val = getattr(self, field, None)
+            if val is not None:
+                params[field] = val
         return json.dumps(params)
 
     def __str__(self) :
