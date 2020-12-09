@@ -1120,7 +1120,7 @@ def histogram(table, tag, sigma):
         if bins is None:
             bins = knuth_bin_width(data, return_bins=True)[1]
             bins = max(len(bins), n_bins_min)
-        _, bins, _ = hist(data, bins=bins, max_bins=1000)
+        _, bins, _ = hist(data, bins=bins, max_bins=2000)
         max_ = max(data)
         mean = np.mean(data)
         rms = stat_funcs['rms'](data)
