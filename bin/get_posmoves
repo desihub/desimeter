@@ -194,6 +194,10 @@ for petalid in petalids :
                 selection[1:] |= otable[key][1:] != otable[key][:-1]  # detect changes
             otable = otable[selection]
 
+        # remove non measured entries
+        ok=(otable["X_FP"] != None)
+        otable=otable[ok]
+
         if not os.path.isdir(args.outdir):
             os.makedirs(args.outdir)
 
