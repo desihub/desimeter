@@ -315,6 +315,20 @@ def check_fit_error(table, tol, key, set_enabling):
         new.remove_rows(failures)
     return new
 
+def check_num_outliers(table, tol, key):
+    '''Checks number of outliers that were discarded during the fit.
+        tol ... integer >= 0
+        key ... 'STATIC' or 'DYNAMIC'
+    
+    Internal details: Returns a copy of table.
+    '''
+    assert key in ['STATIC', 'DYNAMIC']
+    assert isinstance(tol, int)
+    assert 0 <= tol
+    
+    new = table.copy()
+    num_outliers_key = f'NUM_POINTS_IN_{key}'
+
 def check_recent_rehome(table):
     '''Searches for "recent rehome" criterion. This indicates that OFFSET_T and
     OFFSET_P are ok for use on instrument.
