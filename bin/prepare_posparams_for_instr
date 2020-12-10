@@ -445,7 +445,7 @@ class Check(object):
         output = self.func(table=table, **self.kwargs)
         n_deleted = len(table) - len(output)
         done_note = f'{self.name}: done. '
-        if uargs.set_enabling:
+        if not uargs.set_enabling:
             if n_deleted:
                 done_note += f'{n_deleted} rows deleted'
             else:
