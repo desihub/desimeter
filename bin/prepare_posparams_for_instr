@@ -210,11 +210,10 @@ def _eliminate_rows(table, elim, rationale):
     n_elim_posids = len(posids_eliminated)
     logger.warning(f'{n_elim_rows} of {n_rows} rows have {rationale}. These rows will be {elim_action_str} ' +
                    f'from the output table. Affected positioners are:\n{sorted(posids_eliminated)}' +
-                   f'\nTotal {elim_action_str} = {n_elim_posids}\nThis leaves {len(posids_remaining)} of ' +
-                   '{len(all_posids)} positioners remaining.')
+                   f'\nTotal {elim_action_str} = {n_elim_posids}' +
+                   f'\nNot {elim_action_str} = {len(posids_remaining)}')
     output = table.copy()    
     if uargs.set_enabling:
-        assert len()
         output[disable_key] |= elim_bool
         existing = output[disable_rationale_key].tolist()
         output[disable_rationale_key] = [join_notes(existing[i], rationale) if elim_bool else existing[i] for i in range(len(output))]
