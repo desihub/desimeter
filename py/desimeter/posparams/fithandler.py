@@ -30,6 +30,7 @@ output_keys = {'POS_ID': False,
                'ANALYSIS_DATE': True,
                'FIT_ERROR': True,
                'FLAGS': False,
+               'NUM_POINTS_IN_FIT': True,
                }
 output_keys.update({key:True for key in fitter.all_keys})
 
@@ -47,7 +48,7 @@ def write_failed_fit(posid,savedir,flag) :
     output.write(filepath, overwrite=True)
 
 def run_best_fits(posid, path, period_days, data_window, savedir,
-                  static_quantile, printf=print, min_window=10, log_note_selection=None, force_recent_rehome=False):
+                  static_quantile, printf=print, min_window=10, log_note_selection=None, force_recent_rehome=False,outlier_rejection=False) :
     '''Define best-fit analysis cases for one positioner.
 
     INPUTS:
@@ -61,6 +62,7 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
         min_window ... (optional) minimum number of data points to attempt a fit
         log_note_selection ... (optional) required keywords in LOG_NOTE selection, seperated by '&', like ''arc calibration & use_desimeter=True'
         force_recent_rehome ... (optional) force considering all moves where performed just after a rehoming
+        outlier_rejection ... (optional) outlier rejection
     OUTPUTS:
         logstr ... string describing (very briefly) what was done. suitable for
                    printing to stdout, etc
@@ -93,7 +95,7 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
         tmp_table = table[selection]
         tmp_cases = _define_cases(tmp_table, datum_dates, data_window, printf=printf)
         static_out = _process_cases(tmp_table, tmp_cases, printf=printf, mode='static',
-                                    param_nominals=fitter.default_values.copy())
+                                    param_nominals=fitter.default_values.copy(),outlier_rejection=outlier_rejection)
         flags=static_out["FLAGS"]
         if np.any((flags&movemask["FAILED_FIT"])>0) :
             flag=0
@@ -117,7 +119,7 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
 
     # FIRST-PASS (or second) :  STATIC PARAMETERS
     static_out = _process_cases(table, cases, printf=printf, mode='static',
-                                param_nominals=best_static,
+                                param_nominals=best_static,outlier_rejection=outlier_rejection
                                 )
 
     flags=static_out["FLAGS"]
@@ -143,7 +145,7 @@ def run_best_fits(posid, path, period_days, data_window, savedir,
 
     # SECOND-PASS:  DYNAMIC PARAMETERS
     dynamic_out = _process_cases(table, cases, printf=printf, mode='dynamic',
-                                 param_nominals=best_static)
+                                 param_nominals=best_static,outlier_rejection=outlier_rejection)
 
     printf('{}: rms of residuals (dynamic) = {}'.format(posid,list(dynamic_out['FIT_ERROR_DYNAMIC'])))
 
@@ -338,7 +340,7 @@ def _define_cases(table, datum_dates, data_window, printf=print):
     printf(f'{posid}: {len(cases):5d} analysis cases defined')
     return cases
 
-def _process_cases(table, cases, mode, param_nominals, printf=print):
+def _process_cases(table, cases, mode, param_nominals, printf=print,outlier_rejection=False):
     '''Feed analysis cases for a positioner through the best-fit function.
 
     INPUTS:
@@ -371,18 +373,19 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
         printf(f'  start idx = {m:5d}, date = {subtable["DATE"][0]}')
         printf(f'  final idx = {n:5d}, date = {subtable["DATE"][-1]}')
         printf(f'  num points = {n-m+1:5d}')
-        params, covariance_dict, rms_of_residuals = fitter.fit_params(posintT=xytp_data['posintT'],
-                                                                      posintP=xytp_data['posintP'],
-                                                                      ptlX=xytp_data['ptlX'],
-                                                                      ptlY=xytp_data['ptlY'],
-                                                                      gearT=xytp_data['gearT'],
-                                                                      gearP=xytp_data['gearP'],
-                                                                      recent_rehome=xytp_data['recent_rehome'],
-                                                                      sequence_id=xytp_data['sequence_id'],
-                                                                      mode=mode,
-                                                                      nominals=param_nominals,
-                                                                      bounds=fitter.default_bounds,
-                                                                      keep_fixed=[])
+        params, covariance_dict, rms_of_residuals, num_points_in_fit = fitter.fit_params(posintT=xytp_data['posintT'],
+                                                                                         posintP=xytp_data['posintP'],
+                                                                                         ptlX=xytp_data['ptlX'],
+                                                                                         ptlY=xytp_data['ptlY'],
+                                                                                         gearT=xytp_data['gearT'],
+                                                                                         gearP=xytp_data['gearP'],
+                                                                                         recent_rehome=xytp_data['recent_rehome'],
+                                                                                         sequence_id=xytp_data['sequence_id'],
+                                                                                         mode=mode,
+                                                                                         nominals=param_nominals,
+                                                                                         bounds=fitter.default_bounds,
+                                                                                         keep_fixed=[],
+                                                                                         outlier_rejection=outlier_rejection)
 
         output['ANALYSIS_DATE'].append(Time.now().iso)
         output['POS_ID'].append(posid)
@@ -391,6 +394,8 @@ def _process_cases(table, cases, mode, param_nominals, printf=print):
             output[f'DATA_START_{d}'].append(table[d][m])
             output[f'DATA_END_{d}'].append(table[d][n])
         output['NUM_POINTS'].append(n - m + 1)
+        print("num_points_in_fit=",num_points_in_fit)
+        output['NUM_POINTS_IN_FIT'].append(num_points_in_fit)
         output['FIT_ERROR'].append(rms_of_residuals)
         output['FLAGS'].append(params["FLAGS"])
 
