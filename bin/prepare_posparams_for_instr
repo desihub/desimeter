@@ -173,14 +173,28 @@ def str2float(s):
     except:
         return None
 
-def _eliminate_rows(table, elim, rationale):
+def join_notes(*args):
+    '''Concatenate items into a "note" string with standard format. A list or
+    tuple arg is treated as a single "item". So for example if you want the
+    subelements of a list "joined", then argue it expanded, like *mylist
+    '''
+    separator = '; '
+    if len(args) == 0:
+        return ''
+    elif len(args) == 1:
+        return str(args[0])
+    strings = (str(x) for x in args if x != '')
+    return separator.join(strings)
+
+def _eliminate_rows(table, elim, rationale, mark=False):
     '''Logs messages and returns a copy of table, with rows identified by elim
-    deleted from it.
+    either deleted from it or marked DEVICE_CLASSIFIED_NONFUNCTIONAL.
     
         table ... astropy table
         elim ... list of booleans saying whether to eliminate that row
                  must be same length as table
-        rationale ... string message to include in log output message
+        rationale ... string message to include in log output message, or a list
+                      of strings of same length as table
     '''
     assert len(table) == len(elim), f'len(table)={len(table)} != len(elim)={len(elim)}'
     if not(any(elim)):
@@ -193,13 +207,27 @@ def _eliminate_rows(table, elim, rationale):
     n_rows = len(table)
     n_elim_rows = len(np.flatnonzero(elim_bool))  # flatnonzero is like argwhere but better
     n_elim_posids = len(posids_eliminated)
-    logger.warning(f'{n_elim_rows} of {n_rows} rows have {rationale}. These' +
-                   ' rows will be excluded from the output table. This eliminates' +
-                   f' the following {n_elim_posids} positioners from the table:' +
-                   f' {sorted(posids_eliminated)}' +
+    action = 'marked' if mark else 'excluded'
+    rationale_msg = f'{n_elim_rows} of {n_rows} rows'
+    if isinstance(rationale, str):
+        rationale_msg += f' have {rationale}'
+        rationale_list = [rationale if e else '' for e in elim_bool]
+    else:
+        rationale_list = list(rationale)
+        printable_rationale = '\n'.join(rationale_list)
+        rationale_msg += f' {action} due to:\n{printable_rationale}'
+    logger.warning(rationale_msg)
+    logger.warning('These rows will be {action} from the output table. Affected positioners are:' +
+                   f'\n{sorted(posids_eliminated)}\nTotal {action} = {n_elim_posids}' +
                    f'\nThis leaves {len(posids_remaining)} of {len(all_posids)} positioners remaining.')
-    output = table.copy()
-    output.remove_rows(elim_bool)
+    output = table.copy()    
+    if mark:
+        assert len()
+        output[disable_key] |= elim_bool
+        existing = output[disable_rationale_key].tolist()
+        output[disable_rationale_key] = [join_notes(existing[i], rationale_list[i]) for i in range(len(output))]
+    else:
+        output.remove_rows(elim_bool)
     return output
 
 # delete any rows for which a required value is masked
@@ -222,7 +250,7 @@ def check_flags(table):
     new = table.copy()
     for flag in movemask.names():
         fail_list = [movemask[flag] & value for value in new['FLAGS']]
-        new = _eliminate_rows(new, fail_list, f'flag {flag}')
+        new = _eliminate_rows(new, fail_list, f'flag {flag}', mark=uargs.set_enabling)
     return new
 
 def check_static_fit_bounds(table, tighten_factor):
@@ -247,7 +275,7 @@ def check_static_fit_bounds(table, tighten_factor):
         for key, limit in limits.items():
             op = operators[key]
             fail_list = op(new[param], limit)
-            new = _eliminate_rows(new, fail_list, f'{param} {key} bound = {limit}')
+            new = _eliminate_rows(new, fail_list, f'{param} {key} bound = {limit}', mark=uargs.set_enabling)
     return new
 
 def check_xy_offsets(table, tol):
@@ -341,7 +369,7 @@ def check_num_outliers(table, tol, key):
     num_outliers_key = f'NUM_OUTLIERS_{key}'
     new[num_outliers_key] = new['NUM_POINTS'] - new[num_points_in_fit_key]
     exceeds_tol = new[num_outliers_key] > tol
-    new = _eliminate_rows(new, exceeds_tol, f'number of outliers > {tol}')
+    new = _eliminate_rows(new, exceeds_tol, f'number of outliers > {tol}', mark=uargs.set_enabling)
     return new
 
 def check_recent_rehome(table):
