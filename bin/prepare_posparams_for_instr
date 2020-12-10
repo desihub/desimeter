@@ -124,6 +124,7 @@ for key in new_table.columns:
 # special setup for columns related to enabling/disabling
 new_table[disable_key] = False
 new_table[disable_rationale_key] = Column(['']*len(new_table), dtype=object) # astropy hack for variable length strings!
+elim_action_str = 'marked' if uargs.set_enabling else 'excluded'
 
 # user interaction wrappers
 def input2(message):
@@ -186,15 +187,15 @@ def join_notes(*args):
     strings = (str(x) for x in args if x != '')
     return separator.join(strings)
 
-def _eliminate_rows(table, elim, rationale, mark=False):
+def _eliminate_rows(table, elim, rationale):
     '''Logs messages and returns a copy of table, with rows identified by elim
     either deleted from it or marked DEVICE_CLASSIFIED_NONFUNCTIONAL.
     
         table ... astropy table
         elim ... list of booleans saying whether to eliminate that row
                  must be same length as table
-        rationale ... string message to include in log output message, or a list
-                      of strings of same length as table
+        rationale ... string message to include in log output message for any
+                      rows with elim == True
     '''
     assert len(table) == len(elim), f'len(table)={len(table)} != len(elim)={len(elim)}'
     if not(any(elim)):
@@ -207,30 +208,21 @@ def _eliminate_rows(table, elim, rationale, mark=False):
     n_rows = len(table)
     n_elim_rows = len(np.flatnonzero(elim_bool))  # flatnonzero is like argwhere but better
     n_elim_posids = len(posids_eliminated)
-    action = 'marked' if mark else 'excluded'
-    rationale_msg = f'{n_elim_rows} of {n_rows} rows'
-    if isinstance(rationale, str):
-        rationale_msg += f' have {rationale}'
-        rationale_list = [rationale if e else '' for e in elim_bool]
-    else:
-        rationale_list = list(rationale)
-        printable_rationale = '\n'.join(rationale_list)
-        rationale_msg += f' {action} due to:\n{printable_rationale}'
-    logger.warning(rationale_msg)
-    logger.warning('These rows will be {action} from the output table. Affected positioners are:' +
-                   f'\n{sorted(posids_eliminated)}\nTotal {action} = {n_elim_posids}' +
-                   f'\nThis leaves {len(posids_remaining)} of {len(all_posids)} positioners remaining.')
+    logger.warning(f'{n_elim_rows} of {n_rows} rows have {rationale}. These rows will be {elim_action_str} ' +
+                   f'from the output table. Affected positioners are:\n{sorted(posids_eliminated)}' +
+                   f'\nTotal {elim_action_str} = {n_elim_posids}\nThis leaves {len(posids_remaining)} of ' +
+                   '{len(all_posids)} positioners remaining.')
     output = table.copy()    
-    if mark:
+    if uargs.set_enabling:
         assert len()
         output[disable_key] |= elim_bool
         existing = output[disable_rationale_key].tolist()
-        output[disable_rationale_key] = [join_notes(existing[i], rationale_list[i]) for i in range(len(output))]
+        output[disable_rationale_key] = [join_notes(existing[i], rationale) if elim_bool else existing[i] for i in range(len(output))]
     else:
         output.remove_rows(elim_bool)
     return output
 
-# delete any rows for which a required value is masked
+# eliminate any rows for which a required value is masked
 required_keys = {'POS_ID', 'FLAGS', 'DEVICE_LOC', 'NUM_POINTS', 'DATA_END_DATE',
                  'FIT_ERROR_STATIC', 'NUM_POINTS_IN_FIT_STATIC',}
 required_keys |= set(fitter.static_keys)
@@ -240,7 +232,7 @@ mask_table = new_table.mask
 masked_list = mask_table['POS_ID']
 for key in required_keys:
     masked_list |= mask_table[key]
-new_table = _eliminate_rows(new_table, masked_list, 'missing required value(s)')
+new_table = _eliminate_rows(new_table, masked_list, 'paramfits file missing required value(s)')
 
 # check functions
 def check_flags(table):
@@ -250,7 +242,7 @@ def check_flags(table):
     new = table.copy()
     for flag in movemask.names():
         fail_list = [movemask[flag] & value for value in new['FLAGS']]
-        new = _eliminate_rows(new, fail_list, f'flag {flag}', mark=uargs.set_enabling)
+        new = _eliminate_rows(new, fail_list, f'flag {flag}')
     return new
 
 def check_static_fit_bounds(table, tighten_factor):
@@ -275,7 +267,7 @@ def check_static_fit_bounds(table, tighten_factor):
         for key, limit in limits.items():
             op = operators[key]
             fail_list = op(new[param], limit)
-            new = _eliminate_rows(new, fail_list, f'{param} {key} bound = {limit}', mark=uargs.set_enabling)
+            new = _eliminate_rows(new, fail_list, f'{param} {key} bound = {limit}')
     return new
 
 def check_xy_offsets(table, tol):
@@ -297,10 +289,11 @@ def check_xy_offsets(table, tol):
             err = offset - expected
             if abs(err) > tol:
                 delete_idxs.add(i)
-                logger.warning(f'Row for {new["POS_ID"][i]} removed due to {offset_key}=' +
+                logger.warning(f'Row for {new["POS_ID"][i]} {elim_action_str} due to {offset_key}=' +
                                f'{offset:.4f} outside tol={tol} of nominal {expected:.4f} ' +
                                f'by {offset-expected:.4f}')
-    new.remove_rows(list(delete_idxs))        
+    delete_bools = [i in delete_idxs for i in range(len(new))]
+    new = _eliminate_rows(new, delete_bools, f'OFFSET_X or OFFSET_Y outside tol={tol} of nominal value')
     return new
 
 def check_arm_lengths(table, tol):
@@ -321,10 +314,11 @@ def check_arm_lengths(table, tol):
                 logger.warning(f'Row for {new["POS_ID"][i]} removed due to {key}=' +
                                f'{length:.4f} outside tol={tol} of nominal={exp:.4f}' +
                                f' by {length-exp:.4f}')
-    new.remove_rows(list(delete_idxs))        
+    delete_bools = [i in delete_idxs for i in range(len(new))]
+    new = _eliminate_rows(new, delete_bools, f'LENGTH_R1 or LENGTH_R2 outside tol={tol} of nominal value')       
     return new
 
-def check_fit_error(table, tol, key, set_enabling):
+def check_fit_error(table, tol, key):
     '''Checks overall goodness of fit for. Argument 'tol' is max value in rms mm.
     '''
     # Internal details:
@@ -337,7 +331,7 @@ def check_fit_error(table, tol, key, set_enabling):
     fit_err_key = 'FIT_ERROR_STATIC' if 'STATIC' in key else 'FIT_ERROR_DYNAMIC'
     fit_errs = new[fit_err_key]
     failures = fit_errs > tol
-    if set_enabling:
+    if uargs.set_enabling:
         new[disable_key] = failures
         will_disable = set(new['POS_ID'][new[disable_key]])
         for row in new:
@@ -350,7 +344,7 @@ def check_fit_error(table, tol, key, set_enabling):
         for i in np.flatnonzero(failures):
             logger.warning(f'Row for {new["POS_ID"][i]} removed due to {fit_err_key}={fit_errs[i]} > tol={tol}')
         new.remove_rows(failures)
-    if set_enabling:
+    if uargs.set_enabling:
         logger.warning(f'{len(will_disable)} positioners will have {disable_key} --> True')
     return new
 
@@ -366,10 +360,10 @@ def check_num_outliers(table, tol, key):
     assert 0 <= tol
     new = table.copy()
     num_points_in_fit_key = f'NUM_POINTS_IN_FIT_{key}'
-    num_outliers_key = f'NUM_OUTLIERS_{key}'
+    num_outliers_key = f'NUM_OUTLIERS_EXCLUDED_{key}'
     new[num_outliers_key] = new['NUM_POINTS'] - new[num_points_in_fit_key]
     exceeds_tol = new[num_outliers_key] > tol
-    new = _eliminate_rows(new, exceeds_tol, f'number of outliers > {tol}', mark=uargs.set_enabling)
+    new = _eliminate_rows(new, exceeds_tol, f'number of outliers > {tol}')
     return new
 
 def check_recent_rehome(table):
