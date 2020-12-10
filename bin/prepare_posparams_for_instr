@@ -173,7 +173,6 @@ def str2float(s):
     except:
         return None
 
-# check functions
 def _eliminate_rows(table, elim, rationale):
     '''Logs messages and returns a copy of table, with rows identified by elim
     deleted from it.
