@@ -11,6 +11,24 @@ disable_key = 'DEVICE_CLASSIFIED_NONFUNCTIONAL'
 disable_rationale_key = 'ENABLE_DISABLE_RATIONALE'
 commit_prefix = 'COMMIT_'
 
+set_enabling_docstr = f'''
+    1. When set-enabling == False (default):
+    ----------------------------------------
+    Positioners which fail the fit error threshold check will simply be removed
+    from the output file. Thus no changes will be pushed to DB for these. This is
+    the appropriate behavior, for example, if the fit fails due to a math error,
+    noise, or bad measurement data.
+    
+    2. When set-enabling == True (command-line option '-e'):
+    --------------------------------------------------------
+    Output file will include a column {disable_key}. This will
+    contain True/False values reflecting pass/fail of the fit error threshold test.
+    The script set_calibrations.py can subsequently batch enable or disable positioners
+    accordingly. (Note: Like all the other parameters, you will *additionally* be
+    offered a redundant option to set {commit_prefix + disable_key} to False,
+    which *prevents* any enable/disable action from being actually performed.)
+'''
+
 __doc__ = f'''
 Inspects paramfits csv table and prepares a version of the table which is
 ready for operational use on the focal plane.
@@ -28,19 +46,8 @@ As of this writing (2020-06-12) the typical sequence is:
     
 See DESI-5732 for data model and procedures.
 
-Important note regarding '--set-enabling' ('-s') argument:
-    
-    The default behavior is that positioners which fail the fit error threshold
-    check will simply be removed from the output file. Thus no changes will be
-    pushed to DB for these. This is the appropriate behavior, for example, if
-    the fit fails due to a math error, noise, or bad measurement data.
-    
-    If you do '--set-enabling', then the behavior is different. The output file
-    will include a column {disable_key}. It will have True/False values reflecting
-    pass/fail of the fit error threshold test. Then set_calibrations.py can batch
-    enable or disable positioners accordingly. Like all the other parameters, you
-    will still be offered a redundant option to set {commit_prefix + disable_key}
-    to False, which would prevent any enable/disable from being actually performed.
+Important note regarding '--set-enabling' ('-e') argument:
+{set_enabling_docstr}
 '''
 
 force_no_scale = True
@@ -130,18 +137,29 @@ def input2(message):
 
 blank_responses = {'', '(no entry)'}
 
-def yesnohelp(message):
+def yesnohelp(message, yes=True, no=True, help_=True, exit_=True):
     '''Wrapper for user input which cleans up human-entered values and returns
-    a string of exactly 'yes', 'no', or 'help'.
+    a string of exactly 'yes', 'no', or 'help'. Also can give user option to
+    exit the program.
+    
+    Boolean args allow you to turn off options for the user.
     '''
-    answer =  input2(f'{message} (y/n/help/exit)')
-    if answer.lower() in {'h', 'help', 'doc', 'man'}:
+    assert yes or no or help_ or exit_, 'need at least one user option'
+    suffix_parts = ['y' if yes else None,
+                    'n' if no else None,
+                    'help' if help_ else None,
+                    'exit' if exit_ else None,
+                    ]
+    suffix_parts = [s for s in suffix_parts if s]
+    suffix = '/'.join(suffix_parts)
+    answer =  input2(f'{message} ({suffix})')
+    if help_ and answer.lower() in {'h', 'help', 'doc', 'man'}:
         return 'help'
-    if answer.lower() in {'n', 'no', 'false'}:
+    if no and answer.lower() in {'n', 'no', 'false'}:
         return 'no'
-    if answer.lower() in {'y', 'yes', 'true'}:
+    if yes and answer.lower() in {'y', 'yes', 'true'}:
         return 'yes'
-    if answer.lower() in {'exit'}:
+    if exit_ and answer.lower() in {'exit'}:
         logger.info('Exiting at user request.')
         sys.exit(0)
     return yesnohelp(message)
@@ -424,15 +442,9 @@ class Check(object):
 # additional user help for cases where we are possibly disabling positioners
 fit_err_tol = 0.03
 if uargs.set_enabling:
-    pos_perform_tol = 0.1
-    input2('Option "set-enabling" is on. In this mode, rather than determining mathematical ' +
-           'quality of best fit parameters (for which we typically start with a fit error tol ' +
-           f'value like {fit_err_tol} mm), we are more interested here in determining ' + 
-           f'positioner performance. For this, we use tolerance = {pos_perform_tol} mm. The ' +
-           'recommendation is that you *not* change this value, unless it has been discussed ' +
-           'among the focal plane experts team and agreed to. Press enter to acknowledge:')
-    fit_err_tol = pos_perform_tol
-    logger.info(f'fit_err_tol updated to {fit_err_tol} mm')
+    msg = f'\n\nOption "set-enabling" is on. Details:\n{set_enabling_docstr}\n' + \
+          'Please confirm this mode (see paragraph 2 above) is what you want, or exit: '
+    yesnohelp(msg, yes=True, no=False, help_=False, exit_=True)
 
 # set up and run checks
 checks = [Check(check_fit_error, tol=fit_err_tol, key='STATIC', set_enabling=uargs.set_enabling)]
