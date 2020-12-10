@@ -55,6 +55,8 @@ parser.add_argument('--log-note-selection', type=str, default=None, required=Fal
                     help="required keywords in LOG_NOTE selection, seperated by '&', like ''arc calibration & use_desimeter=True'")
 parser.add_argument('--force-recent-rehome', action='store_true',
                     help="consider all moves were performed just after a rehoming (not recommended, this affects the calibration of OFFSET_P and OFFSET_T)")
+parser.add_argument('--outlier-rejection', action='store_true',
+                    help='turn on outlier rejection')
 
 args = parser.parse_args()
 
@@ -111,7 +113,8 @@ if __name__ == '__main__':
                       'static_quantile': args.static_quantile,
                       'printf': printf,
                       'log_note_selection': args.log_note_selection,
-                      'force_recent_rehome': args.force_recent_rehome
+                      'force_recent_rehome': args.force_recent_rehome,
+                      'outlier_rejection':args.outlier_rejection
                       }
             if args.n_processes_max == 1:
                 logstr = fithandler.run_best_fits(**kwargs)
