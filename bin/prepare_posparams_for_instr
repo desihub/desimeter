@@ -445,10 +445,11 @@ class Check(object):
         output = self.func(table=table, **self.kwargs)
         n_deleted = len(table) - len(output)
         done_note = f'{self.name}: done. '
-        if n_deleted:
-            done_note += f'{n_deleted} rows deleted'
-        else:
-            done_note += 'No rows deleted'
+        if uargs.set_enabling:
+            if n_deleted:
+                done_note += f'{n_deleted} rows deleted'
+            else:
+                done_note += 'No rows deleted'
         logger.info(f'{done_note}, {len(output)} remaining')
         return output
     
