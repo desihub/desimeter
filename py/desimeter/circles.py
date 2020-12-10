@@ -117,21 +117,24 @@ def _fast_fit_circle(x,y,use_median=False) :
     return xc,yc,r
 
 
-def robust_fit_circle(x, y, nsig=4.):
+def robust_fit_circle(x, y, nsig=4., minerr=0.1):
 
     ok=np.repeat(True,x.size)
     for _ in range(12) :
         xc,yc,r = _fast_fit_circle(x[ok],y[ok],use_median=True)
+        print(xc,yc,r)
         radii = np.hypot(x-xc, y-yc)
         res = np.abs(radii-r)
         rms = 1.483*np.median(res)
         worst = np.argmax(res)
-        if res[worst] < nsig*rms :
+        if (res[worst] < nsig*rms) or (res[worst] < minerr) :
             break
         ok[worst]=False
         if np.sum(ok) < 3 :
             print("game over: cannot fit a circle with less than 3 points")
             return 0.,0.,0.,ok
-
-    xc,yc,r = fit_circle(x[ok],y[ok])
+    try :
+        xc,yc,r = fit_circle(x[ok],y[ok])
+    except ValueError :
+        print("refined fit failed")
     return xc,yc,r,ok
