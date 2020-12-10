@@ -450,7 +450,8 @@ class Check(object):
                 done_note += f'{n_deleted} rows deleted'
             else:
                 done_note += 'No rows deleted'
-        logger.info(f'{done_note}, {len(output)} remaining')
+            done_note += f', {len(output)} remaining'
+        logger.info(done_note)
         return output
     
     def offer_adjustment(self):
