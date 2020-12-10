@@ -196,16 +196,29 @@ def _eliminate_rows(table, elim, rationale):
     logger.warning(f'{n_elim_rows} of {n_rows} rows have {rationale}. These' +
                    ' rows will be excluded from the output table. This eliminates' +
                    f' the following {n_elim_posids} positioners from the table:' +
-                   f' {sorted(posids_eliminated)}')
+                   f' {sorted(posids_eliminated)}' +
+                   f'\nThis leaves {len(posids_remaining)} of {len(all_posids)} positioners remaining.')
     output = table.copy()
     output.remove_rows(elim_bool)
     return output
 
+# delete any rows for which a required value is masked
+required_keys = {'POS_ID', 'FLAGS', 'DEVICE_LOC', 'NUM_POINTS', 'DATA_END_DATE',
+                 'FIT_ERROR_STATIC', 'NUM_POINTS_IN_FIT_STATIC',}
+required_keys |= set(fitter.static_keys)
+if uargs.allow_scale:
+    required_keys |= {'FIT_ERROR_DYNAMIC', 'NUM_POINTS_IN_FIT_DYNAMIC'}
+mask_table = new_table.mask
+masked_list = mask_table['POS_ID']
+for key in required_keys:
+    masked_list |= mask_table[key]
+new_table = _eliminate_rows(new_table, masked_list, 'missing required value(s)')
+
+# check functions
 def check_flags(table):
     '''Inspects FLAGS field of fit results.
-    
-    Internal details: Returns a copy of table.
-    '''
+    '''    
+    # Internal details: Returns a copy of table.
     new = table.copy()
     for flag in movemask.names():
         fail_list = [movemask[flag] & value for value in new['FLAGS']]
@@ -219,9 +232,8 @@ def check_static_fit_bounds(table, tighten_factor):
     with numeric errors. It tightens the acceptable bounds by a fraction. E.g.,
     for a range [0.0, 2.0], a tighten_factor of 0.1 would use range [0.2, 1.8] in
     the filter.
-    
-    Internal details: Returns a copy of table.
-    '''
+    '''    
+    # Internal details: Returns a copy of table.
     below_key = 'below min'
     above_key = 'above max'
     new = table.copy()
@@ -242,9 +254,8 @@ def check_xy_offsets(table, tol):
     '''Checks reasonableness of OFFSET_X and OFFSET_Y w.r.t. metrology values.
     Argument 'tol' is a value in mm. Rows outside this tolerance will be
     eliminated from the output.
-    
-    Internal details: Returns a copy of table.
     '''
+    # Internal details: Returns a copy of table.
     new = table.copy()
     expected_centers = desimeter.io.load_nominal_positioner_locations()
     delete_idxs = set()
@@ -268,9 +279,8 @@ def check_arm_lengths(table, tol):
     '''Checks closeness of LENGTH_R1 and LENGTH_R2 to their nominal values.
     Argument 'tol' is a value in mm. Rows outside this tolerance will be
     eliminated from the output.
-    
-    Internal details: Returns a copy of table.
     '''
+    # Internal details: Returns a copy of table.
     new = table.copy()
     expected_lengths = {key: fitter.default_values[key] for key in ['LENGTH_R1', 'LENGTH_R2']}
     delete_idxs = set()
@@ -287,21 +297,21 @@ def check_arm_lengths(table, tol):
     return new
 
 def check_fit_error(table, tol, key, set_enabling):
-    '''Checks overall goodness of fit for.
-        tol ... value in rms mm
-        key ... 'STATIC' or 'DYNAMIC'
-        set_enabling ... True  --> usual behavior of eliminating rows if not within tol
-                         False --> keep row and mark DEVICE_CLASSIFIED_NONFUNCTIONAL to
-                                   True or False depending on whether threshold was met
-    
-    Internal details: Returns a copy of table.
+    '''Checks overall goodness of fit for. Argument 'tol' is max value in rms mm.
     '''
+    # Internal details:
+    #     Returns a copy of table.
+    #     key ... 'STATIC' or 'DYNAMIC'
+    #     set_enabling ... True  --> usual behavior of eliminating rows if not within tol
+    #                      False --> keep row and mark DEVICE_CLASSIFIED_NONFUNCTIONAL to
+    #                                True or False depending on whether threshold was met
     new = table.copy()
     fit_err_key = 'FIT_ERROR_STATIC' if 'STATIC' in key else 'FIT_ERROR_DYNAMIC'
     fit_errs = new[fit_err_key]
     failures = fit_errs > tol
     if set_enabling:
         new[disable_key] = failures
+        will_disable = set(new['POS_ID'][new[disable_key]])
         for row in new:
             action = f'{disable_key}={row[disable_key]} because'
             sign = '>' if row[disable_key] else '<='
@@ -312,27 +322,33 @@ def check_fit_error(table, tol, key, set_enabling):
         for i in np.flatnonzero(failures):
             logger.warning(f'Row for {new["POS_ID"][i]} removed due to {fit_err_key}={fit_errs[i]} > tol={tol}')
         new.remove_rows(failures)
+    if set_enabling:
+        logger.warning(f'{len(will_disable)} positioners will have {disable_key} --> True')
     return new
 
 def check_num_outliers(table, tol, key):
-    '''Checks number of outliers that were discarded during the fit.
-        tol ... integer >= 0
-        key ... 'STATIC' or 'DYNAMIC'
-    
-    Internal details: Returns a copy of table.
+    '''Checks number of outliers that were discarded during the fit. Argument 'tol'
+    is an integer >= 0, giving the max number of outliers allowed.
     '''
+    # Internal details:
+    #     Returns a copy of table.
+    #     key ... 'STATIC' or 'DYNAMIC'
     assert key in ['STATIC', 'DYNAMIC']
-    assert isinstance(tol, int)
+    assert isinstance(tol, (int, float))
     assert 0 <= tol
-    
     new = table.copy()
-    num_outliers_key = f'NUM_POINTS_IN_{key}'
+    num_points_in_fit_key = f'NUM_POINTS_IN_FIT_{key}'
+    num_outliers_key = f'NUM_OUTLIERS_{key}'
+    new[num_outliers_key] = new['NUM_POINTS'] - new[num_points_in_fit_key]
+    exceeds_tol = new[num_outliers_key] > tol
+    new = _eliminate_rows(new, exceeds_tol, f'number of outliers > {tol}')
+    return new
 
 def check_recent_rehome(table):
     '''Searches for "recent rehome" criterion. This indicates that OFFSET_T and
     OFFSET_P are ok for use on instrument.
-    
-    Internal details: Returns a copy of table.'''
+    '''
+    # Internal details: Returns a copy of table.
     # As of 2020-06-15, not implemented. The assumption is that fit_posparams
     # output file contains only good OFFSET_T, OFFSET_P, generated from an
     # assumed RECENT_REHOME==True data set. Hopefully in the future we can
@@ -342,8 +358,8 @@ def check_recent_rehome(table):
 def check_uniqueness(table):
     '''Searches for multiple rows with same POS_ID, and asks user to resolve
     any conflicts.
-    
-    Internal details: Returns a copy of table.'''
+    '''
+    # Internal details: Returns a copy of table.
     unique_posids = set(table['POS_ID'])
     new = table.copy()
     def get_row_idxs(table, posid):
@@ -398,7 +414,8 @@ class Check(object):
     
     @property
     def doc(self):
-        return f'{self.name}:\n{self.func.__doc__}'
+        wrapped = " ".join(self.func.__doc__.split())
+        return f'{self.name}:\n{wrapped}'
     
     def run(self, table):
         '''Performs the check function on astropy table of parameters data.'''
@@ -410,7 +427,7 @@ class Check(object):
         if n_deleted:
             done_note += f'{n_deleted} rows deleted'
         else:
-            done_note += 'All rows ok'
+            done_note += 'No rows deleted'
         logger.info(f'{done_note}, {len(output)} remaining')
         return output
     
@@ -460,9 +477,12 @@ if uargs.set_enabling:
     yesnohelp(msg, yes=True, no=False, help_=False, exit_=True)
 
 # set up and run checks
-checks = [Check(check_fit_error, tol=fit_err_tol, key='STATIC', set_enabling=uargs.set_enabling)]
+fits_to_check = ['STATIC']
 if uargs.allow_scale:
-    checks += [Check(check_fit_error, tol=fit_err_tol, key='DYNAMIC', set_enabling=uargs.set_enabling)]
+    fits_to_check += ['DYNAMIC']
+for fit_key in fits_to_check:
+    checks = [Check(check_num_outliers, tol=2, key=fit_key)]
+    checks += [Check(check_fit_error, tol=fit_err_tol, key=fit_key, set_enabling=uargs.set_enabling)]
 checks += [Check(check_flags)]
 checks += [Check(check_static_fit_bounds, tighten_factor=0.001)]
 checks += [Check(check_xy_offsets, tol=0.5)]
