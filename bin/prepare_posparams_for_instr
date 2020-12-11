@@ -187,6 +187,15 @@ def join_notes(*args):
     strings = (str(x) for x in args if x != '')
     return separator.join(strings)
 
+def _current_total_alt_str(table):
+    '''String saying total number of rows either deleted or marked so far.'''
+    s = f'Current total {elim_action_str} = '
+    if uargs.set_enabling:
+        s += str(len(np.where(table[disable_key])[0]))
+    else:
+        s += str(len(input_table) - len(table))
+    return s
+
 def _eliminate_rows(table, elim, rationale):
     '''Logs messages and returns a copy of table, with rows identified by elim
     either deleted from it or marked DEVICE_CLASSIFIED_NONFUNCTIONAL.
@@ -211,18 +220,15 @@ def _eliminate_rows(table, elim, rationale):
     msg = f'{n_elim_rows} of {n_rows} rows have {rationale}. These rows will be {elim_action_str} ' + \
           f'from the output table. Affected positioners are:\n{sorted(posids_eliminated)}' + \
           f'\nTotal {elim_action_str} = {n_elim_posids}' + \
-          f'\nNot {elim_action_str} = {len(posids_remaining)}' + \
-          f'\nCurrent total {elim_action_str} = '
+          f'\nNot {elim_action_str} = {len(posids_remaining)}'
     output = table.copy()    
     if uargs.set_enabling:
         output[disable_key] |= elim_bool
         existing = output[disable_rationale_key].tolist()
         output[disable_rationale_key] = [join_notes(existing[i], rationale) if elim_bool else existing[i] for i in range(len(output))]
-        msg += str(len(np.where(output[disable_rationale_key])[0]))
     else:
         output.remove_rows(elim_bool)
-        msg += str(len(input_table) - len(output))
-    logger.warning(msg)
+    logger.warning(f'{msg}\n{_current_total_alt_str(output)}')
     return output
 
 # eliminate any rows for which a required value is masked
@@ -330,6 +336,11 @@ def check_fit_error(table, tol, key):
     #     set_enabling ... True  --> usual behavior of eliminating rows if not within tol
     #                      False --> keep row and mark DEVICE_CLASSIFIED_NONFUNCTIONAL to
     #                                True or False depending on whether threshold was met
+    #
+    # 2020-12-10 [JHS] This function has some historical special handling for marking /
+    # eliminating rows. Better would be to fold into _eliminate_rows like all the other
+    # check functions. However there was some special line-by-line rationale string handling
+    # I had in there which I didn't want to disturb at this time.
     new = table.copy()
     fit_err_key = 'FIT_ERROR_STATIC' if 'STATIC' in key else 'FIT_ERROR_DYNAMIC'
     fit_errs = new[fit_err_key]
@@ -369,7 +380,7 @@ def check_num_outliers(table, tol, key):
     num_outliers_key = f'NUM_OUTLIERS_EXCLUDED_{key}'
     new[num_outliers_key] = new['NUM_POINTS'] - new[num_points_in_fit_key]
     exceeds_tol = new[num_outliers_key] > tol
-    new = _eliminate_rows(new, exceeds_tol, f'number of outliers > {tol}')
+    new = _eliminate_rows(new, exceeds_tol, f'number of outliers > tol={tol}')
     return new
 
 def check_recent_rehome(table):
@@ -516,7 +527,7 @@ for fit_key in fits_to_check:
 checks += [Check(check_flags)]
 checks += [Check(check_static_fit_bounds, tighten_factor=0.001)]
 checks += [Check(check_xy_offsets, tol=0.5)]
-checks += [Check(check_arm_lengths, tol=0.4)]
+checks += [Check(check_arm_lengths, tol=0.5)]
 #checks += [Check(check_recent_rehome)]
 checks += [Check(check_uniqueness)]
 for check in checks:
@@ -554,16 +565,20 @@ for key, commit_key in commit_keys.items():
         while True:
             answer = yesnohelp(f'Shall we commit {key} to online database?')
             if answer == 'help':
-                logger.info(f'This will set the field {commit_key} to True or False, for' +
-                            ' all remaining positioners in the parameters table (after the' +
-                            ' checks which were just completed). It does not send anything' +
-                            ' to the database at this time. We are just constructing an' +
-                            ' input file right now. Later on, when we feed the input file' +
-                            f' to pecs/set_calibrations.py, *then* the {commit_key} field will' +
-                            ' tell that script whether or not to actually store the associated' +
-                            ' value to the online DB. If you have any doubts about validity of' +
-                            ' the data, reply "no" and discuss with the focal plane team.' +
-                            ' Devs J.Silber, K.Fanning, or J.Guy should be able to assist.')
+                msg = f'This will set the field {commit_key} to True or False, for ' + \
+                      ' all remaining positioners in the parameters table'
+                if uargs.set_enabling:
+                    msg += '. All {elim_action_str} positioners will have {commit_key} forced to False.'
+                else:
+                    msg += ' (after the checks which were just completed).'
+                msg += ' We are not sending anything to the database at this time. We are only' + \
+                       ' constructing an input file right now. Later on, when we feed the input' + \
+                       f' file to pecs/set_calibrations.py, *then* the {commit_key} field will' + \
+                       ' tell that script whether or not to actually store the associated' + \
+                       ' value to the online DB. If you have any doubts about validity of' + \
+                       ' the data, reply "no" and discuss with the focal plane team.' + \
+                       ' Devs J.Silber, K.Fanning, or J.Guy should be able to assist.'
+                logger.info(msg)
             elif answer == 'no':
                 set_val = False
                 break
@@ -572,6 +587,11 @@ for key, commit_key in commit_keys.items():
                 break
         method = 'set by user'
     new_table[commit_key] = set_val
+    
+    # 2020-12-10 [JHS] Do *NOT* commit anything for devices we are setting as nonfunctional.
+    # Because in practice these are cases where we don't trust the calibration.
+    new_table[commit_key] |= new_table[disable_key]
+
     delayed_log_notes += [f'{commit_key} {method} to {set_val} for all positioners']
     will_commit = new_table[commit_key]
     posids_to_commit |= set(new_table['POS_ID'][will_commit])
@@ -586,7 +606,7 @@ if uargs.set_enabling:
     for i in range(len(new_table)):
         row = new_table[i]
         if row[disable_rationale_key]:
-            action = f'{disable_key}={row[disable_key]} because '
+            action = f'{disable_key}={row[disable_key]} because: '
             rationales[i] = action + rationales[i]
     new_table[disable_rationale_key] = rationales
 
