@@ -200,7 +200,7 @@ def solve_assignment(score_matrix):
     return assignment + (score,)
 
 
-def plot_match(fvc, metr, assignment, alternatives=None):
+def possible_assignments_dict(assignment, alternatives):
     possible_assignments = dict()
     if alternatives is not None:
         allassignments = np.vstack([assignment, alternatives])
@@ -212,6 +212,11 @@ def plot_match(fvc, metr, assignment, alternatives=None):
                 continue
             possible_assignments[fvcind] = (
                 possible_assignments.get(fvcind, set()) | set([metrind]))
+    return possible_assignments
+
+
+def plot_match(fvc, metr, assignment, alternatives=None):
+    possible_assignments = possible_assignments_dict(assignment, alternatives)
     from matplotlib import pyplot as p
     p.plot(fvc['X_FP'], fvc['Y_FP'], '+', label='centroids')
     p.plot(metr['X_FP'], metr['Y_FP'], 'x', label='positioner centers')
@@ -225,18 +230,9 @@ def plot_match(fvc, metr, assignment, alternatives=None):
     p.legend()
 
 
-def print_groupings(fvc, metr, assignment, alternatives, file=None, calib=None):
-    possible_assignments = dict()
-    if alternatives is not None:
-        allassignments = np.vstack([assignment, alternatives])
-    else:
-        allassignments = assignment[None, ...]
-    for a in allassignments:
-        for fvcind, metrind in enumerate(a):
-            if metrind == -1:
-                continue
-            possible_assignments[metrind] = (
-                possible_assignments.get(metrind, set()) | set([fvcind]))
+def print_groupings(fvc, metr, assignment, alternatives, file=None,
+                    calib=None):
+    possible_assignments = possible_assignments_dict(assignment, alternatives)
     metrind = np.array(list(possible_assignments.keys()))
     names = [metr['DEVICE_ID'][i] for i in metrind]
     s = np.argsort(names)
