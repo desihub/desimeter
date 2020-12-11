@@ -263,7 +263,7 @@ def check_flags(table):
     new = table.copy()
     for flag in movemask.names():
         fail_list = [movemask[flag] & value for value in new['FLAGS']]
-        new = _eliminate_rows(new, fail_list, f'flag {flag}', 'no flags')
+        new = _eliminate_rows(new, fail_list, f'flag {flag}', '')
     return new
 
 def check_static_fit_bounds(table, tighten_factor):
