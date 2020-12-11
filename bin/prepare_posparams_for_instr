@@ -187,13 +187,23 @@ def join_notes(*args):
     strings = (str(x) for x in args if x != '')
     return separator.join(strings)
 
-def _current_total_alt_str(table):
+def _current_total_alt_str(table, anti=False):
     '''String saying total number of rows either deleted or marked so far.'''
-    s = f'Current total {elim_action_str} = '
+    s = 'Current total '
+    if anti:
+        s += 'not '
+    s += f'{elim_action_str} = '
     if uargs.set_enabling:
-        s += str(len(np.where(table[disable_key])[0]))
+        n_marked = len(np.flatnonzero(table[disable_key]))
+        if anti:
+            s += str(len(table) - n_marked)
+        else:
+            s += str(n_marked)
     else:
-        s += str(len(input_table) - len(table))
+        if anti:
+            s += str(len(table))
+        else:
+            s += str(len(input_table) - len(table))
     return s
 
 def _eliminate_rows(table, elim, rationale):
@@ -592,5 +602,7 @@ if uargs.set_enabling:
 import os
 path = os.path.join(out_dir, output_name)
 new_table.write(path)
+logger.info(_current_total_alt_str(new_table))
+logger.info(_current_total_alt_str(new_table, anti=True))
 logger.info(f'Saved output posparams to {path}')
 logger.info(f'Saved log file to {log_path}')
