@@ -206,7 +206,7 @@ def _current_total_alt_str(table, anti=False):
             s += str(len(input_table) - len(table))
     return s
 
-def _eliminate_rows(table, elim, rationale):
+def _eliminate_rows(table, elim, rationale, antirationale=''):
     '''Logs messages and returns a copy of table, with rows identified by elim
     either deleted from it or marked DEVICE_CLASSIFIED_NONFUNCTIONAL.
     
@@ -215,6 +215,7 @@ def _eliminate_rows(table, elim, rationale):
                  must be same length as table
         rationale ... string message to include in log output message for any
                       rows with elim == True
+        antirationale ... optional string for rows with elim == False
     '''
     assert len(table) == len(elim), f'len(table)={len(table)} != len(elim)={len(elim)}'
     if not(any(elim)):
@@ -235,7 +236,8 @@ def _eliminate_rows(table, elim, rationale):
     if uargs.set_enabling:
         output[disable_key] |= elim_bool
         existing = output[disable_rationale_key].tolist()
-        output[disable_rationale_key] = [join_notes(existing[i], rationale) if elim_bool[i] else existing[i] for i in range(len(output))]
+        output[disable_rationale_key] = [join_notes(existing[i], rationale) if elim_bool[i] else
+                                         join_notes(existing[i], antirationale) for i in range(len(output))]
     else:
         output.remove_rows(elim_bool)
     logger.warning(f'{msg}\n{_current_total_alt_str(output)}')
@@ -350,7 +352,7 @@ def check_fit_error(table, tol, key):
     fit_err_key = 'FIT_ERROR_STATIC' if 'STATIC' in key else 'FIT_ERROR_DYNAMIC'
     fit_errs = new[fit_err_key]
     failures = fit_errs > tol
-    new = _eliminate_rows(new, failures, f'{fit_err_key} > tol={tol}')
+    new = _eliminate_rows(new, failures, f'{fit_err_key} > tol={tol}', f'{fit_err_key} <= tol={tol}')
     return new
 
 def check_num_outliers(table, tol, key):
