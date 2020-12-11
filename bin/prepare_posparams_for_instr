@@ -336,33 +336,11 @@ def check_fit_error(table, tol, key):
     #     set_enabling ... True  --> usual behavior of eliminating rows if not within tol
     #                      False --> keep row and mark DEVICE_CLASSIFIED_NONFUNCTIONAL to
     #                                True or False depending on whether threshold was met
-    #
-    # 2020-12-10 [JHS] This function has some historical special handling for marking /
-    # eliminating rows. Better would be to fold into _eliminate_rows like all the other
-    # check functions. However there was some special line-by-line rationale string handling
-    # I had in there which I didn't want to disturb at this time.
     new = table.copy()
     fit_err_key = 'FIT_ERROR_STATIC' if 'STATIC' in key else 'FIT_ERROR_DYNAMIC'
     fit_errs = new[fit_err_key]
     failures = fit_errs > tol
-    if uargs.set_enabling:
-        new[disable_key] = failures
-        rationales = new[disable_rationale_key].tolist()  # some convoluted logic below to handle these strings, since astropy is intolerant of variable len strs
-        will_disable = set(new['POS_ID'][new[disable_key]])
-        for i in range(len(new)):
-            row = new[i]
-            sign = '>' if row[disable_key] else '<='
-            this_rationale = f'{fit_err_key}={row[fit_err_key]:.6f} {sign} tol={tol}'
-            rationales[i] = join_notes(rationales[i], this_rationale)
-            if row[disable_key]:
-                logger.warning(this_rationale)
-        new[disable_rationale_key] = rationales
-    else:
-        for i in np.flatnonzero(failures):
-            logger.warning(f'Row for {new["POS_ID"][i]} removed due to {fit_err_key}={fit_errs[i]} > tol={tol}')
-        new.remove_rows(failures)
-    if uargs.set_enabling:
-        logger.warning(f'{len(will_disable)} positioner(s) {elim_action_str} as exceeding tol.')
+    new = _eliminate_rows(new, failures, f'{fit_err_key} > tol={tol}')
     return new
 
 def check_num_outliers(table, tol, key):
