@@ -556,7 +556,7 @@ for key, commit_key in commit_keys.items():
                 msg = f'This will set the field {commit_key} to True or False, for ' + \
                       ' all remaining positioners in the parameters table'
                 if uargs.set_enabling:
-                    msg += '. All {elim_action_str} positioners will have {commit_key} forced to False.'
+                    msg += f'. All {elim_action_str} positioners will have {commit_key} forced to False.'
                 else:
                     msg += ' (after the checks which were just completed).'
                 msg += ' We are not sending anything to the database at this time. We are only' + \
