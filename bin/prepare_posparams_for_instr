@@ -218,8 +218,6 @@ def _eliminate_rows(table, elim, rationale, antirationale=''):
         antirationale ... optional string for rows with elim == False
     '''
     assert len(table) == len(elim), f'len(table)={len(table)} != len(elim)={len(elim)}'
-    if not(any(elim)):
-        return table.copy()
     elim_bool = [bool(x) for x in elim]  # guarantee a clean boolean format
     keep = [x == False for x in elim_bool]
     all_posids = set(table['POS_ID'])
@@ -263,7 +261,7 @@ def check_flags(table):
     new = table.copy()
     for flag in movemask.names():
         fail_list = [movemask[flag] & value for value in new['FLAGS']]
-        new = _eliminate_rows(new, fail_list, f'flag {flag}', '')
+        new = _eliminate_rows(new, fail_list, f'flag {flag}', f'not {flag}')
     return new
 
 def check_static_fit_bounds(table, tighten_factor):
