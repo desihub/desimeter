@@ -578,7 +578,7 @@ for key, commit_key in commit_keys.items():
     
     # 2020-12-10 [JHS] Do *NOT* commit anything for devices we are setting as nonfunctional.
     # Because in practice these are cases where we don't trust the calibration.
-    new_table[commit_key] |= new_table[disable_key]
+    new_table[commit_key] &= new_table[disable_key] == False
 
     delayed_log_notes += [f'{commit_key} {method} to {set_val} for all positioners']
     will_commit = new_table[commit_key]
