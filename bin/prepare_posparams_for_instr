@@ -599,6 +599,8 @@ if uargs.set_enabling:
         action = f'{disable_key}={row[disable_key]}'
         if rationales[i]:
             rationales[i] = f'{action} because: {rationales[i]}'
+            if new_table[disable_key][i] == False:
+                rationales[i] += ' (and all other checks passed)'
         else:
             rationales[i] = f'{action} after passing all checks in prepare_posparams_for_instr'
     new_table[disable_rationale_key] = rationales
