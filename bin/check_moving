@@ -1,0 +1,93 @@
+#!/usr/bin/env python
+
+import os
+import psycopg2
+import numpy as np
+from astropy.table import Table, vstack
+import argparse
+import time
+start_time = time.time()
+
+from desimeter.util import parse_fibers
+from desimeter.dbutil import dbquery,get_petal_ids,get_pos_ids,get_petal_loc
+
+enable_keys_moves = {'CTRL_ENABLED'}
+enable_keys_calib = {'DEVICE_CLASSIFIED_NONFUNCTIONAL', 'FIBER_INTACT'}
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="""Retrieve data from posmove DB and save to disk as CSV table""")
+
+parser.add_argument('--host', type= str, required=False, default='db.replicator.dev-cattle.stable.spin.nersc.org', help="db.replicator.dev-cattle.stable.spin.nersc.org for kpno or beyonce.lbl.gov for petaltest")
+parser.add_argument('--port', type= int, required=False, default=60042, help="60042 for kpno or 5432 for petaltest")
+parser.add_argument('--password', type= str, required=False, default=None, help="nothing for kpno")
+parser.add_argument('--petal-ids', type= str, required=False, default=None, help="comma separated list of petal ids")
+parser.add_argument('--exposure-ids', type= str, required=False, default=None, help="comma separated list of exposure ids")
+parser.add_argument('--exposure-iters', type= str, required=False, default=None, help="comma separated list of exposure iters")
+parser.add_argument('--date-min', type = str, default = "2019-01-01", required = False, help="date min with format YYYY-MM-DD")
+parser.add_argument('--date-max', type = str, default = "2030-01-01", required = False, help="date max with format YYYY-MM-DD")
+parser.add_argument('-o', '--outfile', type = str, default = None, required = False, help="output txt file")
+parser.add_argument('-comma', '--comma-replacement', type=str, default='||', help='replace commas in data strings with this in output csv files)')
+
+args  = parser.parse_args()
+
+# example: get_posmoves --host beyonce.lbl.gov --port 5432 --password XXXX --petal-ids 1 --exposure-ids 2107
+
+# open connection
+comm = psycopg2.connect(host=args.host,port=args.port, database='desi_dev', user='desi_reader',password=args.password)
+
+
+if args.petal_ids is not None :
+    petalids = parse_fibers(args.petal_ids)
+else :
+    petalids = get_petal_ids(comm)
+
+if args.outfile :
+    ofile = open(args.outfile,"w")
+else :
+    ofile = None
+
+# sort by petal loc
+petallocs = []
+petalids = np.array(petalids)
+for petalid in petalids :
+    petallocs.append(get_petal_loc(petalid))
+ii=np.argsort(petallocs)
+petalids=petalids[ii]
+
+for petalid in petalids :
+
+    # read data from db
+    cmd = f"select * from posmovedb.positioner_moves_p{int(petalid)} where"
+    cmd += " time_recorded BETWEEN date '{}' and date '{}'".format(args.date_min,args.date_max)
+    if args.exposure_ids is not None:
+        cmd += "and exposure_id in ({})".format(args.exposure_ids)
+    if args.exposure_iters is not None:
+        cmd += " and exposure_iter in ({})".format(args.exposure_iters)
+    posmoves=dbquery(comm,cmd,as_table=True)
+
+    petal_loc = get_petal_loc(petalid)
+
+    for posid in np.unique(posmoves["pos_id"]):
+        selection=(posmoves["pos_id"]==posid)
+        ii=np.where(selection)[0]
+        mindex=posmoves["pos_move_index"][ii]
+        busid=posmoves["bus_id"][ii][0]
+        jj=np.argsort(mindex)
+        x=np.array(posmoves["ptl_x"][ii][jj])
+        y=np.array(posmoves["ptl_y"][ii][jj])
+        ok=(x != None)
+        x=x[ok].astype(float)
+        y=y[ok].astype(float)
+        if x.size<2 : continue
+        dx=x[1:]-x[:-1]
+        dy=y[1:]-y[:-1]
+        dr=np.sqrt(dx**2+dy**2)
+        moving=(dr>0.05).astype(int)
+        line="{} ploc={} busid={} moving={}".format(posid,petal_loc,busid,moving)
+        print(line)
+        if ofile is not None :
+            ofile.write(line+"\n")
+
+if ofile is not None :
+    ofile.close()
+    print("wrote",args.outfile)

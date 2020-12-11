@@ -6,7 +6,8 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.table import Table
-from desimeter.io import load_metrology
+from desimeter.io import load_metrology,fvc2fp_filename
+from desimeter.transform.fvc2fp import FVC2FP
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Plot FVC spots, showing residuals with metrology""")
@@ -15,6 +16,8 @@ parser.add_argument('-i','--infile', type = str, default = None, required = True
 parser.add_argument('--expected', action = "store_true",
                     help = 'compare with expected location (X_FP_EXP,Y_FP_EXP) instead of (X_FP_METRO,Y_FP_METRO)')
 parser.add_argument('--posids',type=str,help="comma separated list of positioner ids to highlight")
+
+parser.add_argument('--coordinates-file', type=str, default=None)
 
 args  = parser.parse_args()
 
@@ -82,6 +85,7 @@ else :
 
 a.scatter(xm,ym,marker=marker,edgecolors="orange",facecolors="none",label=label)
 
+
 if args.expected :
     radius_mm = 6. #pixel2fp*match_radius_pixels
     angle=np.linspace(0,2*np.pi,50)
@@ -93,12 +97,50 @@ if args.expected :
             a.plot(xx+ca,yy+sa,"-",color="gray",alpha=0.4)
     # also display unmatched
     metrology = load_metrology()
+    ok=(metrology["PETAL_LOC"]!=5)
+    metrology=metrology[ok]
+    matched = np.in1d(metrology["LOCATION"],table["LOCATION"])
+    matched_positioners = matched & (metrology["DEVICE_TYPE"]=="POS")
     unmatched = ~np.in1d(metrology["LOCATION"],table["LOCATION"])
     unmatched_positioners = unmatched & (metrology["DEVICE_TYPE"]=="POS")
-    print("unmatched positioners = {}".format(list(metrology["DEVICE_ID"][unmatched_positioners])))
-    for xx,yy in zip(metrology["X_FP"][unmatched_positioners],metrology["Y_FP"][unmatched_positioners]):
-        a.plot(xx+ca,yy+sa,"-",color="red",alpha=0.4)
-    
+    print("number of matched positioners (from metrology) = {}".format(np.sum(matched_positioners)))
+    print("number of unmatched positioners (from metrology) = {}".format(np.sum(unmatched_positioners)))
+    print("unmatched positioners (from metrology) = {}".format(list(metrology["DEVICE_ID"][unmatched_positioners])))
+
+    if args.coordinates_file is not None :
+        coord=Table.read(args.coordinates_file)
+        clocation = np.array(coord["PETAL_LOC"])*1000+np.array(coord["DEVICE_LOC"])
+        matched = np.in1d(clocation,table["LOCATION"])
+        unmatched = ~np.in1d(clocation,table["LOCATION"])
+        print("number of matched positioners (from coords) = {}".format(np.sum(matched)))
+        print("number of unmatched positioners (from coords) = {}".format(np.sum(unmatched)))
+        for k in ["DEVICE_ID" , "POS_ID" ] :
+            if k in coord.dtype.names :
+                print("unmatched positioners (from coords) = {}".format(list(coord[k][unmatched])))
+        for xx,yy in zip(coord["X_FP_EXP"][unmatched],coord["Y_FP_EXP"][unmatched]):
+            a.plot(xx+ca,yy+sa,"-",color="red",alpha=0.3,linewidth=2,label="unmatched expected coord")
+            a.plot([xx-radius_mm,xx+radius_mm],[yy,yy],"-",color="red",alpha=0.3,linewidth=2)
+            a.plot([xx,xx],[yy-radius_mm,yy+radius_mm],"-",color="red",alpha=0.3,linewidth=2)
+
+        if args.posids is not None :
+            posids=args.posids.split(",")
+            for posid in posids :
+                ii=np.where(coord["POS_ID"]==posid)[0]
+                if ii.size>0 :
+                    i=ii[0]
+                    xx=coord["X_FP_EXP"][i]
+                    yy=coord["Y_FP_EXP"][i]
+                    print("showing expected pos of {} at {},{} as a cross".format(posid,xx,yy))
+                    a.plot(xx,yy,"x",color="purple")
+
+    else :
+        for xx,yy in zip(metrology["X_FP"][unmatched_positioners],metrology["Y_FP"][unmatched_positioners]):
+            a.plot(xx+ca,yy+sa,"-",color="red",alpha=0.4)
+
+
+
+
+
 
 dx=xm-x
 dy=ym-y
@@ -106,13 +148,19 @@ dy=ym-y
 if args.posids is not None :
     posids=args.posids.split(",")
     metrology = load_metrology()
+    fvc2fp=FVC2FP.read(fvc2fp_filename())
     for posid in posids :
         i=np.where(metrology["DEVICE_ID"]==posid)[0]
         if len(i)==0 :
             print(posid,"not in metrology")
             continue
-        i=i[0]
+        #i=i[0]
         plt.plot(metrology["X_FP"][i],metrology["Y_FP"][i],"o",alpha=0.6,markersize=10,label=posid)
+        xfp=metrology["X_FP"][i]
+        yfp=metrology["Y_FP"][i]
+        xpix,ypix = fvc2fp.fp2fvc(xfp,yfp)
+        print("{} FP={},{} mm FVC={},{} pix".format(posid,metrology["X_FP"][i][0],metrology["Y_FP"][i][0],xpix[0],ypix[0]))
+
 
 
 

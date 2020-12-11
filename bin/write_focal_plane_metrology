@@ -127,6 +127,11 @@ for k in ["DEVICE_ID","BUS_ID","CAN_ID"] :
 ploc2id = {ploc : table_with_ids["PETAL_ID"][table_with_ids["PETAL_LOC"]==ploc][0] for ploc in np.unique(table_with_ids["PETAL_LOC"])}
 spots["PETAL_ID"] = [ploc2id[ploc] for ploc in spots["PETAL_LOC"]]
 
+for i in range(len(spots)) :
+    if not (spots["DEVICE_LOC"][i] >= 0)  :
+        spots["DEVICE_LOC"][i]=-1
+        spots["LOCATION"][i]=-1
+
 spots.write(args.outfile,format='csv',overwrite=True)
 
 log.info("wrote {}".format(args.outfile))

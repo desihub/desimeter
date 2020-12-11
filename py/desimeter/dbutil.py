@@ -1,6 +1,6 @@
+from astropy.table import Table
 
-
-def dbquery(comm,operation,parameters=None) :
+def dbquery(comm,operation,parameters=None,as_table=False) :
 
     cx=comm.cursor()
     cx.execute(operation,parameters)
@@ -8,7 +8,10 @@ def dbquery(comm,operation,parameters=None) :
     res=cx.fetchall()
     cx.close()
 
-    results=dict()
+    if as_table :
+        results=Table()
+    else :
+        results=dict()
     for i,name in enumerate(names) :
         results[name]=[r[i] for r in res]
 

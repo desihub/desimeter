@@ -67,6 +67,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP, recent_rehome, sequen
                keep_fixed=None,
                ptlXerr=None,
                ptlYerr=None,
+               outlier_rejection=False
                ):
     '''Best-fit function for parameters used in the transformation between
     internally-tracked (theta,phi) and externally measured (x,y).
@@ -148,7 +149,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP, recent_rehome, sequen
         best_params = {"FLAGS": flags}
         covariance_dict = dict()
         rms_of_residuals = 0.
-        return best_params, covariance_dict, rms_of_residuals
+        return best_params, covariance_dict, rms_of_residuals, 0
 
     if not np.any(recent_rehome) :
         print("ERROR: Need at least one measurement with recent_rehome to fit OFFSET_T,P")
@@ -156,7 +157,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP, recent_rehome, sequen
         best_params = {"FLAGS": flags}
         covariance_dict = dict()
         rms_of_residuals = 0.
-        return best_params, covariance_dict, rms_of_residuals
+        return best_params, covariance_dict, rms_of_residuals, 0
 
     # selection of which parameters are variable
     if mode == 'static':
@@ -353,12 +354,10 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP, recent_rehome, sequen
         # for Gaussian x and y,
         # 95% of realisations have dist < 2.1*meddist
         # 99% of realisations have dist < 2.6*meddist
-        ok = (dist[worst]<0.05) | (dist[worst] < 2.1*meddist)
+        if not outlier_rejection :
+            break
 
-        if ptlXerr is not None and ptlYerr is not None :
-            # measuremnt uncertainties were given, so if the outlier is less than 3 sigma it's ok
-            err = np.sqrt( xerr_flat[worst]**2 + yerr_flat[worst]**2 )
-            ok |= dist[worst]<3*err
+        ok = (dist[worst]<0.2) | (dist[worst] < 2.1*meddist)
 
         if ok: break
         print("WARNING: discarding outlier point #{} at x,y={:4.1f},{:4.1f} with dist={:4.3f}mm".format(worst,x_flat[worst],y_flat[worst],dist[worst]))
@@ -388,7 +387,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP, recent_rehome, sequen
             best_params = {"FLAGS": flags}
             covariance_dict = dict()
             rms_of_residuals = 0.
-            return best_params, covariance_dict, rms_of_residuals
+            return best_params, covariance_dict, rms_of_residuals, npts
 
     # organize and return results
     best_params = {key: optimizer_result.x[param_idx[key]] for key in params_to_fit}
@@ -423,7 +422,7 @@ def fit_params(posintT, posintP, ptlX, ptlY, gearT, gearP, recent_rehome, sequen
     # add mask
     best_params["FLAGS"] = flags
 
-    return best_params, covariance_dict, rms_of_residuals
+    return best_params, covariance_dict, rms_of_residuals, x_flat.size
 
 def wrap_at_180(angle):
     angle %= 360

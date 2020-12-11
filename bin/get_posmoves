@@ -60,15 +60,34 @@ if args.enabled_history:
 else:
     desired_fields = {'moves': '*', 'calib': '*'}
 
+if args.pos_ids is not None :
+    only_posids = args.pos_ids.split(",")
+else :
+    only_posids = None
+
 otables = []
+
 i_ptl = 0
 for petalid in petalids :
     i_ptl += 1
 
-    if args.pos_ids in {None, 'movers'}:
-        posids = get_pos_ids(comm, petalid)
-    else:
-        posids = args.pos_ids.split(",")        
+
+    # read data from db
+    from_where = f'from posmovedb.positioner_moves_p{int(petalid)} where'
+    posid_date = "time_recorded BETWEEN date '{}' and date '{}'".format(args.date_min,args.date_max)
+    cmd = f'select distinct pos_id {from_where} {posid_date}'
+    if args.exposure_ids is not None:
+        cmd += " and exposure_id in ({})".format(args.exposure_ids)
+    if args.exposure_iters is not None:
+        cmd += " and exposure_iter in ({})".format(args.exposure_iters)
+    res=dbquery(comm,cmd)
+
+    posids=res["pos_id"]
+
+    if only_posids is not None :
+        posids = np.intersect1d(posids,only_posids)
+
+    if len(posids)==0 : continue
 
     petal_loc = get_petal_loc(petalid)
 
@@ -166,7 +185,7 @@ for petalid in petalids :
             otable[k2]=np.array(posmoves[k])
 
         otable["RECENT_REHOME"]=np.in1d(otable["EXPOSURE_ID"],recent_rehome_exposure_ids).astype(int)
-        
+
         if args.enabled_history:
             selection = np.array([False]*len(otable))
             selection[0] = True  # by default, include the first row
@@ -175,9 +194,13 @@ for petalid in petalids :
                 selection[1:] |= otable[key][1:] != otable[key][:-1]  # detect changes
             otable = otable[selection]
 
+        # remove non measured entries
+        ok=(otable["X_FP"] != None)
+        otable=otable[ok]
+
         if not os.path.isdir(args.outdir):
             os.makedirs(args.outdir)
-        
+
         status_str = f'positioner {i_pos} of {len(posids)} on petal {i_ptl} of {len(petalids)}'
         if args.merge:
             otables.append(otable)
