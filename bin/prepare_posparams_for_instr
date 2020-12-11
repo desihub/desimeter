@@ -332,13 +332,16 @@ def check_fit_error(table, tol, key):
     failures = fit_errs > tol
     if uargs.set_enabling:
         new[disable_key] = failures
+        rationales = new[disable_rationale_key].tolist()  # some convoluted logic below to handle these strings, since astropy is intolerant of variable len strs
         will_disable = set(new['POS_ID'][new[disable_key]])
-        for row in new:
-            action = f'{disable_key}={row[disable_key]} because'
+        for i in range(len(new)):
+            row = new[i]
             sign = '>' if row[disable_key] else '<='
-            row[disable_rationale_key] = f'{action} {fit_err_key}={row[fit_err_key]:.6f} {sign} tol={tol}'
+            this_rationale = f'{fit_err_key}={row[fit_err_key]:.6f} {sign} tol={tol}'
+            rationales[i] = join_notes(rationales[i], this_rationale)
             if row[disable_key]:
-                logger.warning(row[disable_rationale_key])
+                logger.warning(this_rationale)
+        new[disable_rationale_key] = rationales
     else:
         for i in np.flatnonzero(failures):
             logger.warning(f'Row for {new["POS_ID"][i]} removed due to {fit_err_key}={fit_errs[i]} > tol={tol}')
@@ -505,7 +508,7 @@ if uargs.allow_scale:
     fits_to_check += ['DYNAMIC']
 for fit_key in fits_to_check:
     checks = [Check(check_num_outliers, tol=2, key=fit_key)]
-    checks += [Check(check_fit_error, tol=fit_err_tol, key=fit_key, set_enabling=uargs.set_enabling)]
+    checks += [Check(check_fit_error, tol=fit_err_tol, key=fit_key)]
 checks += [Check(check_flags)]
 checks += [Check(check_static_fit_bounds, tighten_factor=0.001)]
 checks += [Check(check_xy_offsets, tol=0.5)]
@@ -572,6 +575,16 @@ for note in delayed_log_notes:
     logger.info(note)
 logger.info(f'Final list of the {len(posids_to_commit)} positioner(s) with any calibration' +
             f' values to be committed:\n{sorted(posids_to_commit)}')
+
+# add some extra info for DEVICE_CLASSIFIED_NONFUNCTIONAL cases that will go in DB
+if uargs.set_enabling:
+    rationales = new_table[disable_rationale_key].tolist()
+    for i in range(len(new_table)):
+        row = new_table[i]
+        if row[disable_rationale_key]:
+            action = f'{disable_key}={row[disable_key]} because '
+            rationales[i] = action + rationales[i]
+    new_table[disable_rationale_key] = rationales
 
 # export
 import os
