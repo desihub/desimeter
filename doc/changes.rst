@@ -2,10 +2,47 @@
 desimeter change Log
 ====================
 
-0.5.2 (unreleased)
+0.6.0 (2020-12-10)
 ------------------
 
-* No changes yet
+* Update to prepare_posparams [PR #166]
+* Several changes for KPNO focal plane calibration [PR #165]
+* Increase max bin size to accommodate corner case [PR #164]
+* Make new fvc2fp parameters optional. [PR #163]
+* Disable bad performers [PR #160]
+* Spots coordinates statistical uncertainties [PR #159]
+* Unmask POSTSCRIPT and CALIB_NOTE fields when necessary [PR #158]
+* Get enabled history [PR #157]
+* Better handle ADC settings in unusual configurations. [PR #156]
+* Empirical field rotation rate [PR #155]
+* Remove parsing 'freeze' in log_note string from inclusion as "FROZEN" [PR #154]
+* Fix some ADC angle computations [PR #153]
+* Update to spotmatch usage [PR #152]
+* Let desimeter routines make directories for output if needed. [PR #151]
+* Update X_FP, Y_FP for GFA pixel corners to match target_ra/dec. [PR #150]
+* Accepted targets [PR #149]
+* Update fp-metrology file based on fiducial systematics script. [PR #148]
+* Add DEVICE_ID,BUS_ID... to metrology table using online positioner index table. [PR #146]
+* Set dtype to object for cols that can carry None or int [PR #144]
+* Clear tmp before analyze bright [PR #143]
+* plot_posparams -- skip files where data is missing [PR #142]
+* Add option --force-recent-rehome to fit_posparams [PR #141]
+* Let fetched posmovedb rows have same timestamp as calib [PR #140]
+* Pos analysis updates [PR #139]
+* Posmoves tp updates [PR #138]
+* Identify requests [PR #137]
+* Dither analysis [PR #136]
+* Proper motion [PR #135]
+* Take into account proper motions [PR #134]
+* Bug fix when reading hexapod rotation in fits header [PR #127]
+* Turbulence opt [PR #126]
+* Turbulence modeling code. [PR #125]
+* Use desimeter logger [PR #124]
+* Analyze pos perf updates [PR #123]
+* Doc xy analysis [PR #122]
+* Use device centers [PR #121]
+* Spotmatch [PR #120]
+
 
 0.5.1 (2020-09-01)
 ------------------
