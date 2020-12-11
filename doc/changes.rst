@@ -2,6 +2,11 @@
 desimeter change Log
 ====================
 
+0.6.1 (2020-12-11)
+------------------
+
+* Fixes in prepare_posparams used for FP calibration of 20201210 [PR #167]
+
 0.6.0 (2020-12-10)
 ------------------
 
