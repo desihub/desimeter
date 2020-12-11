@@ -3,6 +3,7 @@ import desimeter.log
 
 log = desimeter.log.get_logger()
 
+
 def match2d(x1, y1, x2, y2, rad):
     """Find all matches between x1, y1 and x2, y2 within radius rad."""
     from scipy.spatial import cKDTree
@@ -99,8 +100,9 @@ def match_positioners(fvc, metr, calib, countthresh=80000,
     metr = metr[metrpos]
     mm, mc = match(metr['DEVICE_ID'], calib['POS_ID'])
     metrarmlen = np.zeros(len(metr), dtype='f4')
-    metrarmlen[mm] = (calib['LENGTH_R1_STATIC'][mc] +
-                      calib['LENGTH_R2_STATIC'][mc] +
+    lengthextra = '_STATIC' if 'LENGTH_R1_STATIC' in calib.dtype.names else ''
+    metrarmlen[mm] = (calib['LENGTH_R1'+lengthextra][mc] +
+                      calib['LENGTH_R2'+lengthextra][mc] +
                       arm_fudge_offset)
     # 0.1 is a made up number intended to be higher that most of the
     # uncertainties in R1+R2.  Could be replaced by actual propagation of the
@@ -113,7 +115,8 @@ def match_positioners(fvc, metr, calib, countthresh=80000,
     # artificially going to set their arm lengths to 4.3, short enough that
     # the positioners won't overlap their neighbors, but they can find
     # the homed centroid near them.
-    metrarmlen[metrarmlen == 0] = 4.3
+    # metrarmlen[metrarmlen == 0] = 4.3
+    metrarmlen[metrarmlen == 0] = np.median(metrarmlen[metrarmlen != 0])
 
     # we have a bunch of positioner center locations in metr and the reach of
     # each positioner.  Now let's find which spots are in reach of which
@@ -171,7 +174,11 @@ def match_positioners(fvc, metr, calib, countthresh=80000,
 
     ret = np.full(fvclen, -1)
     ret[assignment[1]] = assignment[0]
-    res = (ret, assignment[2])
+    scores = np.full(fvclen, np.nan)
+    ok = assignment[0] != -1
+    scores[assignment[1][ok]] = score_matrix[
+        assignment[0][ok], assignment[1][ok]]
+    res = (ret, scores, assignment[2])
 
     log.info(f'made {assignment[2]} assignments, between {len(fvc)} '
              f'valid centroids and {len(metr)} valid positioners')
@@ -180,9 +187,10 @@ def match_positioners(fvc, metr, calib, countthresh=80000,
         ret = np.full((len(alternatives), fvclen), -1)
         for i, alt in enumerate(alternatives):
             ret[i, alt[1]] = alt[0]
-        ret = res + (ret,)
+        res = res + (ret,)
 
-    return ret
+    return res
+
 
 def solve_assignment(score_matrix):
     from scipy.optimize import linear_sum_assignment
@@ -214,3 +222,59 @@ def plot_match(fvc, metr, assignment, alternatives=None):
     p.xlabel('X_FP (mm)')
     p.ylabel('X_FP (mm)')
     p.legend()
+
+
+def print_groupings(fvc, metr, assignment, alternatives, file=None, calib=None):
+    possible_assignments = dict()
+    if alternatives is not None:
+        allassignments = np.vstack([assignment, alternatives])
+    else:
+        allassignments = assignment[None, ...]
+    for a in allassignments:
+        for fvcind, metrind in enumerate(a):
+            if metrind == -1:
+                continue
+            possible_assignments[metrind] = (
+                possible_assignments.get(metrind, set()) | set([fvcind]))
+    metrind = np.array(list(possible_assignments.keys()))
+    names = [metr['DEVICE_ID'][i] for i in metrind]
+    s = np.argsort(names)
+    if calib is not None:
+        mm, mc = match(metr['DEVICE_ID'], calib['POS_ID'])
+        metrarmr1 = np.zeros(len(metr), dtype='f4')
+        metrarmr2 = np.zeros(len(metr), dtype='f4')
+        metrarmr1[mm] = calib['LENGTH_R1'][mc]
+        metrarmr2[mm] = calib['LENGTH_R2'][mc]
+    if calib is None:
+        print('DEVICE_ID X_FP Y_FP N_POS', file=file)
+    else:
+        print('DEVICE_ID X_FP Y_FP X_ELBOW Y_ELBOW N_POS', file=file)
+    for metrind0 in metrind[s]:
+        tfvc = fvc[np.array([x for x in possible_assignments[metrind0]])]
+        for tfvc0 in tfvc:
+            if calib is None:
+                print(metr['DEVICE_ID'][metrind0],
+                      tfvc0['X_FP'], tfvc0['Y_FP'], len(tfvc), file=file)
+            else:
+                tm = metr[metrind0]
+                dist = np.sqrt((tfvc0['X_FP']-tm['X_FP'])**2 +
+                               (tfvc0['Y_FP']-tm['Y_FP'])**2)
+                r1 = metrarmr1[metrind0]
+                r2 = metrarmr2[metrind0]
+                if r1 + r2 <= dist:
+                    xpt = (r1*tfvc0['X_FP'] + r2*tm['X_FP'])/(r1+r2)
+                    ypt = (r1*tfvc0['Y_FP'] + r2*tm['Y_FP'])/(r1+r2)
+                elif np.abs(r1-r2) > dist:
+                    ypt = tm['Y_FP'] + 0
+                    xpt = tm['X_FP'] + 3
+                else:
+                    ctheta = (dist**2+r1**2-r2**2)/(2*dist*r1)
+                    if np.abs(ctheta) > 1:
+                        pdb.set_trace()
+                    basetheta = np.arctan2(tfvc0['Y_FP']-tm['Y_FP'],
+                                           tfvc0['X_FP']-tm['X_FP'])
+                    xpt = tm['X_FP'] + r1*np.cos(basetheta+np.arccos(ctheta))
+                    ypt = tm['Y_FP'] + r1*np.sin(basetheta+np.arccos(ctheta))
+                print(metr['DEVICE_ID'][metrind0],
+                      tfvc0['X_FP'], tfvc0['Y_FP'], xpt, ypt, len(tfvc),
+                      file=file)
