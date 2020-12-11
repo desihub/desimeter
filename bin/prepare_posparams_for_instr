@@ -225,7 +225,7 @@ def _eliminate_rows(table, elim, rationale):
     if uargs.set_enabling:
         output[disable_key] |= elim_bool
         existing = output[disable_rationale_key].tolist()
-        output[disable_rationale_key] = [join_notes(existing[i], rationale) if elim_bool else existing[i] for i in range(len(output))]
+        output[disable_rationale_key] = [join_notes(existing[i], rationale) if elim_bool[i] else existing[i] for i in range(len(output))]
     else:
         output.remove_rows(elim_bool)
     logger.warning(f'{msg}\n{_current_total_alt_str(output)}')
