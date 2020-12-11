@@ -594,9 +594,11 @@ if uargs.set_enabling:
     rationales = new_table[disable_rationale_key].tolist()
     for i in range(len(new_table)):
         row = new_table[i]
-        if row[disable_rationale_key]:
-            action = f'{disable_key}={row[disable_key]} because: '
-            rationales[i] = action + rationales[i]
+        action = f'{disable_key}={row[disable_key]}'
+        if rationales[i]:
+            rationales[i] = f'{action} because: {rationales[i]}'
+        else:
+            rationales[i] = f'{action} after passing all checks in prepare_posparams_for_instr'
     new_table[disable_rationale_key] = rationales
 
 # export
