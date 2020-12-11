@@ -206,7 +206,7 @@ def _current_total_alt_str(table, anti=False):
             s += str(len(input_table) - len(table))
     return s
 
-def _eliminate_rows(table, elim, rationale):
+def _eliminate_rows(table, elim, rationale, antirationale=''):
     '''Logs messages and returns a copy of table, with rows identified by elim
     either deleted from it or marked DEVICE_CLASSIFIED_NONFUNCTIONAL.
     
@@ -215,10 +215,9 @@ def _eliminate_rows(table, elim, rationale):
                  must be same length as table
         rationale ... string message to include in log output message for any
                       rows with elim == True
+        antirationale ... optional string for rows with elim == False
     '''
     assert len(table) == len(elim), f'len(table)={len(table)} != len(elim)={len(elim)}'
-    if not(any(elim)):
-        return table.copy()
     elim_bool = [bool(x) for x in elim]  # guarantee a clean boolean format
     keep = [x == False for x in elim_bool]
     all_posids = set(table['POS_ID'])
@@ -235,7 +234,8 @@ def _eliminate_rows(table, elim, rationale):
     if uargs.set_enabling:
         output[disable_key] |= elim_bool
         existing = output[disable_rationale_key].tolist()
-        output[disable_rationale_key] = [join_notes(existing[i], rationale) if elim_bool[i] else existing[i] for i in range(len(output))]
+        output[disable_rationale_key] = [join_notes(existing[i], rationale) if elim_bool[i] else
+                                         join_notes(existing[i], antirationale) for i in range(len(output))]
     else:
         output.remove_rows(elim_bool)
     logger.warning(f'{msg}\n{_current_total_alt_str(output)}')
@@ -251,7 +251,7 @@ mask_table = new_table.mask
 masked_list = mask_table['POS_ID']
 for key in required_keys:
     masked_list |= mask_table[key]
-new_table = _eliminate_rows(new_table, masked_list, 'paramfits file missing required value(s)')
+new_table = _eliminate_rows(new_table, masked_list, 'paramfits file missing required value(s)', 'paramfits data complete')
 
 # check functions
 def check_flags(table):
@@ -261,7 +261,7 @@ def check_flags(table):
     new = table.copy()
     for flag in movemask.names():
         fail_list = [movemask[flag] & value for value in new['FLAGS']]
-        new = _eliminate_rows(new, fail_list, f'flag {flag}')
+        new = _eliminate_rows(new, fail_list, f'flag {flag}', f'not {flag}')
     return new
 
 def check_static_fit_bounds(table, tighten_factor):
@@ -286,7 +286,7 @@ def check_static_fit_bounds(table, tighten_factor):
         for key, limit in limits.items():
             op = operators[key]
             fail_list = op(new[param], limit)
-            new = _eliminate_rows(new, fail_list, f'{param} {key} bound = {limit}')
+            new = _eliminate_rows(new, fail_list, f'{param} {key} bound={limit}', f'{param} within bound={limit}')
     return new
 
 def check_xy_offsets(table, tol):
@@ -312,7 +312,7 @@ def check_xy_offsets(table, tol):
                                f'{offset:.4f} outside tol={tol} of nominal {expected:.4f} ' +
                                f'by {offset-expected:.4f}')
     delete_bools = [i in delete_idxs for i in range(len(new))]
-    new = _eliminate_rows(new, delete_bools, f'OFFSET_X or OFFSET_Y outside tol={tol} of nominal value')
+    new = _eliminate_rows(new, delete_bools, f'OFFSET_X or OFFSET_Y outside tol={tol} of nominal value', f'OFFSET_X and OFFSET_Y within tol={tol} of nominal value')
     return new
 
 def check_arm_lengths(table, tol):
@@ -334,7 +334,7 @@ def check_arm_lengths(table, tol):
                                f'{length:.4f} outside tol={tol} of nominal={exp:.4f}' +
                                f' by {length-exp:.4f}')
     delete_bools = [i in delete_idxs for i in range(len(new))]
-    new = _eliminate_rows(new, delete_bools, f'LENGTH_R1 or LENGTH_R2 outside tol={tol} of nominal value')       
+    new = _eliminate_rows(new, delete_bools, f'LENGTH_R1 or LENGTH_R2 outside tol={tol} of nominal value', f'LENGTH_R1 and LENGTH_R2 within tol={tol} of nominal value')       
     return new
 
 def check_fit_error(table, tol, key):
@@ -350,7 +350,7 @@ def check_fit_error(table, tol, key):
     fit_err_key = 'FIT_ERROR_STATIC' if 'STATIC' in key else 'FIT_ERROR_DYNAMIC'
     fit_errs = new[fit_err_key]
     failures = fit_errs > tol
-    new = _eliminate_rows(new, failures, f'{fit_err_key} > tol={tol}')
+    new = _eliminate_rows(new, failures, f'{fit_err_key} > tol={tol}', f'{fit_err_key} <= tol={tol}')
     return new
 
 def check_num_outliers(table, tol, key):
@@ -368,7 +368,7 @@ def check_num_outliers(table, tol, key):
     num_outliers_key = f'NUM_OUTLIERS_EXCLUDED_{key}'
     new[num_outliers_key] = new['NUM_POINTS'] - new[num_points_in_fit_key]
     exceeds_tol = new[num_outliers_key] > tol
-    new = _eliminate_rows(new, exceeds_tol, f'number of outliers > tol={tol}')
+    new = _eliminate_rows(new, exceeds_tol, f'number of outliers > tol={tol}', f'number of outliers <= tol={tol}')
     return new
 
 def check_recent_rehome(table):
@@ -594,9 +594,11 @@ if uargs.set_enabling:
     rationales = new_table[disable_rationale_key].tolist()
     for i in range(len(new_table)):
         row = new_table[i]
-        if row[disable_rationale_key]:
-            action = f'{disable_key}={row[disable_key]} because: '
-            rationales[i] = action + rationales[i]
+        action = f'{disable_key}={row[disable_key]}'
+        if rationales[i]:
+            rationales[i] = f'{action} because: {rationales[i]}'
+        else:
+            rationales[i] = f'{action} after passing all checks in prepare_posparams_for_instr'
     new_table[disable_rationale_key] = rationales
 
 # export
