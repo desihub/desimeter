@@ -106,6 +106,7 @@ else :
         bias = None
 
 filename = args.infile
+extnames = None
 if filename.find(".fits")>0 :
     log.info("read FITS FVC image")
     with fitsio.FITS(args.infile) as fx:
@@ -167,12 +168,15 @@ for seqid,spots in enumerate(spots_list) :
             log.error("too many spots, exiting")
             continue
 
+    outfile = args.outfile
+    if args.sequence:
+        if extnames is not None:
+            outfile = outfile.replace(".csv","-%s.csv" % extnames[seqid])
+        else:
+            outfile = outfile.replace(".csv","-F{:04d}.csv".format(seqid))
+
     if args.nomatch :
         # write spots
-        if not args.sequence :
-            outfile=args.outfile
-        else :
-            outfile=args.outfile.replace(".csv","-F{:04d}.csv".format(seqid))
         spots.write(outfile,format="csv",overwrite=True)
         print("wrote {}".format(outfile))
         continue
@@ -190,9 +194,7 @@ for seqid,spots in enumerate(spots_list) :
         log.error('Fewer than three matched fiducials; exiting early.')
         sys.exit(13)
 
-
     tx = FVC2FP.read_jsonfile(fvc2fp_filename())
-
 
     if args.use_spotmatch :
         metrology = load_metrology()
@@ -358,11 +360,6 @@ for seqid,spots in enumerate(spots_list) :
         ra,dec = fm.fp2radec(spots["X_FP"][ii],spots["Y_FP"][ii])
         spots["RA"][ii]  = ra
         spots["DEC"][ii] = dec
-
-    if not args.sequence :
-        outfile=args.outfile
-    else :
-        outfile=args.outfile.replace(".csv","-F{:04d}.csv".format(seqid))
 
     # write spots
     spots.write(outfile,format="csv",overwrite=True)
