@@ -2,7 +2,12 @@
 desimeter change Log
 ====================
 
-0.6.2 (unreleased)
+0.6.3 (unreleased)
+------------------
+
+* no changes yet
+
+0.6.2 (2020-12-18)
 ------------------
 
 * Update to field rotation model [PR #172]
