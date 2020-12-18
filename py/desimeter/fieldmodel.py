@@ -511,30 +511,35 @@ def dfieldrotdt_empirical_model(ra,dec,lst_deg) :
 
     # Empirical polynomial model
     # based on the output of the script desi_fit_field_rotation_rate.
-    # Result of fit on data/guide_data_20200415.csv :
-    # rms         =  0.12 arcsec/min
-    # max dev     =  0.42 arcsec/min
-    # chi2/ndf    = 119.6/(130-10) = 0.99
+    # Result of fit on data/guide_data_20200415.csv + guide_20201215_with_hexrot.csv
 
+    scalar = np.isscalar(ra)
+    if scalar :
+        ra  = np.atleast_1d(ra)
+        dec = np.atleast_1d(dec)
 
-    ha = (lst_deg - ra)
-    if not dec >= -90. or not dec <= 90. :
+    if np.any(np.abs(dec)>90.) :
         raise ValueError("Unphysical Dec in degrees: {}".format(dec))
 
-    x=sind(ha)
+    ha = (lst_deg - ra)
+    ha = ha%360.
+    ha[ha>180.] -= 360.
+
+    x=ha/60.
     y=(dec-30)/30.
 
-    rotation_rate_arcsec_per_min = -0.386 -0.031*x + 0.193*y + 0.33*x*y + 0.206*x**2 -0.094*y**2 + 0.341*x**3 -0.863*x**2*y + 0.125*x*y**2 -0.151*y**3
+    rotation_rate_arcsec_per_min = -0.396 + 0.012*x + 0.012*y + 0.124*x*y + 0.439*x**2 - 0.144*y**2 + 0.012*x**3 - 0.021*x**2*y + 0.095*x*y**2 -0.062*y**3
 
     # saturation to avoid crazy values if we run outside of the validity range of the polynomial
     min_val = -1.5
     max_val = 1.5
-    if rotation_rate_arcsec_per_min<min_val :
-        rotation_rate_arcsec_per_min = min_val
-    elif rotation_rate_arcsec_per_min>max_val :
-        rotation_rate_arcsec_per_min = max_val
+    rotation_rate_arcsec_per_min[rotation_rate_arcsec_per_min<min_val] = min_val
+    rotation_rate_arcsec_per_min[rotation_rate_arcsec_per_min>max_val] = max_val
 
-    return rotation_rate_arcsec_per_min
+    if scalar :
+        return rotation_rate_arcsec_per_min[0]
+    else :
+        return rotation_rate_arcsec_per_min
 
 
 def dfieldrotdt(ra,dec,mjd,lst_deg) :
