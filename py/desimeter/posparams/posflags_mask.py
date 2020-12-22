@@ -4,6 +4,9 @@
 The values here were retrieved by J.Silber on 2020-12-22.
 https://desi.lbl.gov/svn/code/online/DOSlib/trunk/python/DOSlib/flags.py
 SVN r134618
+
+Wiki documentation page (has more contextual details):
+https://desi.lbl.gov/trac/wiki/FPS/PositionerFlags
 '''
 
 from desimeter.bitmask import BitMask
