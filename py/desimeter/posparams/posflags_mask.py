@@ -1,9 +1,12 @@
 '''These are flags set during online operation of the instrument. Referred to as
 "pos_flags" within the PetalApp / petal context.
 
-The values here were retrieved by JHS on 2020-10-22.
-https://desi.lbl.gov/svn/code/online/DOSlib/branches/lbl/python/DOSlib/flags.py
-SVN r133386
+The values here were retrieved by J.Silber on 2020-12-22.
+https://desi.lbl.gov/svn/code/online/DOSlib/trunk/python/DOSlib/flags.py
+SVN r134618
+
+Wiki documentation page (has more contextual details):
+https://desi.lbl.gov/trac/wiki/FPS/PositionerFlags
 '''
 
 from desimeter.bitmask import BitMask
@@ -16,6 +19,10 @@ POSITIONER_FLAGS_BITS = {'MATCHED' : 0,
                          'BADPOSFID' : 5,
                          'MOVED' : 6,
                          'GIF' : 7,
+                         'ETC' : 8,
+                         'FITTEDPINHOLE' : 9,
+                         'MATCHEDCENTER' : 10,
+                         'AMBIGUOUS' : 11,
                          'FVCPROC' : 12,
                          'ASSIGNED' : 14,
                          'CONVERGED' : 15,
@@ -43,6 +50,10 @@ POSITIONER_FLAGS_VERBOSE = {'MATCHED' : 'Matched',
                             'BADPOSFID' : 'FVC bad posfid',
                             'MOVED' : 'Moved',
                             'GIF' : 'GIF',
+                            'ETC' : 'ETC',
+                            'FITTEDPINHOLE' : 'Fitted pinhole',
+                            'MATCHEDCENTER' : 'Matched to center',
+                            'AMBIGUOUS' : 'Ambiguous match',
                             'FVCPROC' : 'FVCPROC',
                             'ASSIGNED' : 'Target assiged',
                             'CONVERGED' : 'Converged on target',
