@@ -194,7 +194,8 @@ if args.merge:
     cast_types_for_stupid_astropy_merge.update({key: bool for key in {'CTRL_ENABLED', 'CLASSIFIED_AS_RETRACTED', 'DEVICE_CLASSIFIED_NONFUNCTIONAL', 'FIBER_INTACT'}})
     for key, cast in cast_types_for_stupid_astropy_merge.items():
         for table in otables:
-            table[key] = Column(table[key].tolist(), dtype=object)
+            if key in table:
+                table[key] = Column(table[key].tolist(), dtype=object)
     merged = vstack(otables)
     name = time.strftime('%Y%m%dT%H%M%S%z') + '_posdata.csv'
     path = os.path.join(args.outdir, name)
