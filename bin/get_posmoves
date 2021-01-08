@@ -195,8 +195,9 @@ for petalid in petalids :
             otable = otable[selection]
 
         # remove non measured entries
-        ok=(otable["X_FP"] != None)
-        otable=otable[ok]
+        if not args.tp_updates:
+            ok=(otable["X_FP"] != None)
+            otable=otable[ok]
 
         if not os.path.isdir(args.outdir):
             os.makedirs(args.outdir)
