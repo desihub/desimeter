@@ -23,7 +23,6 @@ def detect_phi_arm(x,y,image,template,ang_step=1.) :
     assert(template.shape[0] == template.shape[1])
     pad=template.shape[0]//2
 
-
     D = image
 
     curx = int(np.round(x))
@@ -64,7 +63,18 @@ def detect_phi_arms(spots,image_filename,template_filename,ang_step,nproc=1) :
     template          = fitsio.read(template_filename).astype(float)
     template /= np.sqrt(np.sum(template**2))
 
-    image  = fitsio.read(image_filename).astype(float)
+    image = None
+    fits=fitsio.FITS(image_filename)
+    for hdu in fits :
+        if hdu.get_exttype() == 'IMAGE_HDU' and len(hdu.get_dims())==2 :
+            image = hdu.read()
+            break
+    if image is None :
+        print("error reading",image_filename)
+        sys.exit(12)
+
+    image=image.astype(float)
+
 
     det    = spots
     det["ANGLE"] = np.nan
