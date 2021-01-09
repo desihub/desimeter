@@ -31,7 +31,17 @@ parser.add_argument('--only', type = str, default=None , help='comma separated l
 
 args  = parser.parse_args()
 spots = Table.read(args.table)
-img = fitsio.read(args.front_illuminated_image).astype(float)
+
+img = None
+fits=fitsio.FITS(args.front_illuminated_image)
+for hdu in fits :
+    if hdu.get_exttype() == 'IMAGE_HDU' and len(hdu.get_dims())==2 :
+        img = hdu.read().astype(float)
+        break
+if img is None :
+    print("error reading",args.front_illuminated_image)
+    sys.exit(12)
+
 med = np.median(img)
 print("median value=",med)
 img -= med
@@ -39,9 +49,10 @@ img[img<args.vmin]=args.vmin
 img[img>args.vmax]=args.vmax
 plt.imshow(img,origin=0,cmap='gray')
 a=np.linspace(0,2*np.pi,40)
-rad=6./0.066
-xcircle=rad*np.cos(a)
-ycircle=rad*np.sin(a)
+arm_length_pix=np.median(np.sqrt((spots["XPIX_METRO"]-spots["XPIX_KNEE"])**2+(spots["YPIX_METRO"]-spots["YPIX_KNEE"])**2))
+radius_pix=2*arm_length_pix
+xcircle=radius_pix*np.cos(a)
+ycircle=radius_pix*np.sin(a)
 
 if args.only is not None:
     show_only=args.only.split(",")
