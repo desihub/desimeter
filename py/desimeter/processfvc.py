@@ -33,7 +33,7 @@ def process_fvc(filename, overwrite=False):
 
 def get_outfilename(path_to_fits):
     out_dir = '/tmp'
-    csv_name= path_to_fits.replace(".fits",".csv")
+    csv_name= path_to_fits.replace(".fits.fz",".csv").replace(".fits",".csv")
     basename = os.path.basename(csv_name)
     out = os.path.join(out_dir, basename)
     return out
