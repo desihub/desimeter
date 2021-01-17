@@ -8,7 +8,10 @@ retrieved using the "get_posmoves --with-calib" tool.
 # -----------------------------
 #
 #     TRACKED ... These are errors calculated with respect to POS_T, POS_P. They
-#                 show whether we have control over the robots.
+#                 show whether we have control over the robots. Only the BLIND MOVE
+#                 (submove 0) is relevant in TRACKED results, because the desired
+#                 position is calculated from internal tracking coordinates, not
+#                 some absolute true (x, y) position.
 #
 #   REQUESTED ... Due to anticollision, travel limits, and enabled/disabled state,
 #                 the petal has the right to refuse some targets, or "freeze" the
@@ -20,7 +23,7 @@ retrieved using the "get_posmoves --with-calib" tool.
 #    ACCEPTED ... Subset of REQUESTED, but eliminating those moves for which targets
 #                 were rejected, generally because we had to "freeze" the robot
 #                 prior to reaching the target position, as a final measure to
-#                 prevent ollision.
+#                 prevent collision.
 #
 # See "TAGS" implementation below, for how I've handled labeling to differentiate.
 
