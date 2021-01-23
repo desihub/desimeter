@@ -69,6 +69,8 @@ for petalid in petalids :
 
     npos=len(posmoves["pos_id"])
     print("npos=",npos)
+    if npos==0 :
+        continue
     for postableindex,posid in enumerate(posmoves["pos_id"]) :
 
         # adding calib info
