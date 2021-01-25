@@ -73,10 +73,14 @@ for petalid in petalids :
         continue
     for postableindex,posid in enumerate(posmoves["pos_id"]) :
 
+
+
         # adding calib info
-        cmd="select pos_calib_index, length_r1, length_r2, offset_x, offset_y, offset_t, offset_p, physical_range_t, physical_range_p, gear_calib_t, gear_calib_p, total_limit_seeks_t, total_limit_seeks_p, last_primary_hardstop_dir_t, last_primary_hardstop_dir_p, keepout_expansion_phi_radial, keepout_expansion_phi_angular, keepout_expansion_theta_radial, keepout_expansion_theta_angular, classified_as_retracted, time_recorded from posmovedb.positioner_calibration_p{} where pos_id='{}' order by time_recorded".format(int(petalid),posid)
+        cmd="select pos_calib_index, length_r1, length_r2, offset_x, offset_y, offset_t, offset_p, physical_range_t, physical_range_p, gear_calib_t, gear_calib_p, total_limit_seeks_t, total_limit_seeks_p, last_primary_hardstop_dir_t, last_primary_hardstop_dir_p, keepout_expansion_phi_radial, keepout_expansion_phi_angular, keepout_expansion_theta_radial, keepout_expansion_theta_angular, classified_as_retracted, device_classified_nonfunctional, time_recorded from posmovedb.positioner_calibration_p{} where pos_id='{}' order by time_recorded".format(int(petalid),posid)
+        #cmd="select * from posmovedb.positioner_calibration_p{} where pos_id='{}' order by time_recorded".format(int(petalid),posid)
 
         calib=dbquery(comm,cmd)
+        #print(calib.keys())
 
         # get time stamps to match
         tstamp_calib     =  np.array([d.timestamp() for d in calib["time_recorded"]])
