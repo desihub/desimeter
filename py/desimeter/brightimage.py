@@ -128,8 +128,7 @@ def detect_phi_arms(spots,image_filename,template_filename,ang_step=1.,nproc=1,p
             image = hdu.read()
             break
     if image is None :
-        print("error reading",image_filename)
-        sys.exit(12)
+        raise IOError("error reading",image_filename)
 
     image=image.astype(float)
 
