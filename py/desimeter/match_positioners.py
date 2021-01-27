@@ -1,6 +1,5 @@
 import numpy as np
 import desimeter.log
-import pdb
 
 log = desimeter.log.get_logger()
 
@@ -55,7 +54,7 @@ def match_positioners(fvc, metr, calib, countthresh=80000,
     ----
         fvc : desimeter fvc structure with info on centroids
         metr : desimeter metrology structure with info on positioners
-        calib : desimeter calibration strucuter with info on arm lengths
+        calib : desimeter calibration structure with info on arm lengths
         countthresh : only fvc centroids with flux > countthresh are fit
         arm_fudge_offset : make all arms longer by arm_fudge_offset.
             This is intended to compensate for uncertainties in the measurements.
@@ -124,8 +123,9 @@ def match_positioners(fvc, metr, calib, countthresh=80000,
     # positioners.
 
     if len(metr) != len(fvc):
-        log.info('number of positioners does not equal number of centroids; '
-                 'perfect assignment not possible.')
+        log.info(('number of positioners %d does not equal number'
+                  'of centroids %d; perfect assignment not possible.') %
+                 (len(metr), len(fvc)))
     mm, mf, dmf = match2d(metr['X_FP'].data, metr['Y_FP'].data,
                           fvc['X_FP'].data, fvc['Y_FP'].data,
                           np.max(metrarmlen)+0.1)
@@ -139,6 +139,9 @@ def match_positioners(fvc, metr, calib, countthresh=80000,
     # modulo only the uncertainty in the centroid, which is small.
     # what possible assignments of fibers to centroids exist?
 
+    # (metrology, fvc)
+    # (score_matrix[metrind, fvcind]) is the corresponding score of an edge.
+    # assignment is row_ind, column_ind i.e., metrind, fvcind.
     score_matrix = np.zeros((len(metr), len(fvc)), dtype='f4')
     for i, j in zip(mm, mf):
         score_matrix[i, j] = 1
@@ -170,16 +173,16 @@ def match_positioners(fvc, metr, calib, countthresh=80000,
             if alternative[2] == assignment[2]:
                 alternatives.append(alternative)
             new_score_matrix[assignment[0][i], assignment[1][i]] = old
-        assignment[0][:] = metrpos[assignment[0]]
-        assignment[1][:] = fvcpos[assignment[1]]
+
+    scores = score_matrix[assignment[0], assignment[1]]
+    assignment[0][:] = metrpos[assignment[0]]
+    assignment[1][:] = fvcpos[assignment[1]]
 
     ret = np.full(fvclen, -1)
     ret[assignment[1]] = assignment[0]
-    scores = np.full(fvclen, np.nan)
-    ok = assignment[0] != -1
-    scores[assignment[1][ok]] = score_matrix[
-        assignment[0][ok], assignment[1][ok]]
-    res = (ret, scores, assignment[2])
+    retscores = np.full(fvclen, np.nan)
+    retscores[assignment[1]] = scores
+    res = (ret, retscores, assignment[2])
 
     log.info(f'made {assignment[2]} assignments, between {len(fvc)} '
              f'valid centroids and {len(metr)} valid positioners')
@@ -207,11 +210,14 @@ def possible_assignments_dict(assignment, alternatives):
     else:
         allassignments = assignment[None, ...]
     for a in allassignments:
+        # fvcind, metrind after mangling the assignment array
+        # at the end of match_positioners to our desired format.
+        # this isn't what comes out of solve_assignment naturally.
         for fvcind, metrind in enumerate(a):
             if metrind == -1:
                 continue
-            possible_assignments[fvcind] = (
-                possible_assignments.get(fvcind, set()) | set([metrind]))
+            possible_assignments[metrind] = (
+                possible_assignments.get(metrind, set()) | set([fvcind]))
     return possible_assignments
 
 
@@ -220,8 +226,8 @@ def plot_match(fvc, metr, assignment, alternatives=None):
     from matplotlib import pyplot as p
     p.plot(fvc['X_FP'], fvc['Y_FP'], '+', label='centroids')
     p.plot(metr['X_FP'], metr['Y_FP'], 'x', label='positioner centers')
-    for fvcind in possible_assignments:
-        for metrind in possible_assignments[fvcind]:
+    for metrind in possible_assignments:
+        for fvcind in possible_assignments[metrind]:
             p.plot([fvc['X_FP'][fvcind], metr['X_FP'][metrind]],
                    [fvc['Y_FP'][fvcind], metr['Y_FP'][metrind]], 'r-')
     p.gca().set_aspect('equal')
@@ -267,7 +273,7 @@ def print_groupings(fvc, metr, assignment, alternatives, file=None,
                 else:
                     ctheta = (dist**2+r1**2-r2**2)/(2*dist*r1)
                     if np.abs(ctheta) > 1:
-                        pdb.set_trace()
+                        raise AssertionError('cos(theta) > 1?')
                     basetheta = np.arctan2(tfvc0['Y_FP']-tm['Y_FP'],
                                            tfvc0['X_FP']-tm['X_FP'])
                     xpt = tm['X_FP'] + r1*np.cos(basetheta+np.arccos(ctheta))

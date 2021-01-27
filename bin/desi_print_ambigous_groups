@@ -1,0 +1,52 @@
+#!/usr/bin/env python
+
+import argparse
+import numpy as np
+import desimeter.io
+from desimeter import match_positioners
+from astropy.io import ascii
+
+parser = argparse.ArgumentParser(
+    description="Print positioner FVC centroid <-> positioner matches.")
+parser.add_argument('fvc', type=str, help='desi_fvc_proc output')
+parser.add_argument('--calib', type=str,
+                    help='csv file with LENGTH_R1, LENGTH_R2, and POS_ID',
+                    default=None)
+parser.add_argument('--petal', type=int, help='match only specified petal',
+                    default=None)
+parser.add_argument('--plot', action='store_true', help='show plot')
+args = parser.parse_args()
+
+fvc = ascii.read(args.fvc)
+
+if args.calib is None:
+    posid = np.unique(fvc['DEVICE_ID'])
+    calib = np.zeros(len(posid),
+                     dtype=[('POS_ID', 'U20'), ('LENGTH_R1', 'f4'),
+                            ('LENGTH_R2', 'f4')])
+    calib['POS_ID'] = posid
+    calib['LENGTH_R1'] = 3
+    calib['LENGTH_R2'] = 3
+else:
+    calib = ascii.read(args.calib)
+
+metr = desimeter.io.load_metrology()
+metr = metr[metr['DEVICE_TYPE'] == 'POS']
+
+if args.petal is not None:
+    metr = metr[metr['PETAL_LOC'] == args.petal]
+    okaycentroids = np.zeros(len(fvc), dtype='bool')
+    maxlen = np.max(calib['LENGTH_R1']+calib['LENGTH_R2'])
+    mf, mm, dfm = match_positioners.match2d(
+        fvc['X_FP'], fvc['Y_FP'], metr['X_FP'], metr['Y_FP'], maxlen)
+    okaycentroids[mf] = 1
+    fvc = fvc[okaycentroids]
+
+assignment, scores, score, alternatives = match_positioners.match_positioners(
+    fvc, metr, calib, return_alternatives=True)
+match_positioners.print_groupings(fvc, metr, assignment, alternatives,
+                                  calib=calib)
+if args.plot:
+    match_positioners.plot_match(fvc, metr, assignment, alternatives)
+    from matplotlib import pyplot
+    pyplot.show()
