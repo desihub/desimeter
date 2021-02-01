@@ -94,6 +94,7 @@ required = {'POS_ID', 'POS_MOVE_INDEX', 'POS_T', 'POS_P', 'PTL_X', 'PTL_Y',
             'MOVE_CMD', 'EXPOSURE_ID', 'EXPOSURE_ITER', 'DEVICE_LOC', 'DATE',
             'LOG_NOTE', 'PETAL_LOC', 'FLAGS'}
 masked_nulls_map = {'POSTSCRIPT': '',
+                    'LOG_NOTE': '',
                     'CALIB_NOTE': ''}
 sequence_note_prefix = 'sequence: '
 abs_move_coords = {'QS', 'obsXY', 'poslocXY', 'ptlXY', 'posintTP', 'poslocTP'}
@@ -306,14 +307,14 @@ def identify_moves(table):
     no_move_cmd = nulls(new['MOVE_CMD'])
     for i in range(len(new)):
         expid = new['EXPOSURE_ID'][i]
-        if expid != last_expid:
+        if expid != last_expid or i == 0:
             move_counter = -1
+            submove = -1
             last_expid = expid
         note = new['LOG_NOTE'][i]
         tokens = tokenize_note(note)
         seq_move_idx = None
         move = None
-        submove = 0
         for token in tokens:
             if token.find('sequence_move_idx') == 0:
                 seq_move_idx = parse_val(token)
@@ -321,13 +322,15 @@ def identify_moves(table):
                 move = parse_val(token)
             if token.find('submove') == 0:
                 submove = parse_val(token)
+            else:
+                submove += 1
         if i not in no_move_cmd:
             move_counter += 1
             
             # special case, for data pre 2020-10-08
             if seq_move_idx == None and move != None and 'sequence' in note:
                 seq_move_idx = move - 1
-        
+                
         move_counters.append(move_counter)
         moves.append(move)
         seq_move_idxs.append(seq_move_idx)
@@ -454,7 +457,7 @@ def identify_requests(table):
                         x_fp, y_fp = vals0[i], vals1[i]
                     x_ptl, y_ptl, z_ptl = ptl2fp.fp2ptl(ptl_loc, x_fp, y_fp)
                 x_flat[i], y_flat[i] = pos2ptl.ptl2flat(x_ptl, y_ptl)
-            elif coord in {'poslocXY', 'posintTP', 'poslocTP', 'poslocdXdY', 'dTdP'}:
+            elif coord in {'poslocXY', 'posintTP', 'poslocTP'}:
                 if coord == 'poslocXY':
                     x_loc, y_loc = vals0[i], vals1[i]
                 elif coord == 'posintTP':
@@ -475,6 +478,10 @@ def identify_requests(table):
                     assert False, f'command coordinates {coord} not recognized'
                 x_flat[i] = pos2ptl.loc2flat(x_loc, new['OFFSET_X'][i])
                 y_flat[i] = pos2ptl.loc2flat(y_loc, new['OFFSET_Y'][i])
+            elif coord in {'obsdXdY', 'poslocdXdY', 'dTdP'}:
+                assert False, f'relative command {coord} at submove {new["SUBMOVE"][i]} is not supported in this code'
+            else:
+                assert False, f'command coordinates {coord} not recognized'
             last_known_request_idx = i
         elif not submove0:
             x_flat[i] = x_flat[last_known_request_idx]
