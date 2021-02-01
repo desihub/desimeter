@@ -1128,8 +1128,11 @@ def histogram(table, tag, sigma):
         selection = get_idxs(table, submove, sigma, tag)
         data = table[selection][add_tag(super_tag, 'ERR_XY')] * unit_scale
         if bins is None:
-            bins = knuth_bin_width(data, return_bins=True)[1]
-            bins = max(len(bins), n_bins_min)
+            if len(data) > 3:
+                bins = knuth_bin_width(data, return_bins=True)[1]
+                bins = max(len(bins), n_bins_min)
+            else:
+                bins = len(data)
         _, bins, _ = hist(data, bins=bins, max_bins=2000)
         max_ = max(data)
         mean = np.mean(data)
