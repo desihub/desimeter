@@ -309,8 +309,9 @@ def identify_moves(table):
         expid = new['EXPOSURE_ID'][i]
         if expid != last_expid or i == 0:
             move_counter = -1
-            submove = -1
             last_expid = expid
+            cmd_coord = new['MOVE_CMD'][i].split('=')[0]
+            submove = -1 if cmd_coord in abs_move_coords else 0
         note = new['LOG_NOTE'][i]
         tokens = tokenize_note(note)
         seq_move_idx = None
@@ -671,6 +672,9 @@ def analyze_one_pos(table):
     new = identify_posflags(new)
     new = identify_moves(new)
     new = remove_orphan_submoves(new)
+    if len(new) == 0:
+        log.info(f'Skipped {posid}: no data remaining after removal of orphan submoves.')
+        return None, None
     new = identify_requests(new)
     new = identify_avoidances(new)
     new = identify_accepted(new)
@@ -701,7 +705,11 @@ def analyze_one_pos(table):
         for name, func in tagged_funcs.items():
             tag = get_tag(name)
             data = err_xy[tag]
-            evaluated = func(data)
+            if data:
+                evaluated = func(data)
+            else:
+                log.warning(f'Skipped {posid}: no data for tag {tag}.')
+                return None, None
             stats_dict[name].append(evaluated)
     stats = Table(stats_dict)
     log.info(f'Analyzed {posid}: {len(new)} data rows, {len(submoves)} submoves')
@@ -1216,13 +1224,21 @@ if __name__ == '__main__':
         if result and stat:
             moves_list.append(move)
             stats_list.append(stat)
+    if moves_list:
+        log.info(f'Data analyzed for {len(moves_list)} positioners.')
+    else:
+        log.warning('No valid data resulting from analyis. Now exiting.')
+        import sys
+        sys.exit(0)
             
     # merge results
+    log.info('Merging data into one table.')
     moves = vstack(moves_list)
     stats = vstack(stats_list)
     stats.rename_columns(list(stats.columns), [col.upper() for col in stats.columns])
     
     # binning
+    log.info('Binning data.')
     summaries = {}
     for tag in [TRACKED, REQUESTED, ACCEPTED]:
         moves = identify_quantiles(moves, tag=tag)
