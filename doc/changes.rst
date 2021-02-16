@@ -2,10 +2,18 @@
 desimeter change Log
 ====================
 
-0.6.3 (unreleased)
+0.6.4 (unreleased)
 ------------------
 
-* no changes yet
+* No changes yet.
+
+0.6.3 (2021-02-15)
+------------------
+
+* Update posflags [PR #173]
+* Petal 0 in LBL 6040 [PR #174]
+* Put row deletion in conditional [PR #175]
+* Bright focal plane image analysis [PR #176]
 
 0.6.2 (2020-12-18)
 ------------------
