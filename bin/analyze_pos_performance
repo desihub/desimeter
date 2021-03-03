@@ -532,7 +532,7 @@ def calc_errors(table, tag=TRACKED):
     x_targ_name = add_tag(tag, 'FLAT_X')
     y_targ_name = add_tag(tag, 'FLAT_Y')
     for pair, s in {(x_meas_name, y_meas_name): '',
-                    (x_targ_name, y_targ_name): '_REQUESTED',
+                    (x_targ_name, y_targ_name): '_' + REQUESTED,
                     }.items():
         if any(name not in new.columns for name in pair):
             new[pair[0]], new[pair[1]] = pos2ptl.ptl2flat(new[f'PTL_X{s}'], new[f'PTL_Y{s}'])
