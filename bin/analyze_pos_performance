@@ -364,7 +364,7 @@ def identify_moves(table):
                         dy = float(val_str_list[1]) 
                         if cmd_coord == 'obsdXdY':
                             ptl_loc = new[i]['PETAL_LOC']
-                            a = (ptl_loc - 3) * math.radians(36)  # approx (not the precisely calibrated value)
+                            a = -(ptl_loc - 3) * math.radians(36)  # approx (not the precisely calibrated value)
                             dx_new = math.cos(a)*dx - math.sin(a)*dy
                             dy_new = math.sin(a)*dx + math.cos(a)*dy
                             dx, dy = dx_new, dy_new
