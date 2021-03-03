@@ -343,9 +343,6 @@ def identify_moves(table):
         seq_move_idx = None
         move = None
         request = {key: np.nan for key in requests}
-        params = {'r1': new[i]['LENGTH_R1'], 'r2': new[i]['LENGTH_R2'],
-                  't_offset': new[i]['OFFSET_T'], 'p_offset': new[i]['OFFSET_P'],
-                  'x_offset': new[i]['OFFSET_X'], 'y_offset': new[i]['OFFSET_Y']}
         for token in tokens:
             if token.find('sequence_move_idx') == 0:
                 seq_move_idx = parse_val(token)
@@ -365,27 +362,17 @@ def identify_moves(table):
                         val_str_list = val_str.strip('[').strip(']').split(',')
                         dx = float(val_str_list[0]) 
                         dy = float(val_str_list[1]) 
-                        if cmd_coord = 'obsdXdY':
+                        if cmd_coord == 'obsdXdY':
                             ptl_loc = new[i]['PETAL_LOC']
                             a = (ptl_loc - 3) * math.radians(36)  # approx (not the precisely calibrated value)
-                            rotmat2D = np.array([[math.cos(angle), -math.sin(angle)], [math.sin(angle), math.cos(angle)]])
                             dx_new = math.cos(a)*dx - math.sin(a)*dy
                             dy_new = math.sin(a)*dx + math.cos(a)*dy
-                        elif cmd_coord 
-                        
-                        # 2021-03-03 [JHS] this line doesn't work, because it misses tp_updates
-                        last_t, last_p = new['POS_T'][i-1], new['POS_P'][i-1]
-                        
-                        ptl_x_req_expected, ptl_y_req_expected = req_data['PTL_X_REQUESTED'], req_data['PTL_Y_REQUESTED']
-                        last_ptl_x_expected, last_ptl_y_expected = pos2ptl.int2ptl(last_t, last_p, **params)
-                        user_intended_dx = ptl_x_req_expected - float(last_ptl_x_expected)
-                        user_intended_dy = ptl_y_req_expected - float(last_ptl_y_expected)
+                            dx, dy = dx_new, dy_new
                         last_x_measured, last_y_measured = new['PTL_X'][i-1], new['PTL_Y'][i-1]
-                        corrected_ptl_x_req = last_x_measured + user_intended_dx
-                        corrected_ptl_y_req = last_y_measured + user_intended_dy
+                        corrected_ptl_x_req = last_x_measured + dx
+                        corrected_ptl_y_req = last_y_measured + dy
                         req_data['PTL_X_REQUESTED'] = corrected_ptl_x_req
                         req_data['PTL_Y_REQUESTED'] = corrected_ptl_y_req
-                        # log.info(f'this: {new["MOVE_CMD"][i]}\nlast: {new["MOVE_CMD"][i-1]}\n')
                         
                     request.update(req_data)
         move_counter += 1
