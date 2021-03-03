@@ -335,7 +335,8 @@ def identify_moves(table):
             move_counter = -1
             last_expid = expid
             submove = -1
-        cmd_coord = new['MOVE_CMD'][i].split('=')[0]        
+        cmd_str = new['MOVE_CMD'][i]
+        cmd_coord = cmd_str.split('=')[0]        
         submove = 0 if cmd_coord in abs_move_coords else submove + 1
         note = new['LOG_NOTE'][i]
         tokens = tokenize_note(note)
@@ -359,7 +360,18 @@ def identify_moves(table):
                     req_data = {coords[i]: float(req_split[i]) for i in range(len(coords))}
                     
                     # 2021-03-03 [JHS] hack to mostly correct wrong ptl xyz in log_note
-                    if 'ptlXYZ' in key and cmd_coord in rel_move_coords and submove > 0:
+                    if 'ptlXYZ' in key and 'dXdY' in cmd_coord and submove > 0:
+                        val_str = cmd_str.split('=')[1].split(';')[0]
+                        val_str_list = val_str.strip('[').strip(']').split(',')
+                        dx = float(val_str_list[0]) 
+                        dy = float(val_str_list[1]) 
+                        if cmd_coord = 'obsdXdY':
+                            ptl_loc = new[i]['PETAL_LOC']
+                            a = (ptl_loc - 3) * math.radians(36)  # approx (not the precisely calibrated value)
+                            rotmat2D = np.array([[math.cos(angle), -math.sin(angle)], [math.sin(angle), math.cos(angle)]])
+                            dx_new = math.cos(a)*dx - math.sin(a)*dy
+                            dy_new = math.sin(a)*dx + math.cos(a)*dy
+                        elif cmd_coord 
                         
                         # 2021-03-03 [JHS] this line doesn't work, because it misses tp_updates
                         last_t, last_p = new['POS_T'][i-1], new['POS_P'][i-1]
