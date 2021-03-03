@@ -41,6 +41,8 @@ parser.add_argument('-np', '--n_processes_max', type=int, default=None,  help='m
 parser.add_argument('-d', '--debug_mode', action='store_true', help='turn on some helpful features for debugging')
 top_errs_default = 10
 parser.add_argument('-top', '--n_top_errs', type=int, default=top_errs_default, help=f'identify this many moves with worst case errors, default={top_errs_default}')
+special_move_keywords = {'MOTORTEST', 'move_to_range', 'disambiguate_theta', 'homing', 'limit seek'}
+parser.add_argument('-all', '--include_special_moves', action='store_true', help=f'include all "special moves" in results (normally anything with log notes like {special_move_keywords} are excluded)')
 user_args = parser.parse_args()
 
 # simple checks on user args
@@ -277,6 +279,15 @@ def read(path):
     posids_removed = initial_posids - posids
     if any(posids_removed):
         log.warning(f'Skipped data for {posids_removed} which had no spot matches in {path}')
+    if not user_args.include_special_moves:
+        tokens = [tokenize_note(x) for x in table['LOG_NOTE'].tolist()]
+        specials = [False] * len(tokens)
+        for i in range(len(tokens)):
+            for token in tokens[i]:
+                specials[i] |= any(keyword in token for keyword in special_move_keywords)
+        affected = set(table['POS_ID'][specials])
+        table.remove_rows(specials)
+        log.warning(f'Skipped {sum(specials)} rows of "special move" data for {affected}')
     for posid in posids:
         selection = table['POS_ID'] == posid
         this = table[selection]
@@ -335,7 +346,7 @@ def identify_moves(table):
         for token in tokens:
             if token.find('sequence_move_idx') == 0:
                 seq_move_idx = parse_val(token)
-            if token.find('move') == 0:
+            if token.find('move') == 0 and 'move_to_range' not in token:
                 move = parse_val(token)
             if token.find('submove') == 0:
                 submove = parse_val(token)
