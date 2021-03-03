@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """Tool for analyzing positioner performance. Typically operates on data tables
-retrieved using the "get_posmoves --with-calib" tool.
+retrieved using the "get_posmoves --with-calib" tool. IMPORTANT --- this *legacy*
+tool is only for data taken on or before 2021-02-23. Later data should be analyzed
+using analyze_pos_performance.
 """
 
 # TRACKED vs REQUESTED targets:
