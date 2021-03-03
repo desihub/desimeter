@@ -520,8 +520,11 @@ def calc_errors(table, tag=TRACKED):
     y_meas_name = add_tag(MEASURED, 'FLAT_Y')
     x_targ_name = add_tag(tag, 'FLAT_X')
     y_targ_name = add_tag(tag, 'FLAT_Y')
-    if any(name not in new.columns for name in {x_meas_name, y_meas_name}):
-        new[x_meas_name], new[y_meas_name] = pos2ptl.ptl2flat(new['PTL_X'],  new['PTL_Y'])
+    for pair, s in {(x_meas_name, y_meas_name): '',
+                    (x_targ_name, y_targ_name): '_REQUESTED',
+                    }.items():
+        if any(name not in new.columns for name in pair):
+            new[pair[0]], new[pair[1]] = pos2ptl.ptl2flat(new[f'PTL_X{s}'],  new[f'PTL_Y{s}'])
     if tag == TRACKED:
         targ_x_ptl, targ_y_ptl = pos2ptl.int2ptl(
                                      t_int=new['POS_T'], p_int=new['POS_P'],
@@ -551,11 +554,18 @@ def calc_alt_coords(table):
         x_flat = new[add_tag(tag, 'FLAT_X')]
         y_flat = new[add_tag(tag, 'FLAT_Y')]
         x_ptl, y_ptl = pos2ptl.flat2ptl(x_flat, y_flat)
-        converted = {add_tag(tag, 'PTL_X'): x_ptl,
-                     add_tag(tag, 'PTL_Y'): y_ptl,
-                     add_tag(tag, 'LOC_X'): pos2ptl.flat2loc(x_flat, new['OFFSET_X']),
+        converted = {add_tag(tag, 'LOC_X'): pos2ptl.flat2loc(x_flat, new['OFFSET_X']),
                      add_tag(tag, 'LOC_Y'): pos2ptl.flat2loc(y_flat, new['OFFSET_Y']),
                      }
+        tag_ptl_x = add_tag(tag, 'PTL_X')
+        tag_ptl_y = add_tag(tag, 'PTL_Y')
+        ptl_xy = {}
+        if tag == MEASURED:
+            ptl_xy = {tag_ptl_x: x_ptl, tag_ptl_y: y_ptl}
+        elif any({tag_ptl_x, tag_ptl_y} - set(new.columns)):
+            ptl_xy_vec = pos2ptl.flat2ptl(x_flat, y_flat)
+            ptl_xy = {tag_ptl_x: ptl_xy_vec[0], tag_ptl_y: ptl_xy_vec[1]}
+        converted.update(ptl_xy)
         for name, values in converted.items():
             assert name not in new.columns, f'column {name} already exists'
             new[name] = values
