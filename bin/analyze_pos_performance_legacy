@@ -310,8 +310,9 @@ def identify_moves(table):
         if expid != last_expid or i == 0:
             move_counter = -1
             last_expid = expid
-            cmd_coord = new['MOVE_CMD'][i].split('=')[0]
-            submove = -1 if cmd_coord in abs_move_coords else 0
+            submove = -1
+        cmd_coord = new['MOVE_CMD'][i].split('=')[0]        
+        submove = 0 if cmd_coord in abs_move_coords else submove + 1
         note = new['LOG_NOTE'][i]
         tokens = tokenize_note(note)
         seq_move_idx = None
@@ -322,9 +323,7 @@ def identify_moves(table):
             if token.find('move') == 0:
                 move = parse_val(token)
             if token.find('submove') == 0:
-                submove = parse_val(token)
-            else:
-                submove += 1
+                submove = parse_val(token)                
         if i not in no_move_cmd:
             move_counter += 1
             
