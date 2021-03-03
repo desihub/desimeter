@@ -285,9 +285,10 @@ def read(path):
         for i in range(len(tokens)):
             for token in tokens[i]:
                 specials[i] |= any(keyword in token for keyword in special_move_keywords)
-        affected = set(table['POS_ID'][specials])
-        table.remove_rows(specials)
-        log.warning(f'Skipped {sum(specials)} rows of "special move" data for {affected}')
+        if any(specials):
+            affected = set(table['POS_ID'][specials])
+            table.remove_rows(specials)
+            log.warning(f'Skipped {sum(specials)} rows of "special move" data for {affected}')
     for posid in posids:
         selection = table['POS_ID'] == posid
         this = table[selection]
