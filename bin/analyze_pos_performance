@@ -331,7 +331,7 @@ def identify_moves(table):
         tokens = tokenize_note(note)
         seq_move_idx = None
         move = None
-        request = {key: None for key in requests}
+        request = {key: np.nan for key in requests}
         for token in tokens:
             if token.find('sequence_move_idx') == 0:
                 seq_move_idx = parse_val(token)
@@ -395,8 +395,9 @@ def remove_insufficient_request_info_rows(table):
     insufficient = set()
     for coords in request_coords_map.values():
         for coord in coords:
-            these_insufficient = {i for i in range(len(new)) if new[coord][i] == None}
+            these_insufficient = {i for i in range(len(new)) if math.isnan(new[coord][i])}
             insufficient |= these_insufficient
+    insufficient = list(insufficient)  # for astropy indexing
     if insufficient:
         posids_affected = set(new['POS_ID'][insufficient])
         new.remove_rows(insufficient)
@@ -524,7 +525,7 @@ def calc_errors(table, tag=TRACKED):
                     (x_targ_name, y_targ_name): '_REQUESTED',
                     }.items():
         if any(name not in new.columns for name in pair):
-            new[pair[0]], new[pair[1]] = pos2ptl.ptl2flat(new[f'PTL_X{s}'],  new[f'PTL_Y{s}'])
+            new[pair[0]], new[pair[1]] = pos2ptl.ptl2flat(new[f'PTL_X{s}'], new[f'PTL_Y{s}'])
     if tag == TRACKED:
         targ_x_ptl, targ_y_ptl = pos2ptl.int2ptl(
                                      t_int=new['POS_T'], p_int=new['POS_P'],
@@ -895,6 +896,11 @@ def get_expids_str(table, for_filename=True):
     expids = sorted(set(table['EXPOSURE_ID']))
     separator = '-' if for_filename else ','
     expids_str = separator.join([str(x) for x in expids])
+    if len(expids) > 2:
+        alt_middle = f'{len(expids)-2}_more_expids'
+        alt_expids_str = separator.join([str(expids[0]), alt_middle, str(expids[-1])])
+        if len(alt_expids_str) < len(expids_str):
+            return alt_expids_str
     return expids_str
 
 def get_submoves_str(table, for_filename=True):
