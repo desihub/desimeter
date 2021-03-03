@@ -360,7 +360,10 @@ def identify_moves(table):
                     
                     # 2021-03-03 [JHS] hack to mostly correct wrong ptl xyz in log_note
                     if 'ptlXYZ' in key and cmd_coord in rel_move_coords and submove > 0:
+                        
+                        # 2021-03-03 [JHS] this line doesn't work, because it misses tp_updates
                         last_t, last_p = new['POS_T'][i-1], new['POS_P'][i-1]
+                        
                         ptl_x_req_expected, ptl_y_req_expected = req_data['PTL_X_REQUESTED'], req_data['PTL_Y_REQUESTED']
                         last_ptl_x_expected, last_ptl_y_expected = pos2ptl.int2ptl(last_t, last_p, **params)
                         user_intended_dx = ptl_x_req_expected - float(last_ptl_x_expected)
@@ -370,7 +373,7 @@ def identify_moves(table):
                         corrected_ptl_y_req = last_y_measured + user_intended_dy
                         req_data['PTL_X_REQUESTED'] = corrected_ptl_x_req
                         req_data['PTL_Y_REQUESTED'] = corrected_ptl_y_req
-                        log.info(f'this: {new["MOVE_CMD"][i]}\nlast: {new["MOVE_CMD"][i-1]}\n')
+                        # log.info(f'this: {new["MOVE_CMD"][i]}\nlast: {new["MOVE_CMD"][i-1]}\n')
                         
                     request.update(req_data)
         move_counter += 1
