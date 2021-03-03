@@ -59,8 +59,6 @@ from astropy.time import Time
 from astropy.visualization import hist
 from astropy.stats import knuth_bin_width
 import desimeter.transform.pos2ptl as pos2ptl
-import desimeter.transform.xy2qs as xy2qs
-import desimeter.transform.ptl2fp as ptl2fp
 from desimeter.posparams.posflags_mask import posflags_mask
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
