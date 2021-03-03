@@ -897,7 +897,7 @@ def get_expids_str(table, for_filename=True):
     separator = '-' if for_filename else ','
     expids_str = separator.join([str(x) for x in expids])
     if len(expids) > 2:
-        alt_middle = f'{len(expids)-2}_more_expids'
+        alt_middle = f'({len(expids)-2}-more)'
         alt_expids_str = separator.join([str(expids[0]), alt_middle, str(expids[-1])])
         if len(alt_expids_str) < len(expids_str):
             return alt_expids_str
