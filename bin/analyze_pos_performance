@@ -446,9 +446,8 @@ def get_idxs(table, submove, sigma=None, tag=TRACKED, as_bool=False):
     OUTPUT: list of row index integers
     '''
     selection = table['SUBMOVE'] == submove
-    super_tag = get_super_tag(tag)
     if sigma:
-        selection &= table[add_tag(super_tag, 'SIGMA_CEILING')] <= sigma
+        selection &= table[add_tag(tag, 'SIGMA_CEILING')] <= sigma
     if tag == ACCEPTED:
         selection &= table[ACCEPTED]
     if as_bool:
@@ -756,8 +755,7 @@ def summarize_stats(table, tag=TRACKED, stat_names=stat_funcs.keys()):
                      and columns corresponding to the uppercased names of the argued
                      stats functions. Table includes metadata: n_positioners, n_targets
     '''
-    reduce_to_accepted = tag == ACCEPTED
-    tag = REQUESTED if reduce_to_accepted else tag
+    super_tag = get_super_tag(tag)
     missing_funcs = set(stat_names) - set(stat_funcs)
     assert not(any(missing_funcs)), f'undefined stat funcs {missing_funcs}'
     uppercase_names = {key: key.upper() for key in stat_names}
@@ -771,16 +769,16 @@ def summarize_stats(table, tag=TRACKED, stat_names=stat_funcs.keys()):
     min_radius = math.inf
     for submove in submoves:
         submove_selection = table['SUBMOVE'] == submove
-        if reduce_to_accepted:
+        if tag == ACCEPTED:
             submove_selection = np.logical_and(submove_selection, table[ACCEPTED])
-        radii = table[add_tag(tag, 'RADIUS')][submove_selection].tolist()
+        radii = table[add_tag(super_tag, 'RADIUS')][submove_selection].tolist()
         max_radius = max(max_radius, max(radii))
         min_radius = min(min_radius, min(radii))
         for sigma in sigmas:
             quantile = sigmas[sigma]
             within_quantile = table[add_tag(tag, 'QUANTILE_CEILING')] <= quantile
             quantile_selection = np.logical_and(within_quantile, submove_selection)
-            err = table[add_tag(tag, 'ERR_XY')][quantile_selection].tolist()
+            err = table[add_tag(super_tag, 'ERR_XY')][quantile_selection].tolist()
             new_dict['SUBMOVE'].append(submove)
             new_dict['SIGMA'].append(sigma)
             new_dict['QUANTILE'].append(quantile)
