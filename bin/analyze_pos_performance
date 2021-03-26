@@ -45,6 +45,7 @@ top_errs_default = 10
 parser.add_argument('-top', '--n_top_errs', type=int, default=top_errs_default, help=f'identify this many moves with worst case errors, default={top_errs_default}')
 special_move_keywords = {'MOTORTEST', 'move_to_range', 'disambiguate_theta', 'homing', 'limit seek'}
 parser.add_argument('-all', '--include_special_moves', action='store_true', help=f'include all "special moves" in results (normally anything with log notes like {special_move_keywords} are excluded)')
+parser.add_argument('-sout', '--sparse_output', action='store_true', help='output table is sparser and less memory intensive, also plotting of "bigcharts" is skipped')
 user_args = parser.parse_args()
 
 # simple checks on user args
@@ -94,7 +95,8 @@ img_format = 'png'  # for plot outputs
 required = {'POS_ID', 'POS_MOVE_INDEX', 'POS_T', 'POS_P', 'PTL_X', 'PTL_Y',
             'LENGTH_R1', 'LENGTH_R2', 'OFFSET_X', 'OFFSET_Y', 'OFFSET_T', 'OFFSET_P',
             'MOVE_CMD', 'EXPOSURE_ID', 'EXPOSURE_ITER', 'DEVICE_LOC', 'DATE',
-            'LOG_NOTE', 'PETAL_LOC', 'FLAGS'}
+            'LOG_NOTE', 'PETAL_LOC', 'FLAGS', 'POSTSCRIPT', 'CALIB_NOTE', 'PETAL_ID',
+            'GEAR_CALIB_T', 'GEAR_CALIB_P'}
 masked_nulls_map = {'POSTSCRIPT': '',
                     'LOG_NOTE': '',
                     'CALIB_NOTE': ''}
@@ -265,7 +267,9 @@ def read(path):
         log.warning(f'Skipped data at {path} due to missing columns {missing}')
         return data
     initial_posids = set(table['POS_ID'])
-    # table = remove_unused_columns(table)
+    if user_args.sparse_output:
+        table = remove_unused_columns(table)
+    table = remove_excluded_dates(table)
     table = remove_nonmoving_rows(table)
     table = unmask_columns(table)
     posids = set(table['POS_ID'])
@@ -1229,21 +1233,22 @@ if __name__ == '__main__':
     summaries = {}
     for tag in [TRACKED, REQUESTED, ACCEPTED]:
         moves = identify_quantiles(moves, tag=tag)
-        summaries[tag] = summarize_stats(moves, tag)  
+        summaries[tag] = summarize_stats(moves, tag)
+    submoves = get_submove_ids(moves)
     
     # plot big xy charts
-    chart_limits = {}
-    submoves = get_submove_ids(moves)
-    for submove in submoves:
-        submove_selection = get_idxs(moves, submove)
-        table = moves[submove_selection]
-        note1 = get_description(table, submove)
-        note1 += '\n' + get_exposure_description(table)
-        note1 += '\n' + meta_str(summaries[TRACKED])
-        stats_tag = TRACKED if submove == 0 else ACCEPTED
-        note2 = get_summary_stats_str(summaries[stats_tag], submove=submove, tag=stats_tag)        
-        path, chart_limits = bigchart(table, note1, note2, chart_limits)
-        log.info(f'Saved big chart for submove {submove} to {path}')
+    if not user_args.sparse_output:
+        chart_limits = {}
+        for submove in submoves:
+            submove_selection = get_idxs(moves, submove)
+            table = moves[submove_selection]
+            note1 = get_description(table, submove)
+            note1 += '\n' + get_exposure_description(table)
+            note1 += '\n' + meta_str(summaries[TRACKED])
+            stats_tag = TRACKED if submove == 0 else ACCEPTED
+            note2 = get_summary_stats_str(summaries[stats_tag], submove=submove, tag=stats_tag)        
+            path, chart_limits = bigchart(table, note1, note2, chart_limits)
+            log.info(f'Saved big chart for submove {submove} to {path}')
     
     # make big text string
     bigstr = ''  # text version of info that gets printed on bottoms of bigcharts
