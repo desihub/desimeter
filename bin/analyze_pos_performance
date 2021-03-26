@@ -287,6 +287,9 @@ def read(path):
     if any(missing):
         log.warning(f'Skipped data at {path} due to missing columns {missing}')
         return data
+    if len(table) == 0:
+        log.warning(f'Skipped empty data file at {path}')
+        return data
     initial_posids = set(table['POS_ID'])
     if user_args.sparse_output:
         table = remove_unused_columns(table)
