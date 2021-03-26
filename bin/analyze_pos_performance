@@ -295,6 +295,9 @@ def read(path):
         table = remove_unused_columns(table)
     table = remove_excluded_dates(table)
     table = remove_nonmoving_rows(table)
+    if len(table) == 0:
+        log.warning(f'Skipped data at {path} after all data rows excluded')
+        return data
     table = unmask_columns(table)
     posids = set(table['POS_ID'])
     posids_removed = initial_posids - posids
