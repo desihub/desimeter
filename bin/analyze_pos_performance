@@ -943,20 +943,27 @@ def get_span(table, coord='PTL_X', target_tag=TRACKED):
     vec += table[add_tag(MEASURED, coord)].tolist()
     return max(vec) - min(vec)
 
-def get_expids_str(table, for_filename=True):
-    '''Returns a string representing the set of unique 'EXPOSURE_ID' in the astropy
-    table. Argument for_filename controls whether to return version for use in
-    filenames vs for use in plot labels, general printouts, etc.
+def get_unique_condensed_list_str(table, for_filename=True, key='EXPOSURE_ID'):
+    '''Returns a string representing the set of unique values for argument key,
+    in the astropy table. Argument for_filename controls whether to return version
+    for use in filenames vs for use in plot labels, general printouts, etc.
     '''
-    expids = sorted(set(table['EXPOSURE_ID']))
-    separator = '-' if for_filename else ','
-    expids_str = separator.join([str(x) for x in expids])
-    if len(expids) > 2:
-        alt_middle = f'({len(expids)-2}-more)'
-        alt_expids_str = separator.join([str(expids[0]), alt_middle, str(expids[-1])])
-        if len(alt_expids_str) < len(expids_str):
-            return alt_expids_str
-    return expids_str
+    if key == 'DATE':
+        vals = {d.split(' ')[0] for d in table['DATE']}
+    else:
+        vals = set(table[key])
+    vals = sorted(vals)
+    if for_filename:
+        separator = '_' if key == 'DATE' else '-'
+    else:
+        separator = ','
+    vals_str = separator.join([str(x) for x in vals])
+    if len(vals) > 2:
+        alt_middle = f'({len(vals)-2}-more)'
+        alt_vals_str = separator.join([str(vals[0]), alt_middle, str(vals[-1])])
+        if len(alt_vals_str) < len(vals_str):
+            return alt_vals_str
+    return vals_str
 
 def get_submoves_str(table, for_filename=True):
     '''Returns a string representing the set of unique submoves.
@@ -1005,11 +1012,10 @@ def get_exposure_description(table):
     
     OUTPUT: string
     '''
-    dates = {d.split(' ')[0] for d in table['DATE']}
-    dates = sorted(dates)
-    expids_str = get_expids_str(table, for_filename=False)
+    expids_str = get_unique_condensed_list_str(table, for_filename=False)
+    dates_str = get_unique_condensed_list_str(table, for_filename=False, key='DATE')
     s = f'Exposure ID{"s" if "," in expids_str else ""}: {expids_str}\n'
-    s += f'Date{"s" if len(dates) > 1 else ""} measured: {dates if len(dates) > 1 else dates[0]}\n'
+    s += f'Date{"s" if "," in dates_str else ""} measured: {dates_str}\n'
     s += f'Date analyzed: {Time.now().iso.split(" ")[0]}'
     return s
 
@@ -1110,7 +1116,7 @@ def bigchart(table, note1='', note2='', limits={}):
     place_notes(note1, note2, level='axes')
     plt.legend(loc='upper left')
     plt.axis('equal')
-    expids_str = get_expids_str(table, for_filename=True)
+    expids_str = get_unique_condensed_list_str(table, for_filename=True)
     submove = get_submoves_str(table, for_filename=True)
     path = os.path.join(save_dir, f'expid_{expids_str}_chart_submove{submove}.' + img_format)
     _ = finalize_plot(path, limits)
@@ -1184,7 +1190,7 @@ def histogram(table, tag, sigma):
     
     title = f'Errors w.r.t. {tag} targets\n' + title
     plt.suptitle(title, fontfamily='monospace', verticalalignment='top', fontsize='medium')    
-    expids_str = get_expids_str(table, for_filename=True)
+    expids_str = get_unique_condensed_list_str(table, for_filename=True)
     sigma_str = get_sigma_str(sigma, for_filename=True)
     path = os.path.join(save_dir, f'expid_{expids_str}_hist_{tag}_sigma_{sigma_str}.{img_format}')
     limits = finalize_plot(path, limits)
@@ -1319,7 +1325,7 @@ if __name__ == '__main__':
             log.info(f'Saved histogram for sigma={sigma} to {path}')
 
     # export tabular data
-    expids_str = 'expid_' + get_expids_str(moves, for_filename=True)
+    expids_str = 'expid_' + get_unique_condensed_list_str(moves, for_filename=True)
     moves_path = os.path.join(save_dir, f'{expids_str}_moves.csv')
     stats_path = os.path.join(save_dir, f'{expids_str}_stats_by_positioner.csv')
     text_path = os.path.join(save_dir, f'{expids_str}_report.txt')
