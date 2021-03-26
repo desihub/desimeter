@@ -323,8 +323,11 @@ def read(path):
     for posid in posids:
         selection = table['POS_ID'] == posid
         this = table[selection]
-        data[posid] = this
-        log.info(f'Read data for {posid} at {path}')
+        if len(this) > 0:
+            data[posid] = this
+            log.info(f'Read data for {posid} at {path}')
+        else:
+            log.warning(f'Skipped data for {posid} at {path} due to no rows remaining')
     return data
 
 def sequential_copy(table, copy=True):
