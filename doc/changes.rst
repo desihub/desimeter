@@ -2,10 +2,16 @@
 desimeter change Log
 ====================
 
-0.6.4 (unreleased)
+0.6.5 (unreleased)
 ------------------
 
 * No changes yet.
+
+0.6.4 (2021-03-31)
+------------------
+
+* posperf fix for normal tiles [PR #177]
+* Analyze pos options for large datasets [PR #178]
 
 0.6.3 (2021-02-15)
 ------------------
