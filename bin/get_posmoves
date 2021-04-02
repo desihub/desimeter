@@ -23,8 +23,10 @@ parser.add_argument('--password', type= str, required=False, default=None, help=
 parser.add_argument('--petal-ids', type= str, required=False, default=None, help="comma separated list of petal ids")
 parser.add_argument('--exposure-ids', type= str, required=False, default=None, help="comma separated list of exposure ids")
 parser.add_argument('--exposure-iters', type= str, required=False, default=None, help="comma separated list of exposure iters")
-parser.add_argument('--date-min', type = str, default = "2019-01-01", required = False, help="date min with format YYYY-MM-DD")
-parser.add_argument('--date-max', type = str, default = "2030-01-01", required = False, help="date max with format YYYY-MM-DD")
+default_min_date = '2019-01-01'
+default_max_date = '2050-01-01'
+parser.add_argument('--date-min', type = str, default = default_min_date, required = False, help="date min with format YYYY-MM-DD")
+parser.add_argument('--date-max', type = str, default = default_max_date, required = False, help="date max with format YYYY-MM-DD")
 parser.add_argument('--pos-ids', type= str, required=False, default=None, help="comma separated list of positioner ids (same as DEVICE_ID). alternately, argue 'movers' to only pull data files for those robots with move data")
 parser.add_argument('-o', '--outdir', type = str, default = "None", required = True, help="output directory where MXXXX.csv files are saved")
 parser.add_argument('-c', '--with-calib', action = 'store_true', help="add matching calib from db")
@@ -33,6 +35,7 @@ parser.add_argument('--recent-rehome-exposure-ids', type= str, required=False, d
 parser.add_argument('-comma', '--comma-replacement', type=str, default='||', help='replace commas in data strings with this in output csv files)')
 parser.add_argument('-e', '--enabled-history', action='store_true', help=f'filter the data down to just those rows in which a change occurred to one of {enable_keys_moves | enable_keys_calib}')
 parser.add_argument('-m', '--merge', action='store_true', help='merge all data into one CSV file (rather than separate files per positioner)')
+parser.add_argument('-l', '--latest', type=int, default=0, help="Gets N latest data rows for each positioner. Use of this option overrides several other options, including: exposure-ids, exposure-iters, date-min, date-max, with-calib, tp-updates, recent-rehome-exposure-ids, enabled-history. Default 0 means 'all'.")
 
 args  = parser.parse_args()
 
@@ -41,6 +44,18 @@ args  = parser.parse_args()
 # open connection
 comm = psycopg2.connect(host=args.host,port=args.port, database='desi_dev', user='desi_reader',password=args.password)
 
+order_by = 'order by time_recorded desc' # canonically order things by descending when fetching from DB, affects interpretation of "latest" below
+if args.latest:
+    assert args.latest > 0, f"can't get {args.latest} rows!"
+    args.exposure_ids = None 
+    args.exposure_iters = None
+    args.date_min = default_min_date 
+    args.date_max = default_max_date
+    args.with_calib = True
+    args.tp_updates = True
+    args.recent_rehome_exposure_ids = None 
+    args.enabled_history = False
+    order_by += f' limit {args.latest}'
 
 if args.petal_ids is not None :
     petalids = parse_fibers(args.petal_ids)
@@ -72,7 +87,7 @@ for petalid in petalids :
     i_ptl += 1
 
 
-    # read data from db
+    # read posids from db, for a given petal
     from_where = f'from posmovedb.positioner_moves_p{int(petalid)} where'
     posid_date = "time_recorded BETWEEN date '{}' and date '{}'".format(args.date_min,args.date_max)
     cmd = f'select distinct pos_id {from_where} {posid_date}'
@@ -80,7 +95,7 @@ for petalid in petalids :
         cmd += " and exposure_id in ({})".format(args.exposure_ids)
     if args.exposure_iters is not None:
         cmd += " and exposure_iter in ({})".format(args.exposure_iters)
-    res=dbquery(comm,cmd)
+    res=dbquery(comm, cmd)
 
     posids=res["pos_id"]
 
@@ -95,7 +110,7 @@ for petalid in petalids :
     for posid in posids :
         i_pos += 1
 
-        # read data from db
+        # read full data from db, for a given positioner
         from_where = f'from posmovedb.positioner_moves_p{int(petalid)} where'
         posid_date = "pos_id='{}' and time_recorded BETWEEN date '{}' and date '{}'".format(posid,args.date_min,args.date_max)
         cmd_exp = ''
@@ -109,6 +124,7 @@ for petalid in petalids :
             cmd_idx = f'select pos_move_index {from_where} {posid_date}'
             if cmd_exp:
                 cmd_idx += f' and {cmd_exp}'
+            cmd += order_by 
             result = dbquery(comm, cmd_idx)
             if any(result['pos_move_index']):
                 min_idx = min(result['pos_move_index'])
@@ -121,6 +137,7 @@ for petalid in petalids :
             cmd += f' and ({combined})'
         elif cmd_exp:
             cmd += f' and ({cmd_exp})'
+        cmd += order_by 
         posmoves=dbquery(comm,cmd)
 
         if args.pos_ids == 'movers':
@@ -139,7 +156,8 @@ for petalid in petalids :
         if args.with_calib :
 
             # adding calib info
-            cmd = f'select {desired_fields["calib"]} from posmovedb.positioner_calibration_p{petalid} where pos_id=\'{posid}\' order by time_recorded'
+            cmd = f'select {desired_fields["calib"]} from posmovedb.positioner_calibration_p{petalid} where pos_id=\'{posid}\''
+            cmd += order_by 
             calib=dbquery(comm,cmd)
 
             # get time stamps to match
@@ -214,15 +232,13 @@ if args.merge:
     empty = [i for i in range(len(otables)) if len(otables[i]) == 0]
     for i in reversed(empty):
         del otables[i]
-    cast_types_for_stupid_astropy_merge = {key: object for key in {'POSTSCRIPT', 'BUS_ID', 'CALIB_NOTE', 'LOG_NOTE', 'MOVE_CMD', 'MOVE_VAL1', 'MOVE_VAL2'}}
-    cast_types_for_stupid_astropy_merge.update({key: bool for key in {'CTRL_ENABLED', 'CLASSIFIED_AS_RETRACTED', 'DEVICE_CLASSIFIED_NONFUNCTIONAL', 'FIBER_INTACT'}})
     existing_keys = set(otables[0].columns)  # presume all tables have same keys at this point
-    for key in set(cast_types_for_stupid_astropy_merge) & existing_keys:
-        cast = cast_types_for_stupid_astropy_merge[key]
+    for key in existing_keys:
         for table in otables:
-            table[key] = Column(table[key].tolist(), dtype=cast)
+            table[key] = Column(table[key].tolist(), dtype=object)
     print(f'merging {len(otables)} tables...')
     merged = vstack(otables)
+    merged.sort(['PETAL_ID', 'POS_ID'])
     name = time.strftime('%Y%m%dT%H%M%S%z') + '_posdata.csv'
     path = os.path.join(args.outdir, name)
     merged.write(path)
