@@ -47,7 +47,7 @@ parser.add_argument('-spec', '--include_special_moves', action='store_true', hel
 parser.add_argument('-dmin', '--date_min', type=str, default='2000-01-01', help='exclude rows earlier than YYYY-MM-DD')
 parser.add_argument('-dmax', '--date_max', type=str, default='2100-01-01', help='exclude rows later than YYYY-MM-DD')
 parser.add_argument('-sout', '--sparse_output', action='store_true', help='output table is sparser and less memory intensive, also plotting of "bigcharts" is skipped')
-parser.add_argument('-scl', '--scale_filter', type=str, default='include', choices=['include', 'exclude', 'only'], help='filter which data are analyzed, according to the SCALE_T / SCALE_P (i.e. GEAR_CALIB_T / GEAR_CALIB_P) calibration parameters')
+parser.add_argument('-scl', '--scale_filter', type=str, default='include', choices=['include', 'exclude', 't', 'p', 't_or_p'], help='filter which data are analyzed, according to the SCALE_T / SCALE_P (i.e. GEAR_CALIB_T / GEAR_CALIB_P) calibration parameters')
 user_args = parser.parse_args()
 
 # simple checks on user args
@@ -212,8 +212,12 @@ def remove_excluded_calibs(table):
         return new
     if user_args.scale_filter == 'exclude':
         removals = np.logical_or(new[T] != 1.0, new[P] != 1.0)
-    elif user_args.scale_filter == 'only':
+    elif user_args.scale_filter == 't_or_p':
         removals = np.logical_and(new[T] == 1.0, new[P] == 1.0)
+    elif user_args.scale_filter == 't':
+        removals = new[T] == 1.0
+    elif user_args.scale_filter == 'p':
+        removals = new[P] == 1.0
     else:
         assert f'bad scale_filter option {user_args.scale_filter}'
     new.remove_rows(removals)
