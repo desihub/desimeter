@@ -206,18 +206,17 @@ def remove_excluded_calibs(table):
     OUTPUT:  new ... copy of table, with equal or fewer rows
     '''
     new = table.copy()
+    T = 'GEAR_CALIB_T'
+    P = 'GEAR_CALIB_P'
     if user_args.scale_filter == 'include':
         return new
-    defaults = {'GEAR_CALIB_T': 1.0, 'GEAR_CALIB_P': 1.0}
     if user_args.scale_filter == 'exclude':
-        op = np.not_equal
+        removals = np.logical_or(new[T] != 1.0, new[P] != 1.0)
     elif user_args.scale_filter == 'only':
-        op = np.equal
+        removals = np.logical_and(new[T] == 1.0, new[P] == 1.0)
     else:
         assert f'bad scale_filter option {user_args.scale_filter}'
-    for key, default_val in defaults.items():
-        removals = op(new[key], default_val)
-        new.remove_rows(removals)
+    new.remove_rows(removals)
     return new
 
 def remove_nonmoving_rows(table):
