@@ -32,7 +32,7 @@ analyze_pos_performance_legacy.
 
 # command line argument parsing
 import argparse
-parser = argparse.ArgumentParser(description=__doc__)
+parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-i', '--infiles', type=str, required=True, nargs='*',
                     help='Path to input csv file(s), containing results from "get_posmoves --with-calib" ' +
                          '(see that function''s help for full syntax). Regex is ok (like M*.csv). Multiple ' +
@@ -41,10 +41,9 @@ parser.add_argument('-i', '--infiles', type=str, required=True, nargs='*',
 parser.add_argument('-o', '--outdir', type=str, required=True, help='Path to directory where to save output files.')
 parser.add_argument('-np', '--n_processes_max', type=int, default=None,  help='max number of processors to use')
 parser.add_argument('-d', '--debug_mode', action='store_true', help='turn on some helpful features for debugging')
-top_errs_default = 10
-parser.add_argument('-top', '--n_top_errs', type=int, default=top_errs_default, help=f'identify this many moves with worst case errors, default={top_errs_default}')
+parser.add_argument('-top', '--n_top_errs', type=int, default=10, help='identify this many moves with worst case errors')
 special_move_keywords = {'MOTORTEST', 'move_to_range', 'disambiguate_theta', 'homing', 'limit seek'}
-parser.add_argument('-all', '--include_special_moves', action='store_true', help=f'include all "special moves" in results (normally anything with log notes like {special_move_keywords} are excluded)')
+parser.add_argument('-spec', '--include_special_moves', action='store_true', help=f'include all "special moves" in results (normally anything with log notes like {special_move_keywords} are excluded)')
 parser.add_argument('-dmin', '--date_min', type=str, default='2000-01-01', help='exclude rows earlier than YYYY-MM-DD')
 parser.add_argument('-dmax', '--date_max', type=str, default='2100-01-01', help='exclude rows later than YYYY-MM-DD')
 parser.add_argument('-sout', '--sparse_output', action='store_true', help='output table is sparser and less memory intensive, also plotting of "bigcharts" is skipped')
