@@ -724,7 +724,7 @@ def analyze_one_pos(table):
     new = calc_radii(new, tag=TRACKED)
     new = calc_radii(new, tag=REQUESTED)
     new = detect_num_fvc_images(new)
-    stats_cols = ['POS_ID', 'SUBMOVE']
+    stats_cols = ['POS_ID', 'SUBMOVE', 'GEAR_CALIB_T_MIN', 'GEAR_CALIB_P_MIN']
     stats_tags = [TRACKED, REQUESTED, ACCEPTED]
     stats_cols += [add_tag(tag, 'N_TARGETS') for tag in stats_tags]
     tagged_funcs = {add_tag(tag, name): func for name, func in stat_funcs.items() for tag in stats_tags}
@@ -739,6 +739,10 @@ def analyze_one_pos(table):
             err_xy[tag] = new[add_tag(super_tag, 'ERR_XY')][selection].tolist()
         stats_dict['POS_ID'].append(posid)
         stats_dict['SUBMOVE'].append(submove)
+        ii = get_idxs(new, submove)
+        for ax in ['T', 'P']:
+            gear_calib = min(new[f'GEAR_CALIB_{ax}'][ii])
+            stats_dict[f'GEAR_CALIB_{ax}_MIN'].append(gear_calib)
         for tag, data in err_xy.items():
             stats_dict[add_tag(tag, 'N_TARGETS')].append(len(data))
         for name, func in tagged_funcs.items():
