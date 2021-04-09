@@ -45,6 +45,7 @@ args  = parser.parse_args()
 comm = psycopg2.connect(host=args.host,port=args.port, database='desi_dev', user='desi_reader',password=args.password)
 
 order_by = 'order by time_recorded desc' # canonically order things by descending when fetching from DB, affects interpretation of "latest" below
+order_by_calib = order_by
 if args.latest:
     assert args.latest > 0, f"can't get {args.latest} rows!"
     args.exposure_ids = None 
@@ -157,7 +158,7 @@ for petalid in petalids :
 
             # adding calib info
             cmd = f'select {desired_fields["calib"]} from posmovedb.positioner_calibration_p{petalid} where pos_id=\'{posid}\''
-            cmd += order_by 
+            cmd += order_by_calib 
             calib=dbquery(comm,cmd)
 
             # get time stamps to match
