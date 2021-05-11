@@ -1,6 +1,6 @@
 import numpy as np
 
-from desimeter.transform.radec2tan import radec2tan,hadec2xy,hadec2altaz,tan2radec
+from desimeter.transform.radec2tan import radec2tan,hadec2xy,hadec2altaz,tan2radec,LATITUDE
 from desimeter.transform.tan2fp.raytracefit import tan2fp,fp2tan
 from desimeter.trig import sincosd
 
@@ -11,10 +11,63 @@ def _measure_fieldrot_deg(ha,dec,tel_ha,tel_dec,xfp_mm,yfp_mm) :
     return np.rad2deg(np.mean((yfp_mm[ok]*x2-xfp_mm[ok]*y2)/np.sqrt((xfp_mm[ok]**2+yfp_mm[ok]**2)*(x2**2+y2**2))))
 
 
-def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1,adc2) :
+# This comes straight from PlateMaker: python/PlateMaker/astron.py
+# And it gives a value that = -1 * the DESI 'PARALLAC' header card.
+def parallactic_angle(ha, decl):
+    """Calculate the parallactic angle.
+        Args:
+        ha: Hour Angle (decimal degrees)
+        decl: declination (decimal degrees)
+        Returns:
+        the parallactic angle in decimal degrees
+    """
+    rha = np.deg2rad(ha)
+    rdecl = np.deg2rad(decl)
+    rphi = np.deg2rad(LATITUDE)
+    rpsi = -1 * np.arctan2(np.sin(rha) * np.cos(rphi),
+                           np.cos(rdecl) * np.sin(rphi) - np.sin(rdecl) * np.cos(rphi) * np.cos(rha))
+    return np.rad2deg(rpsi)
+
+def zd2deltaadc(zd):
+        # This comes from the PlateMaker code --
+        #  https://desi.lbl.gov/trac/browser/code/online/DervishTools/trunk/desi/etc/desi/PRISM.par
+        #  https://desi.lbl.gov/trac/browser/code/online/DervishTools/trunk/desi/etc/common.tcl#L839
+        t = np.tan(np.deg2rad(zd))
+        A = -0.0183 + -0.3795*t + -0.1939*t**2
+        A = np.rad2deg(A)
+        return 2*A
+
+def adc_angles(ha,tile_dec) :
+
+    alt,az  = hadec2altaz(ha,tile_dec)
+    tile_zd = 90-alt
+
+    delta_adc = zd2deltaadc(tile_zd)
+
+    pa = parallactic_angle(ha, tile_dec)
+
+    # ADC angles
+    adc1 = 360. - pa + delta_adc/2.
+    adc2 = 360. - pa - delta_adc/2.
+
+    # Wrap to [0, 360]
+    adc1 += 360 * (adc1 < 0)
+    adc1 -= 360 * (adc1 > 360)
+    adc2 += 360 * (adc2 < 0)
+    adc2 -= 360 * (adc2 > 360)
+
+    return adc1,adc2
+
+def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None) :
 
     # LST from HA
     lst=tile_ha+tile_ra
+
+    if ( (adc1 is None) and (adc2 is not None) ) or ( (adc1 is not None) and (adc2 is None) ) :
+        raise ValueError("either set both adc angles or none")
+
+    if adc1 is None :
+        adc1,adc2 =  adc_angles(tile_ha,tile_dec)
 
     # start with pointing = tile center
     tel_ra=tile_ra+0.
