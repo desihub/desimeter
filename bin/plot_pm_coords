@@ -29,6 +29,8 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
                                      description="""FVC image processing""")
 parser.add_argument('-i','--infile', type = str, default = None, required = True,
                     help = 'path to a coordinates files')
+parser.add_argument('--ha', type = float, default = None, required = False,
+                    help = 'specify a different HA than the one in the files')
 
 args = parser.parse_args()
 
@@ -66,9 +68,15 @@ tile_ra=head["TILERA"]
 tile_dec=head["TILEDEC"]
 mjd=head["MJD-OBS"]
 obsha=head["MOUNTHA"]
-ha=obsha+0.
+if args.ha is not None :
+    ha=float(args.ha)
+else :
+    ha=obsha+0.
+
 adc1=head["ADC1PHI"]
 adc2=head["ADC2PHI"]
+adc1=None
+adc2=None
 ra=coord["FIBER_RA"]
 dec=coord["FIBER_DEC"]
 
@@ -83,12 +91,20 @@ yfa=coord["FA_Y"]
 flags=coord["FLAGS_COR_1"]
 
 ok=~(np.isnan(ra)|np.isnan(dec)|np.isnan(xpm)|np.isnan(ypm)|(xpm==0)|(ypm==0))
+#ok &= (coord["DX_1"]**2+coord["DY_1"]**2)<30**2
+#for k in ["OVERLAP","FROZEN","UNREACHABLE","NONFUNCTIONAL"] :
+#    ok &= (flags&mbit[k]>0)
+
 ra=ra[ok]
 dec=dec[ok]
 xpm=xpm[ok]
 ypm=ypm[ok]
 xfa=xfa[ok]
 yfa=yfa[ok]
+flags=flags[ok]
+
+
+
 
 # compute focal plane coordinates using desimeter
 xfp,yfp = fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd=mjd,tile_ha=ha,tile_fieldrot=tile_fieldrot,adc1=adc1,adc2=adc2)
@@ -121,7 +137,12 @@ print("DM-PM min max dy =",np.min(dy[ok]),np.max(dy[ok]))
 
 
 fig, axs = plt.subplots(1, 3, constrained_layout=True,num=str(expid))
-fig.suptitle("expid={} tileid={} HA(obs)={:3.1f} deg, HA(DM)={:3.1f} deg".format(expid,tileid,obsha,ha),fontsize=16)
+title="expid={} tileid={}".format(expid,tileid)
+if args.ha is None :
+   title+=" HA={:3.1f} (deg) ALT={:3.1f}".format(ha,alt)
+else :
+    title+=" HA(obs)={:3.1f} deg HA(DM)={:3.1f} deg".format(obsha,ha)
+fig.suptitle(title,fontsize=16)
 #fig.setnum(str(expid))
 axs[0].set_title("DM-PM")
 #plt.subplot(131,title="expid={} tileid={} DM-PM rms x,y={:4.3f},{:4.3f}".format(expid,tileid,rmsx,rmsy))
@@ -131,7 +152,7 @@ axs[0].quiver(xpm[ok],ypm[ok],dx[ok],dy[ok])
 axs[0].text(-400,420,"rms(x)={:4.3f}\nrms(y)={:4.3f}".format(rmsx,rmsy),verticalalignment="top",fontsize="small")
 
 for k in ["OVERLAP","FROZEN","UNREACHABLE"] :
-    ii=(flags&mbit[k]>0)
+    ii=(coord["FLAGS_COR_1"]&mbit[k]>0)
     print("{}:{}".format(k,np.sum(ii)))
     axs[0].plot(coord["FIBER_X"][ii],coord["FIBER_Y"][ii],".",label=k)
 axs[0].legend(fontsize="small",loc="upper right")
@@ -152,7 +173,7 @@ axs[1].set_title("FA-PM")
 axs[1].quiver(xpm[ok],ypm[ok],dx2[ok],dy2[ok])
 axs[1].text(-400,420,"rms(x)={:4.3f}\nrms(y)={:4.3f}".format(rmsx2,rmsy2),verticalalignment="top",fontsize="small")
 for k in ["OVERLAP","FROZEN","UNREACHABLE"] :
-    ii=(flags&mbit[k]>0)
+    ii=(coord["FLAGS_COR_1"]&mbit[k]>0)
     print("{}:{}".format(k,np.sum(ii)))
     axs[1].plot(coord["FIBER_X"][ii],coord["FIBER_Y"][ii],".",label=k)
 
