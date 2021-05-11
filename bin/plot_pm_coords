@@ -105,7 +105,6 @@ flags=flags[ok]
 
 
 
-
 # compute focal plane coordinates using desimeter
 xfp,yfp = fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd=mjd,tile_ha=ha,tile_fieldrot=tile_fieldrot,adc1=adc1,adc2=adc2)
 
@@ -135,6 +134,15 @@ print("DM-PM rms  dx={} dy={}".format(rmsx,rmsy))
 print("DM-PM min max dx =",np.min(dx[ok]),np.max(dx[ok]))
 print("DM-PM min max dy =",np.min(dy[ok]),np.max(dy[ok]))
 
+quiver_units="width"
+quiver_scale=1.5
+
+def arrow(ax) :
+    xarrow=-410
+    yarrow=350
+    dxarrow=0.1 #mm
+    ax.quiver(xarrow,yarrow,dxarrow,0.,color="black",units=quiver_units,scale=quiver_scale)
+    ax.text(xarrow+70,yarrow,"{} arcsec".format(dxarrow),fontsize="small",verticalalignment="center",horizontalalignment="left")
 
 fig, axs = plt.subplots(1, 3, constrained_layout=True,num=str(expid))
 title="expid={} tileid={}".format(expid,tileid)
@@ -148,8 +156,9 @@ axs[0].set_title("DM-PM")
 #plt.subplot(131,title="expid={} tileid={} DM-PM rms x,y={:4.3f},{:4.3f}".format(expid,tileid,rmsx,rmsy))
 #plt.plot(xpm,ypm,"o")
 #plt.plot(xfp,yfp,"o")
-axs[0].quiver(xpm[ok],ypm[ok],dx[ok],dy[ok])
-axs[0].text(-400,420,"rms(x)={:4.3f}\nrms(y)={:4.3f}".format(rmsx,rmsy),verticalalignment="top",fontsize="small")
+axs[0].quiver(xpm[ok],ypm[ok],dx[ok],dy[ok],units=quiver_units,scale=quiver_scale)
+axs[0].text(-410,420,"rms(x)={:4.3f}\nrms(y)={:4.3f}".format(rmsx,rmsy),verticalalignment="top",fontsize="small")
+arrow(axs[0])
 
 for k in ["OVERLAP","FROZEN","UNREACHABLE"] :
     ii=(coord["FLAGS_COR_1"]&mbit[k]>0)
@@ -157,8 +166,6 @@ for k in ["OVERLAP","FROZEN","UNREACHABLE"] :
     axs[0].plot(coord["FIBER_X"][ii],coord["FIBER_Y"][ii],".",label=k)
 axs[0].legend(fontsize="small",loc="upper right")
 
-#plt.plot(xpm,ypm,"o")
-#plt.plot(xfp,yfp,"o")
 dx2=(xfa-xpm)
 dy2=(yfa-ypm)
 offset=np.sqrt(dx2**2+dy2**2)
@@ -170,8 +177,9 @@ print("FA-PM min max dx =",np.min(dx2[ok]),np.max(dx2[ok]))
 print("FA-PM min max dy =",np.min(dy2[ok]),np.max(dy2[ok]))
 #plt.subplot(122,title="FA-PM rms x,y={:4.3f},{:4.3f}".format(rmsx2,rmsy2))
 axs[1].set_title("FA-PM")
-axs[1].quiver(xpm[ok],ypm[ok],dx2[ok],dy2[ok])
-axs[1].text(-400,420,"rms(x)={:4.3f}\nrms(y)={:4.3f}".format(rmsx2,rmsy2),verticalalignment="top",fontsize="small")
+axs[1].quiver(xpm[ok],ypm[ok],dx2[ok],dy2[ok],units=quiver_units,scale=quiver_scale)
+axs[1].text(-410,420,"rms(x)={:4.3f}\nrms(y)={:4.3f}".format(rmsx2,rmsy2),verticalalignment="top",fontsize="small")
+arrow(axs[1])
 for k in ["OVERLAP","FROZEN","UNREACHABLE"] :
     ii=(coord["FLAGS_COR_1"]&mbit[k]>0)
     print("{}:{}".format(k,np.sum(ii)))
@@ -186,8 +194,9 @@ rmsy3=np.sqrt(np.mean(dy3[ok]**2))
 print("DM-FA rms  dx={} dy={}".format(rmsx3,rmsy3))
 print("DM-FA min max dx =",np.min(dx3[ok]),np.max(dx3[ok]))
 print("DM-FA min max dy =",np.min(dy3[ok]),np.max(dy3[ok]))
-#plt.subplot(122,title="FA-PM rms x,y={:4.3f},{:4.3f}".format(rmsx2,rmsy2))
+
 axs[2].set_title("DM-FA")
-axs[2].quiver(xpm[ok],ypm[ok],dx3[ok],dy3[ok])
-axs[2].text(-400,420,"rms(x)={:4.3f}\nrms(y)={:4.3f}".format(rmsx3,rmsy3),verticalalignment="top",fontsize="small")
+axs[2].quiver(xpm[ok],ypm[ok],dx3[ok],dy3[ok],units=quiver_units,scale=quiver_scale)
+axs[2].text(-410,420,"rms(x)={:4.3f}\nrms(y)={:4.3f}".format(rmsx3,rmsy3),verticalalignment="top",fontsize="small")
+arrow(axs[2])
 plt.show()
