@@ -11,7 +11,7 @@ def _measure_fieldrot_deg(ha,dec,tel_ha,tel_dec,xfp_mm,yfp_mm) :
     return np.rad2deg(np.mean((yfp_mm[ok]*x2-xfp_mm[ok]*y2)/np.sqrt((xfp_mm[ok]**2+yfp_mm[ok]**2)*(x2**2+y2**2))))
 
 
-def fiberassign_radec2xy(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1,adc2) :
+def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1,adc2) :
 
     # LST from HA
     lst=tile_ha+tile_ra
@@ -73,3 +73,13 @@ def fiberassign_radec2xy(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,
     print("Requested fieldrot={:3.1f} arcsec delta={:3.1f} arcsec".format(tile_fieldrot*3600.,(tile_fieldrot-realised_fieldrot)*3600.))
 
     return xfp,yfp
+
+def fiberassign_radec2xy_flat(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1,adc2) :
+
+    xfp,yfp = fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1,adc2)
+
+    # fiber assign coordinates are on the curved coordinates that follow the curved focal surface
+    # the curved coordinates are called 'flat' in the focalplane parlance.
+    xflat,yflat = ptl2flat(xfp,yfp)
+
+    return xflat,yflat

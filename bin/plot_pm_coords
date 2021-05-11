@@ -15,7 +15,7 @@ from desimeter.transform.pos2ptl import flat2ptl
 from desimeter.transform.ptl2fp import ptl2fp
 from desimeter.io import read_hexrot_deg
 #from desimeter.trig import sincosd
-from desimeter.fiberassign import fiberassign_radec2xy
+from desimeter.fiberassign import fiberassign_radec2xy_cs5
 
 
 def measure_fieldrot_deg(ha,dec,tel_ha,tel_dec,xfp_mm,yfp_mm) :
@@ -91,7 +91,7 @@ xfa=xfa[ok]
 yfa=yfa[ok]
 
 # compute focal plane coordinates using desimeter
-xfp,yfp = fiberassign_radec2xy(ra,dec,tile_ra,tile_dec,tile_mjd=mjd,tile_ha=ha,tile_fieldrot=tile_fieldrot,adc1=adc1,adc2=adc2)
+xfp,yfp = fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd=mjd,tile_ha=ha,tile_fieldrot=tile_fieldrot,adc1=adc1,adc2=adc2)
 
 # need to measure the field rotation in DM and rotate to the design field rot
 dm_fieldrot = measure_fieldrot_deg(-ra,dec,-tile_ra,tile_dec,xfp,yfp)
