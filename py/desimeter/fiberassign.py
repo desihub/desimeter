@@ -175,7 +175,7 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
 
     # tune telescope pointing given ADC angle
     # in order to fp coordinates of tile RA and DEC, it's not zero because of the ADC angles
-    for iteration in range(2) :
+    for _ in range(2) :
 
         xtan,ytan = radec2tan(np.array([tile_ra]),np.array([tile_dec]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
         xfp_0,yfp_0   = tan2fp(xtan,ytan,adc1,adc2) #mm
