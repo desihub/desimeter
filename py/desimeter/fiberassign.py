@@ -1,7 +1,7 @@
 import numpy as np
 
-from desimeter.transform.radec2tan import radec2tan,hadec2xy,hadec2altaz,tan2radec,LATITUDE
-from desimeter.transform.tan2fp.raytracefit import tan2fp,fp2tan
+from desimeter.transform.radec2tan import radec2tan,hadec2xy
+from desimeter.transform.tan2fp.raytracefit import tan2fp
 from desimeter.trig import sincosd
 
 def _measure_fieldrot_deg(ha,dec,tel_ha,tel_dec,xfp_mm,yfp_mm) :
@@ -13,29 +13,6 @@ def _measure_fieldrot_deg(ha,dec,tel_ha,tel_dec,xfp_mm,yfp_mm) :
 
 # This comes straight from PlateMaker: python/PlateMaker/astron.py
 # And it gives a value that = -1 * the DESI 'PARALLAC' header card.
-def parallactic_angle(ha, decl):
-    """Calculate the parallactic angle.
-        Args:
-        ha: Hour Angle (decimal degrees)
-        decl: declination (decimal degrees)
-        Returns:
-        the parallactic angle in decimal degrees
-    """
-    rha = np.deg2rad(ha)
-    rdecl = np.deg2rad(decl)
-    rphi = np.deg2rad(LATITUDE)
-    rpsi = -1 * np.arctan2(np.sin(rha) * np.cos(rphi),
-                           np.cos(rdecl) * np.sin(rphi) - np.sin(rdecl) * np.cos(rphi) * np.cos(rha))
-    return np.rad2deg(rpsi)
-
-def zd2deltaadc(zd):
-        # This comes from the PlateMaker code --
-        #  https://desi.lbl.gov/trac/browser/code/online/DervishTools/trunk/desi/etc/desi/PRISM.par
-        #  https://desi.lbl.gov/trac/browser/code/online/DervishTools/trunk/desi/etc/common.tcl#L839
-        t = np.tan(np.deg2rad(zd))
-        A = -0.0183 + -0.3795*t + -0.1939*t**2
-        A = np.rad2deg(A)
-        return 2*A
 
 # Direct copy from https://github.com/desihub/fiberassign/blob/radec2xy/py/fiberassign/targets.py
 # These are reproductions of PlateMaker Tcl functions in
