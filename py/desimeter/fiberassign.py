@@ -2,6 +2,7 @@ import numpy as np
 
 from desimeter.transform.radec2tan import radec2tan,hadec2xy
 from desimeter.transform.tan2fp.raytracefit import tan2fp
+from desimeter.transform.pos2ptl import ptl2flat
 from desimeter.trig import sincosd
 
 def _measure_fieldrot_deg(ha,dec,tel_ha,tel_dec,xfp_mm,yfp_mm) :
