@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import numpy as np
 
 from desimeter.transform.radec2tan import radec2tan,hadec2xy,hadec2altaz,tan2radec
