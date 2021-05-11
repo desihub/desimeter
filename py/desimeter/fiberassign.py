@@ -46,7 +46,6 @@ def pm_get_adc_angles(ha, dec):
     # Here we're reproducing PlateMaker's astrometric
     # transformations to get to the ADC angles it's going to set.
     # These have degree-level disagreements with other methods.
-    pm_longitude = 111.6003
     pm_latitude  =  31.9634
     #lst0 = pm_sidtim(mjd)
     #st = lst0 - longitude
@@ -91,7 +90,7 @@ def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_field
 
     # tune telescope pointing given ADC angle
     # in order to fp coordinates of tile RA and DEC, it's not zero because of the ADC angles
-    for iteration in range(2) :
+    for _ in range(2) :
 
         xtan,ytan = radec2tan(np.array([tile_ra]),np.array([tile_dec]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
         xfp_0,yfp_0   = tan2fp(xtan,ytan,adc1,adc2) #mm
