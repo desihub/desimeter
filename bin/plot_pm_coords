@@ -141,7 +141,7 @@ def arrow(ax) :
     yarrow=-400
     dxarrow=0.1 #mm
     ax.quiver(xarrow,yarrow,dxarrow,0.,color="black",units=quiver_units,scale=quiver_scale)
-    ax.text(xarrow+70,yarrow,"{} arcsec".format(dxarrow),fontsize="small",verticalalignment="center",horizontalalignment="left")
+    ax.text(xarrow+70,yarrow,"{} mm".format(dxarrow),fontsize="small",verticalalignment="center",horizontalalignment="left")
 
 fig, axs = plt.subplots(1, 3, constrained_layout=True,num=str(expid),figsize=(14,5))
 title="expid={} tileid={}".format(expid,tileid)
