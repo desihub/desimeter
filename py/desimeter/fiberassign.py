@@ -57,6 +57,22 @@ def pm_get_adc_angles(ha, dec):
     return adc1, adc2
 
 def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None) :
+    """Computes X Y focal plane coordinates of targets in CS5 coordinate system.
+    Args:
+      ra  : 1D numpy.array with target RA in degrees (need an array of points to compute the field rotation)
+      dec : 1D numpy.array with target Dec in degrees, same size as ra
+      tile_ra : float, RA of tile center in degrees, such that after pointing and ADC shift corrections, this corresponds to X=0,Y=0
+      tile_dec : float, Dec of tile center in degrees, such that after pointing and ADC shift corrections, this corresponds to X=0,Y=0
+      tile_mjd : float, days, used for precession (does not need to be super accurate)
+      tile_ha :  float, hour angle of observation, in degrees
+      tile_fieldrot :  float, design/requested field rotation, in degrees
+      adc1 : optional, float, ADC1 angle in degrees: by default it is computed based on the HA and Dec.
+      adc2 : optional, float, ADC1 angle in degrees: by default it is computed based on the HA and Dec.
+
+    Returns xfp,yfp, focal plane coordinates in mm in CS5, 1D numpy arrays of same size as ra,dec
+    """
+
+    assert(ra.size == dec.size)
 
     # LST from HA
     lst=tile_ha+tile_ra
@@ -126,6 +142,20 @@ def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_field
     return xfp,yfp
 
 def fiberassign_radec2xy_flat(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1,adc2) :
+    """Computes X Y focal plane coordinates of targets in the curved, "flat" coordinate system.
+    Args:
+      ra  : 1D numpy.array with target RA in degrees (need an array of points to compute the field rotation)
+      dec : 1D numpy.array with target Dec in degrees, same size as ra
+      tile_ra : float, RA of tile center in degrees, such that after pointing and ADC shift corrections, this corresponds to X=0,Y=0
+      tile_dec : float, Dec of tile center in degrees, such that after pointing and ADC shift corrections, this corresponds to X=0,Y=0
+      tile_mjd : float, days, used for precession (does not need to be super accurate)
+      tile_ha :  float, hour angle of observation, in degrees
+      tile_fieldrot :  float, design/requested field rotation, in degrees
+      adc1 : optional, float, ADC1 angle in degrees: by default it is computed based on the HA and Dec.
+      adc2 : optional, float, ADC1 angle in degrees: by default it is computed based on the HA and Dec.
+
+    Returns xfp,yfp, focal plane coordinates in mm in the curved "flat" coordinate system, 1D numpy arrays of same size as ra,dec
+    """
 
     xfp,yfp = fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1,adc2)
 
