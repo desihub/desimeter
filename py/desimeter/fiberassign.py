@@ -35,6 +35,7 @@ def pm_psi(ha, dec, latitude):
     return np.rad2deg(rpsi)
 
 def pm_zd2deltaadc(zd):
+    zd = np.minimum(zd, 60.) # saturate zenith angle
     t = np.tan(np.deg2rad(zd))
     A = -0.0183 + -0.3795*t + -0.1939*t**2
     A = np.rad2deg(A)
