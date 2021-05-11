@@ -1,3 +1,19 @@
+"""
+desimeter.fiberassign provides ra,dec <-> x,y transforms for fiberassign
+which must predict these without using as-observed GFA data for final scale
+and rotations.  See bin/plot_pm_coords for example using these functions.
+
+The primary user-facing functions are:
+
+  * Transforms to/from CS5 coordinate system:
+    - fiberassign_radec2xy_cs5
+    - fiberassign_cs5_xy2radec
+  * Transforms to/from "flattened" coordinate system, treating the curved
+    focal surface as if it was flat:
+    - fiberassign_radec2xy_flat
+    - fiberassign_flat_xy2radec
+"""
+
 import numpy as np
 
 from desimeter.transform.radec2tan import radec2tan,tan2radec,hadec2xy
