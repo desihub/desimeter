@@ -37,26 +37,47 @@ def zd2deltaadc(zd):
         A = np.rad2deg(A)
         return 2*A
 
-def adc_angles(ha,tile_dec) :
+# Direct copy from https://github.com/desihub/fiberassign/blob/radec2xy/py/fiberassign/targets.py
+# These are reproductions of PlateMaker Tcl functions in
+# https://desi.lbl.gov/trac/browser/code/online/DervishTools/trunk/desi/etc/nfs.tcl#L43
+# def pm_sidtim(mjd):
+#     return fmod(mjd + (mjd-52903.54875)*(366.24125/365.24125-1.),1.)*360.
+def pm_zd(ha, dec, lat):
+    rha = np.deg2rad(ha)
+    rdec = np.deg2rad(dec)
+    rphi = np.deg2rad(lat)
+    rzen = np.arccos(np.cos(rha) * np.cos(rdec) * np.cos(rphi) +
+            np.sin(rdec) * np.sin(rphi))
+    return np.rad2deg(rzen)
 
-    alt,az  = hadec2altaz(ha,tile_dec)
-    tile_zd = 90-alt
+def pm_psi(ha, dec, latitude):
+    rha = np.deg2rad(ha)
+    rdec = np.deg2rad(dec)
+    rphi = np.deg2rad(latitude)
+    rpsi = np.arctan2(np.sin(rha) * np.cos(rphi), np.cos(rdec) * np.sin(rphi) - np.sin(rdec) * np.cos(rphi) * np.cos(rha))
+    return np.rad2deg(rpsi)
 
-    delta_adc = zd2deltaadc(tile_zd)
+def pm_zd2deltaadc(zd):
+    t = np.tan(np.deg2rad(zd))
+    A = -0.0183 + -0.3795*t + -0.1939*t**2
+    A = np.rad2deg(A)
+    return 2*A
 
-    pa = parallactic_angle(ha, tile_dec)
-
-    # ADC angles
-    adc1 = 360. - pa + delta_adc/2.
-    adc2 = 360. - pa - delta_adc/2.
-
-    # Wrap to [0, 360]
-    adc1 += 360 * (adc1 < 0)
-    adc1 -= 360 * (adc1 > 360)
-    adc2 += 360 * (adc2 < 0)
-    adc2 -= 360 * (adc2 > 360)
-
-    return adc1,adc2
+def pm_get_adc_angles(ha, dec):
+    # Here we're reproducing PlateMaker's astrometric
+    # transformations to get to the ADC angles it's going to set.
+    # These have degree-level disagreements with other methods.
+    pm_longitude = 111.6003
+    pm_latitude  =  31.9634
+    #lst0 = pm_sidtim(mjd)
+    #st = lst0 - longitude
+    #ha = st - tile_ra
+    zd  = pm_zd (ha, dec, pm_latitude)
+    psi = pm_psi(ha, dec, pm_latitude)
+    dadc = pm_zd2deltaadc(zd)
+    adc1 = psi + dadc/2.
+    adc2 = psi - dadc/2.
+    return adc1, adc2
 
 def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None) :
 
@@ -67,7 +88,7 @@ def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_field
         raise ValueError("either set both adc angles or none")
 
     if adc1 is None :
-        adc1,adc2 =  adc_angles(tile_ha,tile_dec)
+        adc1,adc2 =  pm_get_adc_angles(tile_ha,tile_dec)
 
     # start with pointing = tile center
     tel_ra=tile_ra+0.
