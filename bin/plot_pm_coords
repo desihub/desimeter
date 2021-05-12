@@ -1,0 +1,215 @@
+#!/usr/bin/env python
+
+import os
+import numpy as np
+import sys
+import fitsio
+from   astropy.table import Table
+import matplotlib.pyplot as plt
+import argparse
+
+from desimeter.transform.radec2tan import hadec2xy,hadec2altaz
+from desimeter.io import read_hexrot_deg
+from desimeter.fiberassign import fiberassign_radec2xy_cs5,fiberassign_radec2xy_flat
+
+
+def measure_fieldrot_deg(ha,dec,tel_ha,tel_dec,xfp_mm,yfp_mm) :
+
+    ok = (~(np.isnan(ha*dec*xfp_mm*yfp_mm)))&(xfp_mm**2+yfp_mm**2>10**2)
+    x2,y2=hadec2xy(ha[ok],dec[ok],tel_ha,tel_dec) # rad
+    return np.rad2deg(np.mean((yfp_mm[ok]*x2-xfp_mm[ok]*y2)/np.sqrt((xfp_mm[ok]**2+yfp_mm[ok]**2)*(x2**2+y2**2))))
+
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="""FVC image processing""")
+parser.add_argument('-i','--infile', type = str, default = None, required = True,
+                    help = 'path to a coordinates files')
+parser.add_argument('--ha', type = float, default = None, required = False,
+                    help = 'specify a different HA than the one in the files')
+
+args = parser.parse_args()
+
+# from https://desi.lbl.gov/trac/wiki/FPS/PositionerFlags
+mbit={}
+mbit["CTRLDISABLED"]=2**16
+mbit["FIBERBROKEN"]=2**17
+mbit["COMERROR"]=2**18
+mbit["OVERLAP"]=2**19
+mbit["FROZEN"]=2**20
+mbit["UNREACHABLE"]=2**21
+mbit["NONFUNCTIONAL"]=2**24
+mbit["REJECTED"]=2**25
+
+
+filename=args.infile
+
+coord=Table.read(filename)
+#chead=read_header(filename)
+
+obsfilename=filename.replace("coordinates","desi").replace(".fits",".fits.fz")
+head=fitsio.read_header(obsfilename,1)
+tileid=head["TILEID"]
+
+fafilename=os.path.join(os.path.dirname(filename),"fiberassign-{:06d}.fits.gz".format(tileid))
+fahead=fitsio.read_header(fafilename)
+
+tile_fieldrot=fahead["FIELDROT"]
+
+hexrot_deg = read_hexrot_deg(head)
+hexrot_deg = 0.
+expid=head["EXPID"]
+
+tile_ra=head["TILERA"]
+tile_dec=head["TILEDEC"]
+mjd=head["MJD-OBS"]
+obsha=head["MOUNTHA"]
+if args.ha is not None :
+    ha=float(args.ha)
+else :
+    ha=obsha+0.
+
+adc1=head["ADC1PHI"]
+adc2=head["ADC2PHI"]
+adc1=None
+adc2=None
+ra=coord["FIBER_RA"]
+dec=coord["FIBER_DEC"]
+
+
+alt,az=hadec2altaz(ha,tile_dec)
+
+
+xpm=coord["FIBER_X"]
+ypm=coord["FIBER_Y"]
+xfa=coord["FA_X"]
+yfa=coord["FA_Y"]
+flags=coord["FLAGS_COR_1"]
+
+ok=~(np.isnan(ra)|np.isnan(dec)|np.isnan(xpm)|np.isnan(ypm)|(xpm==0)|(ypm==0))
+#ok &= (coord["DX_1"]**2+coord["DY_1"]**2)<30**2
+#for k in ["OVERLAP","FROZEN","UNREACHABLE","NONFUNCTIONAL"] :
+#    ok &= (flags&mbit[k]>0)
+
+ra=ra[ok]
+dec=dec[ok]
+xpm=xpm[ok]
+ypm=ypm[ok]
+xfa=xfa[ok]
+yfa=yfa[ok]
+flags=flags[ok]
+
+
+
+# compute focal plane coordinates using desimeter
+xfp,yfp = fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd=mjd,tile_ha=ha,tile_fieldrot=tile_fieldrot,adc1=adc1,adc2=adc2)
+
+# simply to test the routine
+xflat,yflat = fiberassign_radec2xy_flat(ra,dec,tile_ra,tile_dec,tile_mjd=mjd,tile_ha=ha,tile_fieldrot=tile_fieldrot,adc1=adc1,adc2=adc2)
+
+# need to measure the field rotation in DM and rotate to the design field rot
+dm_fieldrot = measure_fieldrot_deg(-ra,dec,-tile_ra,tile_dec,xfp,yfp)
+fa_fieldrot = measure_fieldrot_deg(-ra,dec,-tile_ra,tile_dec,xfa,yfa)
+pm_fieldrot = measure_fieldrot_deg(-ra,dec,-tile_ra,tile_dec,xpm,ypm)
+print("hexapod rot   = {:3.0f} arcsec".format(hexrot_deg*3600))
+print("DM   fieldrot = {:3.0f} arcsec".format(dm_fieldrot*3600))
+print("PM   fieldrot = {:3.0f} arcsec".format(pm_fieldrot*3600))
+print("TILE fieldrot = {:3.0f} arcsec".format(tile_fieldrot*3600))
+print("FA   fieldrot = {:3.0f} arcsec".format(fa_fieldrot*3600))
+
+dx=(xfp-xpm)
+dy=(yfp-ypm)
+print("mean dx={} dy={}".format(np.mean(xfp-xpm),np.mean(yfp-ypm)))
+print("rms  dx={} dy={}".format(np.sqrt(np.mean(dx**2)),np.sqrt(np.mean(dy**2))))
+
+dx=(xfp-xpm)
+dy=(yfp-ypm)
+offset=np.sqrt(dx**2+dy**2)
+ok=(offset<1)
+print("mean dx={} dy={}".format(np.mean(dx[ok]),np.mean(dy[ok])))
+rmsx=np.sqrt(np.mean(dx[ok]**2))
+rmsy=np.sqrt(np.mean(dy[ok]**2))
+print("DM-PM rms  dx={} dy={}".format(rmsx,rmsy))
+print("DM-PM min max dx =",np.min(dx[ok]),np.max(dx[ok]))
+print("DM-PM min max dy =",np.min(dy[ok]),np.max(dy[ok]))
+
+quiver_units="width"
+quiver_scale=1.5
+showbad=False
+
+def arrow(ax) :
+    xarrow=-410
+    yarrow=-400
+    dxarrow=0.1 #mm
+    ax.quiver(xarrow,yarrow,dxarrow,0.,color="black",units=quiver_units,scale=quiver_scale)
+    ax.text(xarrow+70,yarrow,"{} mm".format(dxarrow),fontsize="small",verticalalignment="center",horizontalalignment="left")
+
+fig, axs = plt.subplots(1, 3, constrained_layout=True,num=str(expid),figsize=(14,5))
+title="expid={} tileid={}".format(expid,tileid)
+if args.ha is None :
+   title+=" HA={:3.1f} (deg) ALT={:3.1f}".format(ha,alt)
+else :
+    title+=" HA(obs)={:3.1f} deg HA(DM)={:3.1f} deg".format(obsha,ha)
+fig.suptitle(title,fontsize=16)
+#fig.setnum(str(expid))
+axs[0].set_title("DM-PM")
+#plt.subplot(131,title="expid={} tileid={} DM-PM rms x,y={:4.3f},{:4.3f}".format(expid,tileid,rmsx,rmsy))
+#plt.plot(xpm,ypm,"o")
+#plt.plot(xfp,yfp,"o")
+axs[0].quiver(xpm[ok],ypm[ok],dx[ok],dy[ok],units=quiver_units,scale=quiver_scale)
+axs[0].text(-410,420,"rms(x)={:4.3f}\nrms(y)={:4.3f}".format(rmsx,rmsy),verticalalignment="top",fontsize="small")
+if showbad :
+    bad=ok&(offset>0.1)
+    if np.sum(bad)>0 :
+        axs[1].quiver(xpm[bad],ypm[bad],dx[bad],dy[bad],units=quiver_units,scale=quiver_scale,color="red")
+arrow(axs[0])
+
+for k in ["OVERLAP","FROZEN","UNREACHABLE"] :
+    ii=(coord["FLAGS_COR_1"]&mbit[k]>0)
+    print("{}:{}".format(k,np.sum(ii)))
+    axs[0].plot(coord["FIBER_X"][ii],coord["FIBER_Y"][ii],".",label=k)
+axs[0].legend(fontsize="small",loc="upper right")
+
+dx2=(xfa-xpm)
+dy2=(yfa-ypm)
+offset=np.sqrt(dx2**2+dy2**2)
+ok=(offset<0.3)
+rmsx2=np.sqrt(np.mean(dx2[ok]**2))
+rmsy2=np.sqrt(np.mean(dy2[ok]**2))
+print("FA-PM rms  dx={} dy={}".format(rmsx2,rmsy2))
+print("FA-PM min max dx =",np.min(dx2[ok]),np.max(dx2[ok]))
+print("FA-PM min max dy =",np.min(dy2[ok]),np.max(dy2[ok]))
+#plt.subplot(122,title="FA-PM rms x,y={:4.3f},{:4.3f}".format(rmsx2,rmsy2))
+axs[1].set_title("FA-PM")
+axs[1].quiver(xpm[ok],ypm[ok],dx2[ok],dy2[ok],units=quiver_units,scale=quiver_scale)
+if showbad :
+    bad=ok&(offset>0.1)
+    if np.sum(bad)>0 :
+        axs[1].quiver(xpm[bad],ypm[bad],dx2[bad],dy2[bad],units=quiver_units,scale=quiver_scale,color="red")
+
+
+axs[1].text(-410,420,"rms(x)={:4.3f}\nrms(y)={:4.3f}".format(rmsx2,rmsy2),verticalalignment="top",fontsize="small")
+arrow(axs[1])
+for k in ["OVERLAP","FROZEN","UNREACHABLE"] :
+    ii=(coord["FLAGS_COR_1"]&mbit[k]>0)
+    print("{}:{}".format(k,np.sum(ii)))
+    axs[1].plot(coord["FIBER_X"][ii],coord["FIBER_Y"][ii],".",label=k)
+
+dx3=(xfp-xfa)
+dy3=(yfp-yfa)
+offset=np.sqrt(dx3**2+dy3**2)
+ok=(offset<1)
+rmsx3=np.sqrt(np.mean(dx3[ok]**2))
+rmsy3=np.sqrt(np.mean(dy3[ok]**2))
+print("DM-FA rms  dx={} dy={}".format(rmsx3,rmsy3))
+print("DM-FA min max dx =",np.min(dx3[ok]),np.max(dx3[ok]))
+print("DM-FA min max dy =",np.min(dy3[ok]),np.max(dy3[ok]))
+
+axs[2].set_title("DM-FA")
+axs[2].quiver(xpm[ok],ypm[ok],dx3[ok],dy3[ok],units=quiver_units,scale=quiver_scale)
+axs[2].text(-410,420,"rms(x)={:4.3f}\nrms(y)={:4.3f}".format(rmsx3,rmsy3),verticalalignment="top",fontsize="small")
+if showbad :
+    bad=ok&(offset>0.1)
+    if np.sum(bad)>0 :
+        axs[2].quiver(xpm[bad],ypm[bad],dx3[bad],dy3[bad],units=quiver_units,scale=quiver_scale,color="red",linewidth=1)
+arrow(axs[2])
+plt.show()
