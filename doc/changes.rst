@@ -2,10 +2,19 @@
 desimeter change Log
 ====================
 
-0.6.5 (unreleased)
+0.6.6 (unreleased)
 ------------------
 
-* No changes yet.
+* No changes yet
+
+0.6.5 (2021-05-11)
+------------------
+
+* add ``get_posmoves --latest`` option [PRs #179, #181, #182]
+* add ``analyze_pos_performance`` options to filter based upon positioner
+  movement scale factors [PR #180]
+* add ``desimeter.fiberassign`` with x,y <-> ra,dec transform predictions
+  for fiberassign (i.e. not using as-observed GFA data) [PR #183]
 
 0.6.4 (2021-03-31)
 ------------------
