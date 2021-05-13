@@ -2,10 +2,16 @@
 desimeter change Log
 ====================
 
-0.6.6 (unreleased)
+0.6.7 (unreleased)
 ------------------
 
-* No changes yet
+* No changes yet.
+
+0.6.6 (2021-05-13)
+------------------
+
+* Add empirical desimeter to platemaker transforms and use for
+  fiberassign xy2radec and radec2xy [PR #184]
 
 0.6.5 (2021-05-11)
 ------------------
