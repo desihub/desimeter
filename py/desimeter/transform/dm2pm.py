@@ -86,8 +86,6 @@ class DM2PM(object):
     def fit(self,xdm,ydm,xpm,ypm):
         """ Fit transformation.
         """
-
-        log = get_logger()
         rxdm, rydm = self._reduce_xy(xdm,ydm)
         rxpm, rypm = self._reduce_xy(xpm,ypm)
         _ , self.dm2pm_zbcoeffs = fitZhaoBurge(rxdm, rydm, rxpm, rypm, polids=self.zbpolids)
