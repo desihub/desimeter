@@ -16,9 +16,11 @@ The primary user-facing functions are:
 
 import numpy as np
 
+from desimeter.io import dm2pm_filename
 from desimeter.transform.radec2tan import radec2tan,tan2radec,hadec2xy
 from desimeter.transform.tan2fp.raytracefit import tan2fp,fp2tan
 from desimeter.transform.pos2ptl import ptl2flat,flat2ptl
+from desimeter.transform.dm2pm import DM2PM
 from desimeter.trig import sincosd
 
 def _measure_fieldrot_deg(ha,dec,tel_ha,tel_dec,xfp_mm,yfp_mm) :
@@ -73,7 +75,7 @@ def pm_get_adc_angles(ha, dec):
     adc2 = psi - dadc/2.
     return adc1, adc2
 
-def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None) :
+def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,to_platemaker=True) :
     """Computes X Y focal plane coordinates of targets in CS5 coordinate system.
     Args:
       ra  : 1D numpy.array with target RA in degrees (need an array of points to compute the field rotation)
@@ -84,8 +86,8 @@ def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_field
       tile_ha :  float, hour angle of observation, in degrees
       tile_fieldrot :  float, design/requested field rotation, in degrees
       adc1 : optional, float, ADC1 angle in degrees: by default it is computed based on the HA and Dec.
-      adc2 : optional, float, ADC1 angle in degrees: by default it is computed based on the HA and Dec.
-
+      adc2 : optional, float, ADC2 angle in degrees: by default it is computed based on the HA and Dec.
+      to_platemaker : assume output coordinates are in platemaker system and use dm2pm transform
     Returns xfp,yfp, focal plane coordinates in mm in CS5, 1D numpy arrays of same size as ra,dec
     """
 
@@ -143,6 +145,11 @@ def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_field
     xtan,ytan = radec2tan(ra,dec,tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
     tmp_xfp,tmp_yfp = tan2fp(xtan,ytan,adc1,adc2)
 
+    if to_platemaker :
+        # apply tranformation from desimeter to platemater
+        dm2pm = DM2PM.read(dm2pm_filename())
+        tmp_xfp,tmp_yfp = dm2pm.dm2pm(tmp_xfp,tmp_yfp)
+
     # measure field rotation
     tmp_fieldrot = _measure_fieldrot_deg(-ra,dec,-tile_ra,tile_dec,tmp_xfp,tmp_yfp)
 
@@ -158,7 +165,7 @@ def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_field
 
     return xfp,yfp
 
-def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None) :
+def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,from_platemaker=True) :
     """Computes RA Dec from focal plane coordinates of targets in CS5 coordinate system (inverse of fiberassign_radec2xy_cs5)
     Args:
       xfp  : 1D numpy.array with target X in mm (need an array of points to compute the field rotation)
@@ -169,8 +176,8 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
       tile_ha :  float, hour angle of observation, in degrees
       tile_fieldrot :  float, design/requested field rotation, in degrees
       adc1 : optional, float, ADC1 angle in degrees: by default it is computed based on the HA and Dec.
-      adc2 : optional, float, ADC1 angle in degrees: by default it is computed based on the HA and Dec.
-
+      adc2 : optional, float, ADC2 angle in degrees: by default it is computed based on the HA and Dec.
+      from_platemaker : assume input coordinates are from platemaker and use pm2dm transform
     Returns RA,Dec, 1D numpy arrays of same size as X,Y
     """
 
@@ -219,6 +226,11 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
         tel_ra += dra
         tel_dec += ddec
 
+    if from_platemaker :
+        # apply tranformation from desimeter to platemater
+        dm2pm = DM2PM.read(dm2pm_filename())
+        xfp,yfp = dm2pm.pm2dm(xfp,yfp)
+
     xtan,ytan = fp2tan(xfp,yfp,adc1,adc2)
     tmp_ra,tmp_dec    = tan2radec(xtan,ytan,tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
 
@@ -242,7 +254,7 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
     return ra,dec
 
 
-def fiberassign_radec2xy_flat(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None) :
+def fiberassign_radec2xy_flat(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,to_platemaker=True) :
     """Computes X Y focal plane coordinates of targets in the curved, "flat" coordinate system.
     Args:
       ra  : 1D numpy.array with target RA in degrees (need an array of points to compute the field rotation)
@@ -253,12 +265,12 @@ def fiberassign_radec2xy_flat(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
       tile_ha :  float, hour angle of observation, in degrees
       tile_fieldrot :  float, design/requested field rotation, in degrees
       adc1 : optional, float, ADC1 angle in degrees: by default it is computed based on the HA and Dec.
-      adc2 : optional, float, ADC1 angle in degrees: by default it is computed based on the HA and Dec.
-
+      adc2 : optional, float, ADC2 angle in degrees: by default it is computed based on the HA and Dec.
+      to_platemaker : assume output coordinates are in platemaker system and use dm2pm transform
     Returns xfp,yfp, focal plane coordinates in mm in the curved "flat" coordinate system, 1D numpy arrays of same size as ra,dec
     """
 
-    xfp,yfp = fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1,adc2)
+    xfp,yfp = fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1,adc2,to_platemaker=to_platemaker)
 
     # fiber assign coordinates are on the curved coordinates that follow the curved focal surface
     # the curved coordinates are called 'flat' in the focalplane parlance.
@@ -268,7 +280,7 @@ def fiberassign_radec2xy_flat(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
 
 
 
-def fiberassign_flat_xy2radec(xflat,yflat,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None) :
+def fiberassign_flat_xy2radec(xflat,yflat,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,from_platemaker=True) :
     """Computes RA Dec from focal plane coordinates of targets in curved "flat" coordinate system (inverse of fiberassign_radec2xy_flat)
     Args:
       xflat  : 1D numpy.array with target RA in degrees (need an array of points to compute the field rotation)
@@ -279,11 +291,11 @@ def fiberassign_flat_xy2radec(xflat,yflat,tile_ra,tile_dec,tile_mjd,tile_ha,tile
       tile_ha :  float, hour angle of observation, in degrees
       tile_fieldrot :  float, design/requested field rotation, in degrees
       adc1 : optional, float, ADC1 angle in degrees: by default it is computed based on the HA and Dec.
-      adc2 : optional, float, ADC1 angle in degrees: by default it is computed based on the HA and Dec.
-
+      adc2 : optional, float, ADC2 angle in degrees: by default it is computed based on the HA and Dec.
+      from_platemaker : assume input coordinates are from platemaker and use pm2dm transform
     Returns RA,Dec, 1D numpy arrays of same size as xflat,yflat
     """
 
     xfp,yfp = flat2ptl(xflat,yflat)
-    ra,dec  = fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None)
+    ra,dec  = fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=adc1,adc2=adc2,from_platemaker=from_platemaker)
     return ra,dec

@@ -61,6 +61,9 @@ def load_petal_alignement():
 def fvc2fp_filename():
     return os.path.join(desimeter_data_dir(),'init-fvc2fp.json')
 
+def dm2pm_filename():
+    return os.path.join(desimeter_data_dir(),'dm2pm.json')
+
 def fvc_bias_filename():
     return os.path.join(desimeter_data_dir(),'bias.fits')
 
@@ -69,7 +72,7 @@ def load_nominal_positioner_locations():
     filename = 'positioner_locations_0530v18.csv'
     path = os.path.join(directory, filename)
     table = Table.read(path)
-    
+
     # so that we can use identical copy as in svn plate_control/petal, but with
     # more desimeter-like nomenclature
     names_map = {'device_location_id': 'DEVICE_LOC',
@@ -82,6 +85,5 @@ def load_nominal_positioner_locations():
                  }
     for n1, n2 in names_map.items():
         table.rename_column(n1, n2)
-    
+
     return table
-    
