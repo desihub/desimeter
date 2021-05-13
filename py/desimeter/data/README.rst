@@ -26,6 +26,10 @@ default transformation from FVC to FP, used to init the match
 
 .. _`DESI-5421`: https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=5421
 
+dm2pm.json
+--------------------------------------
+transformation from desimeter FP coordinates to platemaker FP coordinates
+
 pos2ptl_test_data.json
 --------------------------------------
 * generated using postransforms.py from SVN
@@ -52,4 +56,3 @@ guide_data_20200415.csv
   the script `desi_fit_field_rotation_rate`.
 * The resulting polynomial as a function of HA and Dec is
   used in the routine `desimeter.fieldmodel.dfieldrotdt`.
-
