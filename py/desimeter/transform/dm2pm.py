@@ -6,9 +6,6 @@ and different coordinates for fiducials, GFAs.
 
 import json
 import numpy as np
-
-from desimeter.io import load_metrology
-from desimeter.log import get_logger
 from desimeter.transform.zhaoburge import getZhaoBurgeXY,fitZhaoBurge
 
 #-------------------------------------------------------------------------
