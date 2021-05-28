@@ -2,10 +2,15 @@
 desimeter change Log
 ====================
 
-0.6.7 (unreleased)
+0.6.8 (unreleased)
 ------------------
 
 * No changes yet.
+
+0.6.7 (2021-05-28)
+------------------
+
+* Use vectorized cross product for speed [PR #185].
 
 0.6.6 (2021-05-13)
 ------------------
