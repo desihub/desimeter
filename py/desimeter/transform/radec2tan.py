@@ -181,11 +181,8 @@ def compute_aberration(ra_eclip,dec_eclip, mjd, magnif):
     targetXYZ = getXYZ(ra_eclip,dec_eclip)
 
     if len(targetXYZ.shape) > 1 :
-        VxT   = np.zeros(targetXYZ.shape)
-        TxVxT = np.zeros(targetXYZ.shape)
-        for i in range(targetXYZ.shape[1]) :
-            VxT[:,i]=np.cross(apexXYZ[:,i], targetXYZ[:,i])
-            TxVxT[:,i]=np.cross(targetXYZ[:,i],VxT[:,i])
+        VxT = np.cross(apexXYZ, targetXYZ, axis=0)
+        TxVxT = np.cross(targetXYZ,VxT, axis=0)
     else :
        VxT       = np.cross(apexXYZ, targetXYZ)
        TxVxT     = np.cross(targetXYZ, VxT)
