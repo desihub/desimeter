@@ -204,7 +204,7 @@ def make_covar_independent_nonoise(x1, y1, x2, y2, param, rq=False, **kw):
     return covar
 
 
-def make_covar_independent(data, param, rq=False):
+def make_covar_independent(data, param, rq=False, **kw):
     """Gaussian covariance matrix for data given param.
 
     Args:
@@ -374,8 +374,9 @@ def correct_using_stationary(xs, ys, x0s, y0s, xc, yc):
     data['y'] = ys
     data['dx'] = xs-x0s
     data['dy'] = ys-y0s
-    xturb, yturb, _ = solve_independent(data, nuse=500, excludeself=True,
-                                        predict_at=(xc, yc))
+    xturb, yturb, res = solve_independent(data, nuse=500, excludeself=False,
+                                          predict_at=(xc, yc), method='powell',
+                                          fix_covar=True)
     return xc-xturb, yc-yturb
 
 
@@ -422,7 +423,8 @@ def correct(x, y, x0, y0, dx=None, dy=None):
     return x-xturb, y-yturb
 
 
-def solve_independent(data, excludeself=False, predict_at=None, **kw):
+def solve_independent(data, excludeself=False, predict_at=None,
+                      fix_covar=False, **kw):
     """Find turbulent contributions to measured fiber positions.
 
     Assumes that the covariance matrix should be the same for x & y,
@@ -444,8 +446,16 @@ def solve_independent(data, excludeself=False, predict_at=None, **kw):
         res : output from scipy.optimize.minimize describing best fit
             covariance matrix
     """
-    covar, res = solve_covar(data, lossfun=loss_independent,
-                             covarfun=make_covar_independent, **kw)
+    if not fix_covar:
+        covar, res = solve_covar(data, lossfun=loss_independent,
+                                 covarfun=make_covar_independent, **kw)
+    else:
+        from types import SimpleNamespace
+        res = SimpleNamespace()
+        res.x = [5e-3, 5e-3, 100]
+        if kw.get('rq', False):
+            res.x = res.x + [2]
+        covar = make_covar_independent(data, res.x, **kw)
 
     if predict_at is not None and excludeself:
         raise ValueError('predict_at does not make sense in combination with '
@@ -573,7 +583,6 @@ def turbulence_gallery(fn, expectfn):
         data = make_data(expect, measure)
         covar, res = solve_covar(data, lossfun=loss_independent,
                                  covarfun=make_covar_independent)
-        print(res.x)
         uu, ss, _ = np.linalg.svd(covar)
         xvec = np.dot(uu, np.random.randn(len(ss))*np.sqrt(ss))
         yvec = np.dot(uu, np.random.randn(len(ss))*np.sqrt(ss))
