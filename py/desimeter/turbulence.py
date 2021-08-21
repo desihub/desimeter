@@ -3,8 +3,18 @@ import astropy.io.ascii
 from scipy import optimize
 import scipy.linalg
 from desimeter.match_positioners import match
-from desimeter.log import get_logger
 import scipy.spatial
+
+
+# accommodate both use in online system and in datasystems environment
+# use online system logging when available
+try:
+    import DOSLib.logger as log
+    log.warning = log.warn
+except Exception:
+    from desimeter.log import get_logger
+    log = get_logger()
+
 
 # =================================================================
 # from Sergey : correction using local polynomial fit
@@ -148,7 +158,7 @@ def make_covar_gradwavefront_nonoise(x1, y1, x2, y2, param, rq=False, **kw):
     return covar
 
 
-def make_covar_gradwavefront(data, param, rq=False):
+def make_covar_gradwavefront(data, param, rq=False, **kw):
     """Make derivative-of-Gaussian covariance matrix for data given param.
 
     Args:
@@ -349,7 +359,8 @@ def solve_files(expectedfn, measuredfn, mode='independent', **kw):
     return out, res
 
 
-def correct_using_stationary(xs, ys, x0s, y0s, xc, yc):
+def correct_using_stationary(xs, ys, x0s, y0s, xc, yc,
+                             scale_covar=1):
     """Remove correlated turbulent signals from measured locations of fibers,
     using subset of stationary fibers.
 
@@ -363,6 +374,8 @@ def correct_using_stationary(xs, ys, x0s, y0s, xc, yc):
         y0s : array_like(n), expected y position of stationary fibers
         xc : array_like(n), measured x position of fibers to be corrected
         yc : array_like(n), measured y position of fibers to be corrected
+        scale_covar : bool, amount to scale covariance by
+            (pix / micron for FVC instead of FP, e.g.)
 
     Returns:
         xn, yn: turbulence-corrected positions of fibers
@@ -374,9 +387,10 @@ def correct_using_stationary(xs, ys, x0s, y0s, xc, yc):
     data['y'] = ys
     data['dx'] = xs-x0s
     data['dy'] = ys-y0s
-    xturb, yturb, res = solve_independent(data, nuse=500, excludeself=False,
-                                          predict_at=(xc, yc), method='powell',
-                                          fix_covar=True)
+    xturb, yturb, res = solve_independent(
+        data, nuse=500, excludeself=False,
+        predict_at=(xc, yc), method='powell',
+        fix_covar=True, scale_covar=scale_covar)
     return xc-xturb, yc-yturb
 
 
@@ -410,7 +424,6 @@ def correct(x, y, x0, y0, dx=None, dy=None):
         y : array_like(n), turbulence-corrected y positions of fibers
     """
     if (dx is not None) or (dy is not None):
-        log = get_logger()
         log.warning('Uncertainties in x & y are currently ignored.')
     data = np.zeros(len(x), dtype=[
         ('x', 'f8'), ('y', 'f8'),
@@ -424,7 +437,7 @@ def correct(x, y, x0, y0, dx=None, dy=None):
 
 
 def solve_independent(data, excludeself=False, predict_at=None,
-                      fix_covar=False, **kw):
+                      fix_covar=False, scale_covar=1, **kw):
     """Find turbulent contributions to measured fiber positions.
 
     Assumes that the covariance matrix should be the same for x & y,
@@ -452,7 +465,7 @@ def solve_independent(data, excludeself=False, predict_at=None,
     else:
         from types import SimpleNamespace
         res = SimpleNamespace()
-        res.x = [5e-3, 5e-3, 100]
+        res.x = [5e-3*scale_covar, 5e-3*scale_covar, 50*scale_covar]
         if kw.get('rq', False):
             res.x = res.x + [2]
         covar = make_covar_independent(data, res.x, **kw)
@@ -490,7 +503,8 @@ def solve_independent(data, excludeself=False, predict_at=None,
     return xturb, yturb, res
 
 
-def solve_gradwavefront(data, excludeself=False, predict_at=None, **kw):
+def solve_gradwavefront(data, excludeself=False, predict_at=None,
+                        fix_covar=False, **kw):
     """Find turbulent contributions to measured fiber positions.
 
     Assumes that the turbulent contributions can be modeled as the
@@ -515,8 +529,16 @@ def solve_gradwavefront(data, excludeself=False, predict_at=None, **kw):
         raise ValueError('predict_at does not make sense in combination with '
                          'excludeself')
 
-    covar, res = solve_covar(data, lossfun=loss_gradwavefront,
-                             covarfun=make_covar_gradwavefront, **kw)
+    if not fix_covar:
+        covar, res = solve_covar(data, lossfun=loss_gradwavefront,
+                                 covarfun=make_covar_gradwavefront, **kw)
+    else:
+        from types import SimpleNamespace
+        res = SimpleNamespace()
+        res.x = [5e-3, 5e-3, 100]
+        if kw.get('rq', False):
+            res.x = res.x + [2]
+        covar = make_covar_gradwavefront(data, res.x, **kw)
 
     dvec = np.concatenate([data['dx'], data['dy']])
     if not excludeself:
