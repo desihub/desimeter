@@ -144,7 +144,7 @@ def correct_with_pol(x, y, x0, y0, win=50):
 def make_covar_gradwavefront_nonoise(x1, y1, x2, y2, param, rq=False, **kw):
     if rq:
         raise ValueError('gradwavefront does not support rq mode.')
-    sigma, aa, ll = param
+    _, aa, ll = param
     xdist = (x1[None, :] - x2[:, None])/ll
     ydist = (y1[None, :] - y2[:, None])/ll
     gauss = aa**2*np.exp(-(xdist**2+ydist**2)/2)
@@ -387,7 +387,7 @@ def correct_using_stationary(xs, ys, x0s, y0s, xc, yc,
     data['y'] = ys
     data['dx'] = xs-x0s
     data['dy'] = ys-y0s
-    xturb, yturb, res = solve_independent(
+    xturb, yturb, _ = solve_independent(
         data, nuse=500, excludeself=False,
         predict_at=(xc, yc), method='powell',
         fix_covar=True, scale_covar=scale_covar)
