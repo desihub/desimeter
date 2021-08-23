@@ -201,9 +201,9 @@ def loss_gradwavefront(data, param, rq=False):
 
 def make_covar_independent_nonoise(x1, y1, x2, y2, param, rq=False, **kw):
     if not rq:
-        sigma, aa, ll = param
+        _, aa, ll = param
     else:
-        sigma, aa, ll, alpha = param
+        _, aa, ll, alpha = param
         alpha = np.clip(alpha, 0.1, 1000)
     dist2 = ((x1[None, :] - x2[:, None])**2 +
              (y1[None, :] - y2[:, None])**2)/ll**2
@@ -603,7 +603,7 @@ def turbulence_gallery(fn, expectfn):
     for i, fn0 in enumerate(fn):
         measure = astropy.io.ascii.read(fn0)
         data = make_data(expect, measure)
-        covar, res = solve_covar(data, lossfun=loss_independent,
+        covar, _ = solve_covar(data, lossfun=loss_independent,
                                  covarfun=make_covar_independent)
         uu, ss, _ = np.linalg.svd(covar)
         xvec = np.dot(uu, np.random.randn(len(ss))*np.sqrt(ss))
