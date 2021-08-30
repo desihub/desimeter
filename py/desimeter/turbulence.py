@@ -378,7 +378,8 @@ def correct_using_stationary(xs, ys, x0s, y0s, xc, yc,
             (pix / micron for FVC instead of FP, e.g.)
 
     Returns:
-        xn, yn: turbulence-corrected positions of fibers
+        xturb, yturb: derived turbulent offsets.  Turbulence corrected
+        positions are given by xc-xturb, yc-yturb.
     """
     data = np.zeros(len(xs), dtype=[
         ('x', 'f8'), ('y', 'f8'),
@@ -391,7 +392,7 @@ def correct_using_stationary(xs, ys, x0s, y0s, xc, yc,
         data, nuse=500, excludeself=False,
         predict_at=(xc, yc), method='powell',
         fix_covar=True, scale_covar=scale_covar)
-    return xc-xturb, yc-yturb
+    return xturb, yturb
 
 
 def correct(x, y, x0, y0, dx=None, dy=None):
