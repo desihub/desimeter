@@ -1,0 +1,71 @@
+# generate by /global/common/software/desi/cori/desiconda/20200801-1.4.0-spec/code/desimeter/0.6.7/bin/load_petal_alignments_from_db on 2021-09-17, snapshot version = 119
+0:
+  Tx: 0.1224
+  Ty: 0.0528
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: -1.885369086
+1:
+  Tx: 0.0105
+  Ty: 0.0005
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: -1.256580211
+2:
+  Tx: -0.0265
+  Ty: 0.0415
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: -0.628353415
+3:
+  Tx: -0.048
+  Ty: -0.0299
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: 0.000150777
+4:
+  Tx: -0.0196
+  Ty: 0.0459
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: 0.628496576
+5:
+  Tx: -0.0794
+  Ty: -0.0113
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: 1.256632524
+6:
+  Tx: -0.0412
+  Ty: 0.003
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: 1.885139556
+7:
+  Tx: 0.0904
+  Ty: -0.102
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: 2.51321797
+8:
+  Tx: 0.0056
+  Ty: -0.0267
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: 3.14148172
+9:
+  Tx: -0.014
+  Ty: 0.0264
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: 3.769961549

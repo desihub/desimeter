@@ -1,0 +1,71 @@
+# generate by ./load_petal_alignments_from_db.py on 2019-12-18, snapshot version = 90
+0:
+  Tx: 0.1175
+  Ty: 0.0397
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: -1.885372167
+1:
+  Tx: 0.0158
+  Ty: -0.0133
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: -1.256503195
+2:
+  Tx: -0.0125
+  Ty: 0.0111
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: -0.628304778
+3:
+  Tx: -0.0133
+  Ty: -0.0258
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: 0.000211098
+4:
+  Tx: -0.0104
+  Ty: 0.0815
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: 0.628135812
+5:
+  Tx: -0.0643
+  Ty: 0.012
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: 1.256690922
+6:
+  Tx: 0.0106
+  Ty: 0.0638
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: 1.885428
+7:
+  Tx: 0.0476
+  Ty: -0.1252
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: 2.513129889
+8:
+  Tx: -0.057
+  Ty: -0.035
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: 3.141578953
+9:
+  Tx: -0.034
+  Ty: -0.0089
+  Tz: 0.0
+  alpha: 0.0
+  beta: 0.0
+  gamma: 3.769783444
