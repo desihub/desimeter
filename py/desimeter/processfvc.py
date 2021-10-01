@@ -129,12 +129,12 @@ def fvc_proc(args, log):
 
 
     if args.make_directory:
-        directory, fn = os.path.split(args.outfile)
+        directory, _ = os.path.split(args.outfile)
         if directory != '':
             if not os.path.exists(directory):
                 os.makedirs(directory)
         if args.output_transform is not None:
-            directory, fn = os.path.split(args.outfile)
+            directory, _ = os.path.split(args.outfile)
             if directory != '':
                 if not os.path.exists(directory):
                     os.makedirs(directory)
