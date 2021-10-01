@@ -62,7 +62,7 @@ def get_outfilename(path_to_fits):
     return out
 
 
-def fvc_proc(args, log):
+def preproc(args):
 
     if not args.outfile.endswith(".csv") :
         print("sorry output filename has to end with .csv")
@@ -71,8 +71,6 @@ def fvc_proc(args, log):
     if args.threshold is not None :
         print("sorry, please use option --min-counts-per-pixel instead of ambiguous and now deprecated --threshold.")
         return 1
-
-    spots_list=[]
 
     if args.no_bias :
         bias = None
@@ -83,10 +81,27 @@ def fvc_proc(args, log):
             bias_filename = fvc_bias_filename()
         if os.path.isfile(bias_filename) :
             print("Will subtract bias. Reading {}".format(bias_filename))
-            bias = fitsio.read(bias_filename).astype(float)
+            args.bias = fitsio.read(bias_filename).astype(float)
         else :
-            bias = None
+            args.bias = None
 
+    if args.make_directory:
+        directory, _ = os.path.split(args.outfile)
+        if directory != '':
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+        if args.output_transform is not None:
+            directory, _ = os.path.split(args.outfile)
+            if directory != '':
+                if not os.path.exists(directory):
+                    os.makedirs(directory)
+
+    return 0
+
+
+def get_spots_list(args, log):
+
+    spots_list=[]
     filename = args.infile
     extnames = None
     if filename.find(".fits")>0 :
@@ -115,29 +130,28 @@ def fvc_proc(args, log):
             for extname in extnames :
                 log.info('reading image in extension {}'.format(extname))
                 image = fx[extname].read().astype(float)
-                if bias is not None :
-                    image -= bias
+                if args.bias is not None :
+                    image -= args.bias
                 spots_list.append( detectspots(image,min_counts_per_pixel=args.min_counts_per_pixel,min_counts_per_spot=args.min_counts,nsig=7,psf_sigma=args.fvc_psf_sigma) )
-
 
     elif filename.find(".csv")>0 :
         log.info("read CSV spots table")
         spots_list.append( Table.read(filename,format="csv") )
     else :
         log.info("sorry, I don't know what to do with input file {} because not .fits nor .csv".format(filename))
-        return 12
+        return None
+    return spots_list
 
 
-    if args.make_directory:
-        directory, _ = os.path.split(args.outfile)
-        if directory != '':
-            if not os.path.exists(directory):
-                os.makedirs(directory)
-        if args.output_transform is not None:
-            directory, _ = os.path.split(args.outfile)
-            if directory != '':
-                if not os.path.exists(directory):
-                    os.makedirs(directory)
+def fvc_proc(args, log):
+
+    errcode = preproc(args)
+    if errcode:
+        return errcode
+
+    spots_list = get_spots_list(args, log)
+    if spots_list is None:
+        return 13
 
     for seqid,spots in enumerate(spots_list) :
 
