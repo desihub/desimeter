@@ -5,7 +5,7 @@ desimeter change Log
 0.6.8 (unreleased)
 ------------------
 
-* No changes yet.
+* Refactor desi_fvc_proc and add option to run directly w/o subprocess [PR #189].
 
 0.6.7 (2021-05-28)
 ------------------
