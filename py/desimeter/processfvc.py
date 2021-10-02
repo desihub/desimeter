@@ -22,6 +22,10 @@ from desimeter.turbulence import correct,correct_with_pol
 def process_fvc(filename, overwrite=False, use_subprocess=True):
     """Process an FVC image.
 
+    The default use_subprocess=True maintains backwards compatibility but
+    new code should generally use use_subprocess=False to avoid the overhead
+    of a subprocess call and for more predictable results.
+
     Parameters
     ----------
     filename: str
