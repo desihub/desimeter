@@ -1,3 +1,5 @@
+"""FVC image processing
+"""
 import os
 import sys
 import subprocess
@@ -18,15 +20,27 @@ from desimeter.spotmatch import spotmatch
 from desimeter.turbulence import correct,correct_with_pol
 
 def process_fvc(filename, overwrite=False, use_subprocess=True):
-    '''Calls desi_fvc_proc on the input file.
+    """Process an FVC image.
 
-    INPUTS:  filename ... fits file (can also be csv, in which case desi_fvc_proc is skipped)
-             overwrite ... if a processed table of the same basename already exists in /tmp,
-                           reprocess and overwrite it with new table. (default behavior is
-                           to use the already-existing table)
+    Parameters
+    ----------
+    filename: str
+        Name of FITS file containing the FVC image to analyze, or else a CSV file of
+        spot coordinates to read and return directly.
+    overwrite: bool
+        Read an ouput file from a previous call to this function when False.
+        Otherwise, always generate the output to return.
+    use_subprocess: bool
+        Calls desi_fvc_proc in a subprocess when True.  Otherwise, process the FVC image
+        in the current context. A subprocess will generally have a different python
+        environment, especially if the current environment is managed by conda or
+        a jupyter kernel.
 
-    OUTPUT:  astropy table
-    '''
+    Returns
+    -------
+    astropy.table.Table
+        A table of the found spot coordinates.
+    """
     if filename.find(".csv")>0 :
         # already a coordinates table
         return Table.read(filename)
@@ -63,7 +77,8 @@ def get_outfilename(path_to_fits):
 
 
 def preproc(args):
-
+    """Preprocess arguments.
+    """
     if not args.outfile.endswith(".csv") :
         print("sorry output filename has to end with .csv")
         return 12
@@ -184,7 +199,8 @@ def get_expected_pos(args, log):
 
 
 def fvc_proc(args, log):
-
+    """Process an FVC image with options specified by args and output to log.
+    """
     errcode = preproc(args)
     if errcode:
         return errcode
@@ -371,6 +387,8 @@ def fvc_proc(args, log):
 
 
 def get_parser():
+    """Define FVC processing options and defaults.
+    """
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                         description="""FVC image processing""")
     parser.add_argument('-i','--infile', type = str, default = None, required = True,
