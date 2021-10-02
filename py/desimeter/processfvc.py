@@ -73,7 +73,7 @@ def preproc(args):
         return 1
 
     if args.no_bias :
-        bias = None
+        args.bias = None
     else :
         if args.bias :
             bias_filename = args.bias
@@ -139,8 +139,48 @@ def get_spots_list(args, log):
         spots_list.append( Table.read(filename,format="csv") )
     else :
         log.info("sorry, I don't know what to do with input file {} because not .fits nor .csv".format(filename))
-        return None
-    return spots_list
+        return None, None
+
+    return spots_list, extname
+
+
+def get_expected_pos(args, log):
+    if args.expected_positions is not None :
+        log.info("reading expected positions in {}".format(args.expected_positions))
+        expected_pos = Table.read(args.expected_positions) # auto-magically guess format
+
+        if (not "X_FP" in expected_pos.keys()) and "X_FP_EXP" in expected_pos.keys() :
+            log.warning("Rename X_FP_EXP,Y_FP_EXP -> X_FP,Y_FP")
+            expected_pos.rename_column("X_FP_EXP","X_FP")
+            expected_pos.rename_column("Y_FP_EXP","Y_FP")
+
+
+        if not "X_FP" in expected_pos.keys() :
+            if "EXP_Q_0" in  expected_pos.keys() :
+                log.info("EXP_Q_0,EXP_S_0 -> X_FP,Y_FP")
+                x,y = qs2xy(q=expected_pos["EXP_Q_0"],s=expected_pos["EXP_S_0"])
+                expected_pos["X_FP"] = x
+                expected_pos["Y_FP"] = y
+                bad_expected_pos = (np.isnan(x)|np.isnan(y))
+                if np.sum(bad_expected_pos) > 0 :
+                    expected_pos["X_FP"][bad_expected_pos]=-99999.
+                    expected_pos["Y_FP"][bad_expected_pos]=-99999.
+            else :
+                log.error("No EXP_Q_0 nor X_FP in expected positions file {}".format(args.expected_positions))
+    else :
+        log.info("since no input expected positions, use metrology to match the fibers to the positioner centers")
+        expected_pos = load_metrology()
+
+    if not "LOCATION" in expected_pos.keys() :
+        # add useful location keyword
+        expected_pos["LOCATION"] = np.array(expected_pos["PETAL_LOC"])*1000+np.array(expected_pos["DEVICE_LOC"])
+
+    if "PINHOLE_ID" in expected_pos.dtype.names :
+        # exclude pinhole because here we want to match fibers
+        ii = np.where(expected_pos["PINHOLE_ID"]==0)[0]
+        expected_pos = expected_pos[:][ii]
+
+    return expected_pos
 
 
 def fvc_proc(args, log):
@@ -149,7 +189,7 @@ def fvc_proc(args, log):
     if errcode:
         return errcode
 
-    spots_list = get_spots_list(args, log)
+    spots_list, extnames = get_spots_list(args, log)
     if spots_list is None:
         return 13
 
@@ -211,41 +251,7 @@ def fvc_proc(args, log):
 
         tx.fit(spots, metrology=metrology, update_spots=True, zbfit=(args.zbfit), fixed_scale=args.fixed_scale, fixed_rotation=args.fixed_rotation)
 
-        if args.expected_positions is not None :
-            log.info("reading expected positions in {}".format(args.expected_positions))
-            expected_pos = Table.read(args.expected_positions) # auto-magically guess format
-
-            if (not "X_FP" in expected_pos.keys()) and "X_FP_EXP" in expected_pos.keys() :
-                log.warning("Rename X_FP_EXP,Y_FP_EXP -> X_FP,Y_FP")
-                expected_pos.rename_column("X_FP_EXP","X_FP")
-                expected_pos.rename_column("Y_FP_EXP","Y_FP")
-
-
-            if not "X_FP" in expected_pos.keys() :
-                if "EXP_Q_0" in  expected_pos.keys() :
-                    log.info("EXP_Q_0,EXP_S_0 -> X_FP,Y_FP")
-                    x,y = qs2xy(q=expected_pos["EXP_Q_0"],s=expected_pos["EXP_S_0"])
-                    expected_pos["X_FP"] = x
-                    expected_pos["Y_FP"] = y
-                    bad_expected_pos = (np.isnan(x)|np.isnan(y))
-                    if np.sum(bad_expected_pos) > 0 :
-                        expected_pos["X_FP"][bad_expected_pos]=-99999.
-                        expected_pos["Y_FP"][bad_expected_pos]=-99999.
-                else :
-                    log.error("No EXP_Q_0 nor X_FP in expected positions file {}".format(args.expected_positions))
-        else :
-            log.info("since no input expected positions, use metrology to match the fibers to the positioner centers")
-            expected_pos = load_metrology()
-
-        if not "LOCATION" in expected_pos.keys() :
-            # add useful location keyword
-            expected_pos["LOCATION"] = np.array(expected_pos["PETAL_LOC"])*1000+np.array(expected_pos["DEVICE_LOC"])
-
-        if "PINHOLE_ID" in expected_pos.dtype.names :
-            # exclude pinhole because here we want to match fibers
-            ii = np.where(expected_pos["PINHOLE_ID"]==0)[0]
-            expected_pos = expected_pos[:][ii]
-
+        expected_pos = get_expected_pos(args, log)
 
         # select spots that are not already matched
         selection  = (spots["LOCATION"]==-1)
