@@ -390,6 +390,9 @@ def correct_using_stationary(xs, ys, x0s, y0s, xc, yc,
     data['y'] = ys
     data['dx'] = xs-x0s
     data['dy'] = ys-y0s
+    m = (np.isfinite(data['x']) & np.isfinite(data['y']) &
+         np.isfinite(data['dx']) & np.isfinite(data['dy']))
+    data = data[m]
     if clip_resid > 0:
         # here using only stationary positioners
         xturb, yturb, _ = solve_independent(
