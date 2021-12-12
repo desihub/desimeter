@@ -360,7 +360,7 @@ def solve_files(expectedfn, measuredfn, mode='independent', **kw):
 
 
 def correct_using_stationary(xs, ys, x0s, y0s, xc, yc,
-                             scale_covar=1):
+                             scale_covar=1, clip_resid=0.01):
     """Remove correlated turbulent signals from measured locations of fibers,
     using subset of stationary fibers.
 
@@ -376,6 +376,8 @@ def correct_using_stationary(xs, ys, x0s, y0s, xc, yc,
         yc : array_like(n), measured y position of fibers to be corrected
         scale_covar : bool, amount to scale covariance by
             (pix / micron for FVC instead of FP, e.g.)
+        clip_resid: float, exclude positioners with residuals larger than
+            X mm, default 0.01 mm = 10 microns.
 
     Returns:
         xturb, yturb: derived turbulent offsets.  Turbulence corrected
@@ -388,6 +390,22 @@ def correct_using_stationary(xs, ys, x0s, y0s, xc, yc,
     data['y'] = ys
     data['dx'] = xs-x0s
     data['dy'] = ys-y0s
+    m = (np.isfinite(data['x']) & np.isfinite(data['y']) &
+         np.isfinite(data['dx']) & np.isfinite(data['dy']))
+    data = data[m]
+    if clip_resid > 0:
+        # here using only stationary positioners
+        xturb, yturb, _ = solve_independent(
+            data, nuse=500, excludeself=False,
+            method='powell', fix_covar=True,
+            scale_covar=scale_covar)
+        offset = np.hypot(data['dx'] - xturb, data['dy'] - yturb)
+        m = offset < 0.01  # 10 microns
+        if np.sum(~m) > 0:
+            log.info('Excluding %d stationary positioners with turbulence '
+                     'corrected offsets larger than 10 microns.' % np.sum(~m))
+        data = data[m]
+
     xturb, yturb, _ = solve_independent(
         data, nuse=500, excludeself=False,
         predict_at=(xc, yc), method='powell',
