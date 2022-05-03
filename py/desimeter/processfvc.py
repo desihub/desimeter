@@ -160,7 +160,7 @@ def get_spots_list(args, log):
         log.info("sorry, I don't know what to do with input file {} because not .fits nor .csv".format(filename))
         return None, None
 
-    return spots_list, extname
+    return spots_list, extnames
 
 
 def get_expected_pos(args, log):
