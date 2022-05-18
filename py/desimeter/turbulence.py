@@ -4,6 +4,7 @@ from scipy import optimize
 import scipy.linalg
 from desimeter.match_positioners import match
 import scipy.spatial
+from astropy.stats import mad_std
 
 
 # accommodate both use in online system and in datasystems environment
@@ -360,7 +361,8 @@ def solve_files(expectedfn, measuredfn, mode='independent', **kw):
 
 
 def correct_using_stationary(xs, ys, x0s, y0s, xc, yc,
-                             scale_covar=1, clip_resid=0.01):
+                             scale_covar=1, clip_resid=0.01,
+                             return_good=False):
     """Remove correlated turbulent signals from measured locations of fibers,
     using subset of stationary fibers.
 
@@ -378,6 +380,8 @@ def correct_using_stationary(xs, ys, x0s, y0s, xc, yc,
             (pix / micron for FVC instead of FP, e.g.)
         clip_resid: float, exclude positioners with residuals larger than
             X mm, default 0.01 mm = 10 microns.
+        return_good: bool, additionally return mask indicating good fibers
+            that were used.
 
     Returns:
         xturb, yturb: derived turbulent offsets.  Turbulence corrected
@@ -390,27 +394,40 @@ def correct_using_stationary(xs, ys, x0s, y0s, xc, yc,
     data['y'] = ys
     data['dx'] = xs-x0s
     data['dy'] = ys-y0s
-    m = (np.isfinite(data['x']) & np.isfinite(data['y']) &
-         np.isfinite(data['dx']) & np.isfinite(data['dy']))
-    data = data[m]
+    mask = (np.isfinite(data['x']) & np.isfinite(data['y']) &
+            np.isfinite(data['dx']) & np.isfinite(data['dy']))
+    data = data[mask]
     if clip_resid > 0:
+        tmask = mask.copy()
+        for c in (data['dx'], data['dy']):
+            med = np.median(c)
+            sd = mad_std(c)
+            tmask &= (c > med - 5*sd) & (c < med + 5*sd)
+        if np.any(tmask):
+            data = data[tmask]
+            mask = mask & tmask
         # here using only stationary positioners
         xturb, yturb, _ = solve_independent(
             data, nuse=500, excludeself=False,
             method='powell', fix_covar=True,
             scale_covar=scale_covar)
         offset = np.hypot(data['dx'] - xturb, data['dy'] - yturb)
-        m = offset < 0.01  # 10 microns
-        if np.sum(~m) > 0:
+        tmask = offset < 0.01  # 10 microns
+        data = data[tmask]
+        mask[mask] &= tmask
+        if np.sum(~mask) > 0:
             log.info('Excluding %d stationary positioners with turbulence '
-                     'corrected offsets larger than 10 microns.' % np.sum(~m))
-        data = data[m]
+                     'corrected offsets larger than 10 microns or 4 sigma '
+                     'away from rest.' % np.sum(~mask))
 
     xturb, yturb, _ = solve_independent(
         data, nuse=500, excludeself=False,
         predict_at=(xc, yc), method='powell',
         fix_covar=True, scale_covar=scale_covar)
-    return xturb, yturb
+    out = (xturb, yturb)
+    if return_good:
+        out = out + (mask,)
+    return out
 
 
 def correct(x, y, x0, y0, dx=None, dy=None):
