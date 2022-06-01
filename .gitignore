@@ -29,6 +29,7 @@ distribute-*.tar.gz
 # Other
 .*.swp
 *~
+.ipynb_checkpoints
 
 # Mac OSX
 .DS_Store
