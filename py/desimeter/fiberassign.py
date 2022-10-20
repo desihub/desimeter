@@ -22,6 +22,11 @@ from desimeter.transform.tan2fp.raytracefit import tan2fp,fp2tan
 from desimeter.transform.pos2ptl import ptl2flat,flat2ptl
 from desimeter.transform.dm2pm import DM2PM
 from desimeter.trig import sincosd
+import desimeter.log
+
+
+log = desimeter.log.get_logger()
+
 
 def _measure_fieldrot_deg(ha,dec,tel_ha,tel_dec,xfp_mm,yfp_mm) :
 
@@ -112,7 +117,7 @@ def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_field
 
         xtan,ytan = radec2tan(np.array([tile_ra]),np.array([tile_dec]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
         xfp_0,yfp_0   = tan2fp(xtan,ytan,adc1,adc2) #mm
-        #print("Temp tile center in FP coordinates = {},{} mm".format(xfp_0[0],yfp_0[0]))
+        #log.info("Temp tile center in FP coordinates = {},{} mm".format(xfp_0[0],yfp_0[0]))
 
         # numeric derivative
         eps = 1./3600. #
@@ -139,7 +144,7 @@ def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_field
     # verify
     xtan,ytan = radec2tan(np.array([tile_ra]),np.array([tile_dec]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
     xfp_0,yfp_0   = tan2fp(xtan,ytan,adc1,adc2) #mm
-    print("Tile center in FP coordinates = {},{} mm".format(xfp_0[0],yfp_0[0]))
+    log.info("Tile center in FP coordinates = {},{} mm".format(xfp_0[0],yfp_0[0]))
 
     # now compute coordinates of all targets
     xtan,ytan = radec2tan(ra,dec,tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
@@ -161,7 +166,7 @@ def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_field
 
     # verify
     realised_fieldrot = _measure_fieldrot_deg(-ra,dec,-tile_ra,tile_dec,xfp,yfp)
-    print("Requested fieldrot={:3.1f} arcsec delta={:3.1f} arcsec".format(tile_fieldrot*3600.,(tile_fieldrot-realised_fieldrot)*3600.))
+    log.info("Requested fieldrot={:3.1f} arcsec delta={:3.1f} arcsec".format(tile_fieldrot*3600.,(tile_fieldrot-realised_fieldrot)*3600.))
 
     return xfp,yfp
 
@@ -202,7 +207,7 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
 
         xtan,ytan = radec2tan(np.array([tile_ra]),np.array([tile_dec]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
         xfp_0,yfp_0   = tan2fp(xtan,ytan,adc1,adc2) #mm
-        #print("Temp tile center in FP coordinates = {},{} mm".format(xfp_0[0],yfp_0[0]))
+        #log.info("Temp tile center in FP coordinates = {},{} mm".format(xfp_0[0],yfp_0[0]))
 
         # numeric derivative
         eps = 1./3600. #
@@ -249,7 +254,7 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
 
     # verify
     realised_fieldrot = _measure_fieldrot_deg(-ra,dec,-tile_ra,tile_dec,xfp,yfp)
-    print("Requested fieldrot={:3.1f} arcsec delta={:3.1f} arcsec".format(tile_fieldrot*3600.,(tile_fieldrot-realised_fieldrot)*3600.))
+    log.info("Requested fieldrot={:3.1f} arcsec delta={:3.1f} arcsec".format(tile_fieldrot*3600.,(tile_fieldrot-realised_fieldrot)*3600.))
 
     return ra,dec
 
