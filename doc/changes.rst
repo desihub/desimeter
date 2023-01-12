@@ -5,7 +5,12 @@ desimeter change Log
 0.6.8 (unreleased)
 ------------------
 
-* Refactor desi_fvc_proc and add option to run directly w/o subprocess [PR #189].
+* Add turbulence correction mode using stationary positioners [PR #186, #187].
+* Refactor desi_fvc_proc and add option to run directly w/o subprocess
+  [PR #189, #192].
+* Clip outlying stationary positioners from turbulence fits at 10 microns
+  [PR #190, #193].
+* Change print to log [PR #195]
 
 0.6.7 (2021-05-28)
 ------------------
