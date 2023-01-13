@@ -2,7 +2,12 @@
 desimeter change Log
 ====================
 
-0.6.8 (unreleased)
+0.7.1 (unreleased)
+------------------
+
+* No changes yet.
+
+0.7.0 (2023-01-12)
 ------------------
 
 * Add turbulence correction mode using stationary positioners [PR #186, #187].
