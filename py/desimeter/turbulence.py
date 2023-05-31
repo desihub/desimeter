@@ -3,8 +3,19 @@ import astropy.io.ascii
 from scipy import optimize
 import scipy.linalg
 from desimeter.match_positioners import match
-from desimeter.log import get_logger
 import scipy.spatial
+from astropy.stats import mad_std
+
+
+# accommodate both use in online system and in datasystems environment
+# use online system logging when available
+try:
+    import DOSLib.logger as log
+    log.warning = log.warn
+except Exception:
+    from desimeter.log import get_logger
+    log = get_logger()
+
 
 # =================================================================
 # from Sergey : correction using local polynomial fit
@@ -130,7 +141,25 @@ def correct_with_pol(x, y, x0, y0, win=50):
 # From Eddie : correction using gaussian processes
 # ===============================================================
 
-def make_covar_gradwavefront(data, param, rq=False):
+
+def make_covar_gradwavefront_nonoise(x1, y1, x2, y2, param, rq=False, **kw):
+    if rq:
+        raise ValueError('gradwavefront does not support rq mode.')
+    _, aa, ll = param
+    xdist = (x1[None, :] - x2[:, None])/ll
+    ydist = (y1[None, :] - y2[:, None])/ll
+    gauss = aa**2*np.exp(-(xdist**2+ydist**2)/2)
+    n1 = len(x1)
+    n2 = len(x2)
+    covar = np.empty((n2*2, n1*2), dtype='f4')
+    covar[:n2, :n1] = (1-xdist*xdist)*gauss
+    covar[n2:, :n1] = -xdist*ydist*gauss
+    covar[:n2, n1:] = -xdist*ydist*gauss
+    covar[n2:, n1:] = (1-ydist*ydist)*gauss
+    return covar
+
+
+def make_covar_gradwavefront(data, param, rq=False, **kw):
     """Make derivative-of-Gaussian covariance matrix for data given param.
 
     Args:
@@ -141,17 +170,10 @@ def make_covar_gradwavefront(data, param, rq=False):
     Returns:
         covar : covariance matrix (n*len(data)*2, n*len(data)*2) for [dx, dy]
     """
-    sigma, aa, ll = param
-    xdist = (data['x'][None, :] - data['x'][:, None])/ll
-    ydist = (data['y'][None, :] - data['y'][:, None])/ll
-    gauss = aa**2*np.exp(-(xdist**2+ydist**2)/2)
-    nn = len(data)
-    covar = np.empty((nn*2, nn*2), dtype='f4')
-    covar[:nn, :nn] = (1-xdist*xdist)*gauss
-    covar[nn:, :nn] = -xdist*ydist*gauss
-    covar[:nn, nn:] = -xdist*ydist*gauss
-    covar[nn:, nn:] = (1-ydist*ydist)*gauss
-    covar += np.diag(np.full(2*nn, sigma**2))
+    covar = make_covar_gradwavefront_nonoise(
+        data['x'], data['y'], data['x'], data['y'], param, rq=rq)
+    sigma = param[0]
+    covar += np.diag(np.full(covar.shape[0], sigma**2))
     return covar
 
 
@@ -178,7 +200,22 @@ def loss_gradwavefront(data, param, rq=False):
     return 0.5*chi2
 
 
-def make_covar_independent(data, param, rq=False):
+def make_covar_independent_nonoise(x1, y1, x2, y2, param, rq=False, **kw):
+    if not rq:
+        _, aa, ll = param
+    else:
+        _, aa, ll, alpha = param
+        alpha = np.clip(alpha, 0.1, 1000)
+    dist2 = ((x1[None, :] - x2[:, None])**2 +
+             (y1[None, :] - y2[:, None])**2)/ll**2
+    if not rq:
+        covar = aa**2*np.exp(-dist2/2)
+    else:
+        covar = aa**2*(1+dist2/(2*alpha))**(-alpha)
+    return covar
+
+
+def make_covar_independent(data, param, rq=False, **kw):
     """Gaussian covariance matrix for data given param.
 
     Args:
@@ -190,19 +227,9 @@ def make_covar_independent(data, param, rq=False):
     Returns:
         covar : covariance matrix for dx (equivalently, dy)
     """
-    # might be good to have more large-scale coherence
-    # "rational quadratic" seems like the next obvious choice.
-    if not rq:
-        sigma, aa, ll = param
-    else:
-        sigma, aa, ll, alpha = param
-        alpha = np.clip(alpha, 0.1, 1000)
-    dist2 = ((data['x'][None, :] - data['x'][:, None])**2 +
-             (data['y'][None, :] - data['y'][:, None])**2)/ll**2
-    if not rq:
-        covar = aa**2*np.exp(-dist2/2)
-    else:
-        covar = aa**2*(1+dist2/(2*alpha))**(-alpha)
+    covar = make_covar_independent_nonoise(
+        data['x'], data['y'], data['x'], data['y'], param, rq=rq)
+    sigma = param[0]
     covar += np.eye(len(data))*sigma**2
     return covar
 
@@ -300,7 +327,7 @@ def solve_files(expectedfn, measuredfn, mode='independent', **kw):
     Args:
         expectedfn : file name containing expected locations of positioners
         measuredfn : file name containing measured locations of positioners
-        mode : 'independent' or 'gradwavefront
+        mode : 'independent' or 'gradwavefront'
             models turbulent offset correlations as either a Gaussian process
             with a Gaussian correlation function or a derivative-of-Gaussian
             correlation function (appropriate if the turbulent contributions
@@ -333,12 +360,82 @@ def solve_files(expectedfn, measuredfn, mode='independent', **kw):
     return out, res
 
 
+def correct_using_stationary(xs, ys, x0s, y0s, xc, yc,
+                             scale_covar=1, clip_resid=0.01,
+                             return_good=False):
+    """Remove correlated turbulent signals from measured locations of fibers,
+    using subset of stationary fibers.
+
+    See `correct` for more documentation.  This function extends `correct`
+    to use a subset of the fibers to correct all the fibers.
+
+    Args:
+        xs : array_like(n), measured x position of stationary fibers
+        ys : array_like(n), measured y position of stationary fibers
+        x0s : array_like(n), expected x position of stationary fibers
+        y0s : array_like(n), expected y position of stationary fibers
+        xc : array_like(n), measured x position of fibers to be corrected
+        yc : array_like(n), measured y position of fibers to be corrected
+        scale_covar : bool, amount to scale covariance by
+            (pix / micron for FVC instead of FP, e.g.)
+        clip_resid: float, exclude positioners with residuals larger than
+            X mm, default 0.01 mm = 10 microns.
+        return_good: bool, additionally return mask indicating good fibers
+            that were used.
+
+    Returns:
+        xturb, yturb: derived turbulent offsets.  Turbulence corrected
+        positions are given by xc-xturb, yc-yturb.
+    """
+    data = np.zeros(len(xs), dtype=[
+        ('x', 'f8'), ('y', 'f8'),
+        ('dx', 'f8'), ('dy', 'f8')])
+    data['x'] = xs
+    data['y'] = ys
+    data['dx'] = xs-x0s
+    data['dy'] = ys-y0s
+    mask = (np.isfinite(data['x']) & np.isfinite(data['y']) &
+            np.isfinite(data['dx']) & np.isfinite(data['dy']))
+    data = data[mask]
+    if clip_resid > 0:
+        tmask = mask.copy()
+        for c in (data['dx'], data['dy']):
+            med = np.median(c)
+            sd = mad_std(c)
+            tmask &= (c > med - 5*sd) & (c < med + 5*sd)
+        if np.any(tmask):
+            data = data[tmask]
+            mask = mask & tmask
+        # here using only stationary positioners
+        xturb, yturb, _ = solve_independent(
+            data, nuse=500, excludeself=False,
+            method='powell', fix_covar=True,
+            scale_covar=scale_covar)
+        offset = np.hypot(data['dx'] - xturb, data['dy'] - yturb)
+        tmask = offset < 0.01  # 10 microns
+        data = data[tmask]
+        mask[mask] &= tmask
+        if np.sum(~mask) > 0:
+            log.info('Excluding %d stationary positioners with turbulence '
+                     'corrected offsets larger than 10 microns or 4 sigma '
+                     'away from rest.' % np.sum(~mask))
+
+    xturb, yturb, _ = solve_independent(
+        data, nuse=500, excludeself=False,
+        predict_at=(xc, yc), method='powell',
+        fix_covar=True, scale_covar=scale_covar)
+    out = (xturb, yturb)
+    if return_good:
+        out = out + (mask,)
+    return out
+
+
 def correct(x, y, x0, y0, dx=None, dy=None):
     """Remove correlated turbulent signals from measured locations of fibers.
 
     Residuals x-x0, y-y0 are modeled as a Gaussian process.  The
-    covariance of this Gaussian process is fit as with a covariance
-    matrix with the following components:
+    covariance of this Gaussian process is fit as the sum of the
+    following components:
     - a diagonal measurement error and positioner movement error term
     - a spatially correlated turbulent term
 
@@ -363,7 +460,6 @@ def correct(x, y, x0, y0, dx=None, dy=None):
         y : array_like(n), turbulence-corrected y positions of fibers
     """
     if (dx is not None) or (dy is not None):
-        log = get_logger()
         log.warning('Uncertainties in x & y are currently ignored.')
     data = np.zeros(len(x), dtype=[
         ('x', 'f8'), ('y', 'f8'),
@@ -376,7 +472,8 @@ def correct(x, y, x0, y0, dx=None, dy=None):
     return x-xturb, y-yturb
 
 
-def solve_independent(data, excludeself=False, **kw):
+def solve_independent(data, excludeself=False, predict_at=None,
+                      fix_covar=False, scale_covar=1, **kw):
     """Find turbulent contributions to measured fiber positions.
 
     Assumes that the covariance matrix should be the same for x & y,
@@ -388,6 +485,8 @@ def solve_independent(data, excludeself=False, **kw):
         excludeself : bool
             do not use this fiber when computing the turbulence
             affecting this fiber.
+        predict_at : tuple(array_like, array_like)
+            x & y coordinates of locations at which to predict turbulence
         **kw : additional keywords passed to solve_covar
 
     Returns:
@@ -396,15 +495,42 @@ def solve_independent(data, excludeself=False, **kw):
         res : output from scipy.optimize.minimize describing best fit
             covariance matrix
     """
-    covar, res = solve_covar(data, lossfun=loss_independent,
-                             covarfun=make_covar_independent, **kw)
+    if not fix_covar:
+        covar, res = solve_covar(data, lossfun=loss_independent,
+                                 covarfun=make_covar_independent, **kw)
+    else:
+        from types import SimpleNamespace
+        res = SimpleNamespace()
+        res.x = [5e-3*scale_covar, 5e-3*scale_covar, 50*scale_covar]
+        if kw.get('rq', False):
+            res.x = res.x + [2]
+        covar = make_covar_independent(data, res.x, **kw)
 
-    cninv = np.eye(len(data))*res.x[0]**(-2)
+    if predict_at is not None and excludeself:
+        raise ValueError('predict_at does not make sense in combination with '
+                         'excludeself')
+
     if not excludeself:
-        cpcninv = np.dot(covar, cninv)
-        aa = cpcninv+np.eye(len(data))
-        xturb = np.linalg.solve(aa, np.dot(cpcninv, data['dx']))
-        yturb = np.linalg.solve(aa, np.dot(cpcninv, data['dy']))
+        if predict_at:
+            # K(X*, X)(K(X, X) + C_n)^-1 y
+            # Rasmussen & Williams algorithm 2.1
+            chol, low = scipy.linalg.cho_factor(covar, check_finite=False,
+                                                overwrite_a=True)
+            covarpred = make_covar_independent_nonoise(
+                data['x'], data['y'], predict_at[0], predict_at[1],
+                res.x, **kw)
+            alphax = scipy.linalg.cho_solve((chol, low), data['dx'])
+            alphay = scipy.linalg.cho_solve((chol, low), data['dy'])
+            xturb = np.dot(covarpred, alphax)
+            yturb = np.dot(covarpred, alphay)
+        else:
+            # covar includes measurement uncertainties; separate that part out.
+            cninv = np.eye(len(data))*res.x[0]**(-2)
+            covar -= np.eye(len(data))*res.x[0]**2
+            cpcninv = np.dot(covar, cninv)
+            aa = cpcninv+np.eye(len(data))
+            xturb = np.linalg.solve(aa, np.dot(cpcninv, data['dx']))
+            yturb = np.linalg.solve(aa, np.dot(cpcninv, data['dy']))
     else:
         # Rasmussen & Williams 5.12
         kinv = np.linalg.inv(covar)
@@ -413,7 +539,8 @@ def solve_independent(data, excludeself=False, **kw):
     return xturb, yturb, res
 
 
-def solve_gradwavefront(data, excludeself=False, **kw):
+def solve_gradwavefront(data, excludeself=False, predict_at=None,
+                        fix_covar=False, **kw):
     """Find turbulent contributions to measured fiber positions.
 
     Assumes that the turbulent contributions can be modeled as the
@@ -433,20 +560,48 @@ def solve_gradwavefront(data, excludeself=False, **kw):
         res : output from scipy.optimize.minimize describing best fit
             covariance matrix
     """
-    covar, res = solve_covar(data, lossfun=loss_gradwavefront,
-                             covarfun=make_covar_gradwavefront, **kw)
+
+    if predict_at is not None and excludeself:
+        raise ValueError('predict_at does not make sense in combination with '
+                         'excludeself')
+
+    if not fix_covar:
+        covar, res = solve_covar(data, lossfun=loss_gradwavefront,
+                                 covarfun=make_covar_gradwavefront, **kw)
+    else:
+        from types import SimpleNamespace
+        res = SimpleNamespace()
+        res.x = [5e-3, 5e-3, 100]
+        if kw.get('rq', False):
+            res.x = res.x + [2]
+        covar = make_covar_gradwavefront(data, res.x, **kw)
 
     dvec = np.concatenate([data['dx'], data['dy']])
-    cninv = np.eye(len(dvec))*res.x[0]**(-2)
     if not excludeself:
-        cpcninv = np.dot(covar, cninv)
-        aa = cpcninv+np.eye(len(dvec))
-        turb = np.linalg.solve(aa, np.dot(cpcninv, dvec))
+        if predict_at:
+            # K(X*, X)(K(X, X) + C_n)^-1 y
+            # Rasmussen & Williams algorithm 2.1
+            chol, low = scipy.linalg.cho_factor(covar, check_finite=False,
+                                                overwrite_a=True)
+            covarpred = make_covar_gradwavefront_nonoise(
+                data['x'], data['y'], predict_at[0], predict_at[1],
+                res.x, **kw)
+            alpha = scipy.linalg.cho_solve((chol, low), dvec)
+            turb = np.dot(covarpred, alpha)
+            xturb, yturb = turb[:len(predict_at[0])], turb[len(predict_at[0]):]
+        else:
+            # remove measurement noise contribution to covar
+            cninv = np.eye(len(dvec))*res.x[0]**(-2)
+            covar -= np.eye(len(dvec))*res.x[0]**2
+            cpcninv = np.dot(covar, cninv)
+            aa = cpcninv+np.eye(len(dvec))
+            turb = np.linalg.solve(aa, np.dot(cpcninv, dvec))
+            xturb, yturb = turb[:len(data)], turb[len(data):]
     else:
         # Rasmussen & Williams 5.12
         kinv = np.linalg.inv(covar)
         turb = dvec - kinv.dot(dvec)/np.diag(kinv)
-    xturb, yturb = turb[:len(data)], turb[len(data):]
+        xturb, yturb = turb[:len(data)], turb[len(data):]
     return xturb, yturb, res
 
 
@@ -484,9 +639,8 @@ def turbulence_gallery(fn, expectfn):
     for i, fn0 in enumerate(fn):
         measure = astropy.io.ascii.read(fn0)
         data = make_data(expect, measure)
-        covar, res = solve_covar(data, lossfun=loss_independent,
+        covar, _ = solve_covar(data, lossfun=loss_independent,
                                  covarfun=make_covar_independent)
-        print(res.x)
         uu, ss, _ = np.linalg.svd(covar)
         xvec = np.dot(uu, np.random.randn(len(ss))*np.sqrt(ss))
         yvec = np.dot(uu, np.random.randn(len(ss))*np.sqrt(ss))

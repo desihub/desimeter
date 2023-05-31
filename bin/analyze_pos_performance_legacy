@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """Tool for analyzing positioner performance. Typically operates on data tables
-retrieved using the "get_posmoves --with-calib" tool. IMPORTANT: this tool is
-only for use on data taken on or after 2021-02-24. Prior data requires use of
-analyze_pos_performance_legacy.
+retrieved using the "get_posmoves --with-calib" tool. IMPORTANT --- this *legacy*
+tool is only for data taken on or before 2021-02-23. Later data should be analyzed
+using analyze_pos_performance.
 """
 
 # TRACKED vs REQUESTED targets:
@@ -32,7 +32,7 @@ analyze_pos_performance_legacy.
 
 # command line argument parsing
 import argparse
-parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('-i', '--infiles', type=str, required=True, nargs='*',
                     help='Path to input csv file(s), containing results from "get_posmoves --with-calib" ' +
                          '(see that function''s help for full syntax). Regex is ok (like M*.csv). Multiple ' +
@@ -41,25 +41,13 @@ parser.add_argument('-i', '--infiles', type=str, required=True, nargs='*',
 parser.add_argument('-o', '--outdir', type=str, required=True, help='Path to directory where to save output files.')
 parser.add_argument('-np', '--n_processes_max', type=int, default=None,  help='max number of processors to use')
 parser.add_argument('-d', '--debug_mode', action='store_true', help='turn on some helpful features for debugging')
-parser.add_argument('-top', '--n_top_errs', type=int, default=10, help='identify this many moves with worst case errors')
-special_move_keywords = {'MOTORTEST', 'move_to_range', 'disambiguate_theta', 'homing', 'limit seek'}
-parser.add_argument('-spec', '--include_special_moves', action='store_true', help=f'include all "special moves" in results (normally anything with log notes like {special_move_keywords} are excluded)')
-parser.add_argument('-dmin', '--date_min', type=str, default='2000-01-01', help='exclude rows earlier than YYYY-MM-DD')
-parser.add_argument('-dmax', '--date_max', type=str, default='2100-01-01', help='exclude rows later than YYYY-MM-DD')
-parser.add_argument('-sout', '--sparse_output', action='store_true', help='output table is sparser and less memory intensive, also plotting of "bigcharts" is skipped')
-parser.add_argument('-scl', '--scale_filter', type=str, default='include', choices=['include', 'exclude', 't_only', 'p_only', 't_or_p', 't_and_p'],
-                    help='filter which data are analyzed, according to the SCALE_T / SCALE_P (i.e. GEAR_CALIB_T / GEAR_CALIB_P) calibration parameters')
+top_errs_default = 10
+parser.add_argument('-top', '--n_top_errs', type=int, default=top_errs_default, help=f'identify this many moves with worst case errors, default={top_errs_default}')
 user_args = parser.parse_args()
 
 # simple checks on user args
-assert user_args.n_processes_max == None or user_args.n_processes_max > 0, f'invalid arg {user_args.n_processes_max} for user_args.n_processes_max'
-assert user_args.n_top_errs >= 1, f'invalid arg {user_args.n_top_errs} for user_args.n_top_errs'
-for key in ['date_min', 'date_max']:
-    val = user_args.__dict__[key]
-    s = val.split('-')
-    assert len(s) == 3 and len(s[0]) == 4 and len(s[1]) == 2 and len(s[2]) == 2 \
-        and 1999 < int(s[0]) < 2101 and 0 < int(s[1]) < 13 and 0 < int(s[2]) < 32, f'invalid {key} argument {val}'
-assert user_args.date_min <= user_args.date_max, f'invalid date_min {user_args.date_min} > date_max {user_args.date_max}'
+assert user_args.n_processes_max == None or user_args.n_processes_max > 0, f'unrecognized arg {user_args.n_processes_max} for user_args.n_processes_max'
+assert user_args.n_top_errs >= 1, f'unrecognized arg {user_args.n_top_errs} for user_args.n_top_errs'
 
 # proceed with bulk of imports
 import os
@@ -71,6 +59,8 @@ from astropy.time import Time
 from astropy.visualization import hist
 from astropy.stats import knuth_bin_width
 import desimeter.transform.pos2ptl as pos2ptl
+import desimeter.transform.xy2qs as xy2qs
+import desimeter.transform.ptl2fp as ptl2fp
 from desimeter.posparams.posflags_mask import posflags_mask
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
@@ -104,8 +94,7 @@ img_format = 'png'  # for plot outputs
 required = {'POS_ID', 'POS_MOVE_INDEX', 'POS_T', 'POS_P', 'PTL_X', 'PTL_Y',
             'LENGTH_R1', 'LENGTH_R2', 'OFFSET_X', 'OFFSET_Y', 'OFFSET_T', 'OFFSET_P',
             'MOVE_CMD', 'EXPOSURE_ID', 'EXPOSURE_ITER', 'DEVICE_LOC', 'DATE',
-            'LOG_NOTE', 'PETAL_LOC', 'FLAGS', 'POSTSCRIPT', 'CALIB_NOTE', 'PETAL_ID',
-            'GEAR_CALIB_T', 'GEAR_CALIB_P'}
+            'LOG_NOTE', 'PETAL_LOC', 'FLAGS'}
 masked_nulls_map = {'POSTSCRIPT': '',
                     'LOG_NOTE': '',
                     'CALIB_NOTE': ''}
@@ -113,9 +102,6 @@ sequence_note_prefix = 'sequence: '
 abs_move_coords = {'QS', 'obsXY', 'poslocXY', 'ptlXY', 'posintTP', 'poslocTP'}
 rel_move_coords = {'dQdS', 'obsdXdY', 'poslocdXdY', 'dTdP'}
 all_move_coords = abs_move_coords | rel_move_coords
-request_coords_map = {'req_posintTP': ['POS_T', 'POS_P'],
-                      'req_ptlXYZ': ['PTL_X', 'PTL_Y', 'PTL_Z'],
-                      } # note that the basenames get tagged below
 
 # tagging of different position value types
 TRACKED = 'TRACKED'  # refers to internally-tracked angles 'POS_T', 'POS_P'
@@ -152,9 +138,7 @@ def get_super_tag(tag):
     if tag == ACCEPTED:
         return REQUESTED
     return tag
-
-request_coords_map = {key: [add_tag(REQUESTED, basename) for basename in request_coords_map[key]] for key in request_coords_map}
-
+    
 # statistics functions for summarizing errors
 stat_funcs = {'max': np.max, 'min': np.min, 'mean': np.mean, 'median': np.median,
               'std': np.std, 'rms': lambda X: np.sqrt(np.sum(np.power(X, 2))/len(X))}
@@ -174,61 +158,14 @@ def tokenize_note(log_note):
     tokens = [token.strip() for token in tokens]
     return tokens
 
-def split_note_token(token):
-    '''Subdivides tokens in typical LOG_NOTE strings.'''
-    separator_options = [s for s in ['||', '|', ','] if s in token] + [None]  # None is fallback
-    separator = separator_options[0]
-    return token.split(separator)
-
 def parse_val(string, separator=' ', typefunc=int):
     '''Parse a number out of typical token format from LOG_NOTE strings.'''
     split = string.split(separator)
     val = typefunc(split[1]) if len(split) > 0 else None
     return val
 
-def remove_excluded_dates(table):
-    '''Deletes rows dated outside the user-defined exclusions.
-    
-    INPUTS:  table ... astropy table, as generated by read()
-    OUTPUT:  new ... copy of table, with equal or fewer rows
-    '''
-    new = table.copy()
-    below = new['DATE'] < user_args.date_min
-    new.remove_rows(below)
-    above = new['DATE'] > user_args.date_max
-    new.remove_rows(above)
-    return new
-
-def remove_excluded_calibs(table):
-    '''Deletes rows containing excluded calibration settings, according to
-    user argument.
-    
-    INPUTS:  table ... astropy table, as generated by read()
-    OUTPUT:  new ... copy of table, with equal or fewer rows
-    '''
-    new = table.copy()
-    T = 'GEAR_CALIB_T'
-    P = 'GEAR_CALIB_P'
-    if user_args.scale_filter == 'include':
-        return new
-    if user_args.scale_filter == 'exclude':
-        keep = np.logical_and(new[T] == 1.0, new[P] == 1.0)
-    elif user_args.scale_filter == 't_or_p':
-        keep = np.logical_or(new[T] != 1.0, new[P] != 1.0)
-    elif user_args.scale_filter == 't_and_p':
-        keep = np.logical_and(new[T] != 1.0, new[P] != 1.0)
-    elif user_args.scale_filter == 't_only':
-        keep = np.logical_and(new[T] != 1.0, new[P] == 1.0)
-    elif user_args.scale_filter == 'p_only':
-        keep = np.logical_and(new[T] == 1.0, new[P] != 1.0)
-    else:
-        assert f'bad scale_filter option {user_args.scale_filter}'
-    removals = np.logical_not(keep)
-    new.remove_rows(removals)
-    return new
-
 def remove_nonmoving_rows(table):
-    '''Deletes rows with no requested move.
+    '''Deletes rows with no move.
     
     INPUTS:  table ... astropy table, as generated by read()
     OUTPUT:  new ... copy of table, with equal or fewer rows
@@ -316,18 +253,9 @@ def read(path):
     if any(missing):
         log.warning(f'Skipped data at {path} due to missing columns {missing}')
         return data
-    if len(table) == 0:
-        log.warning(f'Skipped empty data file at {path}')
-        return data
     initial_posids = set(table['POS_ID'])
-    if user_args.sparse_output:
-        table = remove_unused_columns(table)
-    table = remove_excluded_dates(table)
-    table = remove_excluded_calibs(table)
+    # table = remove_unused_columns(table)
     table = remove_nonmoving_rows(table)
-    if len(table) == 0:
-        log.warning(f'Skipped data at {path} after all data rows excluded')
-        return data
     table = unmask_columns(table)
     posids = set(table['POS_ID'])
     posids_removed = initial_posids - posids
@@ -340,24 +268,11 @@ def read(path):
     posids_removed = initial_posids - posids
     if any(posids_removed):
         log.warning(f'Skipped data for {posids_removed} which had no spot matches in {path}')
-    if not user_args.include_special_moves:
-        tokens = [tokenize_note(x) for x in table['LOG_NOTE'].tolist()]
-        specials = [False] * len(tokens)
-        for i in range(len(tokens)):
-            for token in tokens[i]:
-                specials[i] |= any(keyword in token for keyword in special_move_keywords)
-        if any(specials):
-            affected = set(table['POS_ID'][specials])
-            table.remove_rows(specials)
-            log.warning(f'Skipped {sum(specials)} rows of "special move" data for {affected}')
     for posid in posids:
         selection = table['POS_ID'] == posid
         this = table[selection]
-        if len(this) > 0:
-            data[posid] = this
-            log.info(f'Read data for {posid} at {path}')
-        else:
-            log.warning(f'Skipped data for {posid} at {path} due to no rows remaining')
+        data[posid] = this
+        log.info(f'Read data for {posid} at {path}')
     return data
 
 def sequential_copy(table, copy=True):
@@ -390,70 +305,42 @@ def identify_moves(table):
     seq_move_idxs = []
     moves = []
     submoves = []
-    requests = {}
-    for coords in request_coords_map.values():
-        for coord in coords:
-            requests[coord] = []
     last_expid = new['EXPOSURE_ID'][0]
+    no_move_cmd = nulls(new['MOVE_CMD'])
     for i in range(len(new)):
         expid = new['EXPOSURE_ID'][i]
         if expid != last_expid or i == 0:
             move_counter = -1
             last_expid = expid
             submove = -1
-        cmd_str = new['MOVE_CMD'][i]
-        cmd_coord = cmd_str.split('=')[0]        
+        cmd_coord = new['MOVE_CMD'][i].split('=')[0]        
         submove = 0 if cmd_coord in abs_move_coords else submove + 1
         note = new['LOG_NOTE'][i]
         tokens = tokenize_note(note)
         seq_move_idx = None
         move = None
-        request = {key: np.nan for key in requests}
         for token in tokens:
             if token.find('sequence_move_idx') == 0:
                 seq_move_idx = parse_val(token)
-            if token.find('move') == 0 and 'move_to_range' not in token:
+            if token.find('move') == 0:
                 move = parse_val(token)
             if token.find('submove') == 0:
-                submove = parse_val(token)
-            for key, coords in request_coords_map.items():
-                if token.find(key) == 0:
-                    req_data_str = token.split('=')[-1].strip('(').strip(')')
-                    req_split = split_note_token(req_data_str)
-                    req_data = {coords[i]: float(req_split[i]) for i in range(len(coords))}
-                    
-                    # 2021-03-03 [JHS] hack to mostly correct wrong ptl xyz in log_note
-                    if 'ptlXYZ' in key and 'dXdY' in cmd_coord and submove > 0:
-                        val_str = cmd_str.split('=')[1].split(';')[0]
-                        val_str_list = val_str.strip('[').strip(']').split(',')
-                        dx = float(val_str_list[0]) 
-                        dy = float(val_str_list[1]) 
-                        if cmd_coord == 'obsdXdY':
-                            ptl_loc = new[i]['PETAL_LOC']
-                            a = -(ptl_loc - 3) * math.radians(36)  # approx (not the precisely calibrated value)
-                            dx_new = math.cos(a)*dx - math.sin(a)*dy
-                            dy_new = math.sin(a)*dx + math.cos(a)*dy
-                            dx, dy = dx_new, dy_new
-                        last_x_measured, last_y_measured = new['PTL_X'][i-1], new['PTL_Y'][i-1]
-                        corrected_ptl_x_req = last_x_measured + dx
-                        corrected_ptl_y_req = last_y_measured + dy
-                        req_data['PTL_X_REQUESTED'] = corrected_ptl_x_req
-                        req_data['PTL_Y_REQUESTED'] = corrected_ptl_y_req
-                        
-                    request.update(req_data)
-        move_counter += 1
+                submove = parse_val(token)                
+        if i not in no_move_cmd:
+            move_counter += 1
+            
+            # special case, for data pre 2020-10-08
+            if seq_move_idx == None and move != None and 'sequence' in note:
+                seq_move_idx = move - 1
+                
         move_counters.append(move_counter)
         moves.append(move)
         seq_move_idxs.append(seq_move_idx)
         submoves.append(submove)
-        for key, val in request.items():
-            requests[key].append(val)
     new['MOVE_COUNTER'] = move_counters
     new['SEQUENCE_MOVE_IDX'] = Column(seq_move_idxs, dtype=object)  # sometimes carries int, sometimes None
     new['MOVE'] = Column(moves, dtype=object)  # sometimes carries int, sometimes None
     new['SUBMOVE'] = submoves
-    for key, vals in requests.items():
-        new[key] = vals
     return new
 
 def remove_orphan_submoves(table):
@@ -481,25 +368,6 @@ def remove_orphan_submoves(table):
         new.remove_rows(orphans)
     return new
 
-def remove_insufficient_request_info_rows(table):
-    '''Deletes rows for which not enough request data to do error calculations.
-    
-    INPUT:  table ... astropy table including those coordinate data specified by request_coords_map
-    OUTPUT: copy of table, may have fewer rows
-    '''
-    new = sequential_copy(table)
-    insufficient = set()
-    for coords in request_coords_map.values():
-        for coord in coords:
-            these_insufficient = {i for i in range(len(new)) if math.isnan(new[coord][i])}
-            insufficient |= these_insufficient
-    insufficient = list(insufficient)  # for astropy indexing
-    if insufficient:
-        posids_affected = set(new['POS_ID'][insufficient])
-        new.remove_rows(insufficient)
-        print(f'Removed {len(insufficient)} row(s) from {posids_affected} due to insufficient request data.')
-    return new
-
 def get_idxs(table, submove, sigma=None, tag=TRACKED, as_bool=False):
     '''Returns a list of idxs for rows associated with the argued submove.
     
@@ -512,8 +380,9 @@ def get_idxs(table, submove, sigma=None, tag=TRACKED, as_bool=False):
     OUTPUT: list of row index integers
     '''
     selection = table['SUBMOVE'] == submove
+    super_tag = get_super_tag(tag)
     if sigma:
-        selection &= table[add_tag(tag, 'SIGMA_CEILING')] <= sigma
+        selection &= table[add_tag(super_tag, 'SIGMA_CEILING')] <= sigma
     if tag == ACCEPTED:
         selection &= table[ACCEPTED]
     if as_bool:
@@ -536,6 +405,99 @@ def get_sigmas(table, tag):
     sigmas = sorted(set(table[s_name]))
     return {s: table[q_name][table[s_name] == s][0] for s in sigmas}    
 
+def identify_requests(table):
+    '''Searches MOVE_CMD fields to identify original requested targets.
+    These differ from posintTP (internally-tracked) targets.
+    
+    INPUTS:  table ... astropy table containing 'POS_MOVE_INDEX', 'MOVE_CMD',
+                      'EXPOSURE_ID', 'MOVE', and 'SUBMOVE'
+                      
+    OUTPUT:  copy of table, including new columns tagged as REQUESTED
+             
+    Note that 'MOVE' values may not be unique, if the dataset includes multiple
+    tests. In such cases, uniqueness can be determined by inspecting also the
+    EXPOSURE_ID field --- within which MOVE *will* be unique.
+    
+    Additionally, note that 'MOVE' integers may not correspond 1:1 with those
+    given in the LOG_NOTE fields, again due to handling of uniqueness corner
+    cases. However, 'SUBMOVE' ids *will* correspond exactly to those in LOG_NOTE.
+    '''
+    new = sequential_copy(table)    
+    n = len(new)
+    possible_requests = [s.split(';')[0] for s in new['MOVE_CMD']]
+    possible_coords = [s.split('=')[0] for s in possible_requests]
+    is_move = [s in all_move_coords for s in possible_coords]
+    requests = [possible_requests[i] if is_move[i] else '' for i in range(n)]
+    coords = [possible_coords[i] if is_move[i] else '' for i in range(n)]
+    val_strs = [requests[i].split('=')[1] if is_move[i] else '' for i in range(n)]
+    val_str_lists = [s.strip('[').strip(']').split(',') for s in val_strs]
+    vals0 = [float(val_str_lists[i][0]) if is_move[i] else None for i in range(n)]
+    vals1 = [float(val_str_lists[i][1]) if is_move[i] else None for i in range(n)]    
+    last_known_request_idx = -1
+    x_flat = [None]*len(new)
+    y_flat = [None]*len(new)
+    for i in range(n):
+        coord = coords[i]
+        if not(coord):
+            # This occurs, for example, with auto-generated neighbor collision avoidance moves.
+            # Resolve ambiguity by treating "requested" position as equal to internally-tracked.
+            coord = 'posintTP'
+            vals0[i] = new['POS_T'][i]
+            vals1[i] = new['POS_P'][i]
+        submove0 = new['SUBMOVE'][i] == 0
+        is_abs = coord in abs_move_coords
+        is_request = submove0 and is_abs
+        if is_request:
+            if coord in {'QS', 'ptlXY', 'obsXY'}:
+                if coord == 'ptlXY':
+                    x_ptl, y_ptl = vals0[i], vals1[i]   
+                else:
+                    ptl_loc = new['PETAL_LOC'][i]
+                    if coord == 'QS':
+                        x_fp, y_fp = xy2qs.qs2xy(vals0[i], vals1[i])
+                    elif coord == 'obsXY':
+                        x_fp, y_fp = vals0[i], vals1[i]
+                    x_ptl, y_ptl, z_ptl = ptl2fp.fp2ptl(ptl_loc, x_fp, y_fp)
+                x_flat[i], y_flat[i] = pos2ptl.ptl2flat(x_ptl, y_ptl)
+            elif coord in {'poslocXY', 'posintTP', 'poslocTP'}:
+                if coord == 'poslocXY':
+                    x_loc, y_loc = vals0[i], vals1[i]
+                elif coord == 'posintTP':
+                    x_loc, y_loc = pos2ptl.int2loc(t_int=vals0[i],
+                                                   p_int=vals1[i],
+                                                   r1=new['LENGTH_R1'][i],
+                                                   r2=new['LENGTH_R2'][i],
+                                                   t_offset=new['OFFSET_T'][i],
+                                                   p_offset=new['OFFSET_P'][i])
+                elif coord == 'poslocTP':
+                    t_ext = pos2ptl.int2ext(vals0[i], new['OFFSET_T'][i])
+                    p_ext = pos2ptl.int2ext(vals1[i], new['OFFSET_P'][i])
+                    x_loc, y_loc = pos2ptl.ext2loc(t_ext=t_ext,
+                                                   p_ext=p_ext,
+                                                   r1=new['LENGTH_R1'][i],
+                                                   r2=new['LENGTH_R2'][i])
+                else:
+                    assert False, f'command coordinates {coord} not recognized'
+                x_flat[i] = pos2ptl.loc2flat(x_loc, new['OFFSET_X'][i])
+                y_flat[i] = pos2ptl.loc2flat(y_loc, new['OFFSET_Y'][i])
+            elif coord in {'obsdXdY', 'poslocdXdY', 'dTdP'}:
+                assert False, f'relative command {coord} at submove {new["SUBMOVE"][i]} is not supported in this code'
+            else:
+                assert False, f'command coordinates {coord} not recognized'
+            last_known_request_idx = i
+        elif not submove0:
+            x_flat[i] = x_flat[last_known_request_idx]
+            y_flat[i] = y_flat[last_known_request_idx]
+        else:
+            assert False, f'Unexpected case for {new["POS_ID"][i]} at row {i}. Not handled right in identify_requests(), needs debugging.'
+    for vec in [x_flat, y_flat]:
+        assert not any([x == None for x in vec]), f'Unexpected case for {new["POS_ID"][i]}. Not handled right in identify_requests(), needs debugging.'
+    x_flat = [float(x) for x in x_flat]  # avoid screwy numpy ambiguous dimensions
+    y_flat = [float(y) for y in y_flat]  # avoid screwy numpy ambiguous dimensions
+    new[add_tag(REQUESTED, 'FLAT_X')] = x_flat
+    new[add_tag(REQUESTED, 'FLAT_Y')] = y_flat
+    return new
+
 def identify_avoidances(table):
     '''Identifies collision avoidance cases.
     INPUT:  table ... astropy table including column 'LOG_NOTE'
@@ -554,7 +516,9 @@ def identify_avoidances(table):
             if key == split[0]:
                 avoidances_str = split[1]
                 avoidances = avoidances_str.strip('[').strip(']').replace("'","").replace(' ','')
-                avoidances = split_note_token(avoidances)
+                separator_options = [s for s in ['||', '|', ','] if s in avoidances] + [None]  # None is fallback
+                separator = separator_options[0]
+                avoidances = avoidances.split(separator)
                 counts[i] += len(avoidances)
         if 'FROZEN' in new['FLAG_STRINGS'][i]:
             frozen[i] = True
@@ -616,11 +580,8 @@ def calc_errors(table, tag=TRACKED):
     y_meas_name = add_tag(MEASURED, 'FLAT_Y')
     x_targ_name = add_tag(tag, 'FLAT_X')
     y_targ_name = add_tag(tag, 'FLAT_Y')
-    for pair, s in {(x_meas_name, y_meas_name): '',
-                    (x_targ_name, y_targ_name): '_' + REQUESTED,
-                    }.items():
-        if any(name not in new.columns for name in pair):
-            new[pair[0]], new[pair[1]] = pos2ptl.ptl2flat(new[f'PTL_X{s}'], new[f'PTL_Y{s}'])
+    if any(name not in new.columns for name in {x_meas_name, y_meas_name}):
+        new[x_meas_name], new[y_meas_name] = pos2ptl.ptl2flat(new['PTL_X'],  new['PTL_Y'])
     if tag == TRACKED:
         targ_x_ptl, targ_y_ptl = pos2ptl.int2ptl(
                                      t_int=new['POS_T'], p_int=new['POS_P'],
@@ -650,18 +611,11 @@ def calc_alt_coords(table):
         x_flat = new[add_tag(tag, 'FLAT_X')]
         y_flat = new[add_tag(tag, 'FLAT_Y')]
         x_ptl, y_ptl = pos2ptl.flat2ptl(x_flat, y_flat)
-        converted = {add_tag(tag, 'LOC_X'): pos2ptl.flat2loc(x_flat, new['OFFSET_X']),
+        converted = {add_tag(tag, 'PTL_X'): x_ptl,
+                     add_tag(tag, 'PTL_Y'): y_ptl,
+                     add_tag(tag, 'LOC_X'): pos2ptl.flat2loc(x_flat, new['OFFSET_X']),
                      add_tag(tag, 'LOC_Y'): pos2ptl.flat2loc(y_flat, new['OFFSET_Y']),
                      }
-        tag_ptl_x = add_tag(tag, 'PTL_X')
-        tag_ptl_y = add_tag(tag, 'PTL_Y')
-        ptl_xy = {}
-        if tag == MEASURED:
-            ptl_xy = {tag_ptl_x: x_ptl, tag_ptl_y: y_ptl}
-        elif any({tag_ptl_x, tag_ptl_y} - set(new.columns)):
-            ptl_xy_vec = pos2ptl.flat2ptl(x_flat, y_flat)
-            ptl_xy = {tag_ptl_x: ptl_xy_vec[0], tag_ptl_y: ptl_xy_vec[1]}
-        converted.update(ptl_xy)
         for name, values in converted.items():
             assert name not in new.columns, f'column {name} already exists'
             new[name] = values
@@ -719,10 +673,10 @@ def analyze_one_pos(table):
     new = identify_posflags(new)
     new = identify_moves(new)
     new = remove_orphan_submoves(new)
-    new = remove_insufficient_request_info_rows(new)
     if len(new) == 0:
-        log.info(f'Skipped {posid}: no data remaining after removal of orphan submoves and/or those with insufficient request data.')
+        log.info(f'Skipped {posid}: no data remaining after removal of orphan submoves.')
         return None, None
+    new = identify_requests(new)
     new = identify_avoidances(new)
     new = identify_accepted(new)
     new = identify_sequences(new)
@@ -732,7 +686,7 @@ def analyze_one_pos(table):
     new = calc_radii(new, tag=TRACKED)
     new = calc_radii(new, tag=REQUESTED)
     new = detect_num_fvc_images(new)
-    stats_cols = ['POS_ID', 'SUBMOVE', 'GEAR_CALIB_T_MIN', 'GEAR_CALIB_P_MIN']
+    stats_cols = ['POS_ID', 'SUBMOVE']
     stats_tags = [TRACKED, REQUESTED, ACCEPTED]
     stats_cols += [add_tag(tag, 'N_TARGETS') for tag in stats_tags]
     tagged_funcs = {add_tag(tag, name): func for name, func in stat_funcs.items() for tag in stats_tags}
@@ -747,10 +701,6 @@ def analyze_one_pos(table):
             err_xy[tag] = new[add_tag(super_tag, 'ERR_XY')][selection].tolist()
         stats_dict['POS_ID'].append(posid)
         stats_dict['SUBMOVE'].append(submove)
-        ii = get_idxs(new, submove)
-        for ax in ['T', 'P']:
-            gear_calib = min(new[f'GEAR_CALIB_{ax}'][ii])
-            stats_dict[f'GEAR_CALIB_{ax}_MIN'].append(gear_calib)
         for tag, data in err_xy.items():
             stats_dict[add_tag(tag, 'N_TARGETS')].append(len(data))
         for name, func in tagged_funcs.items():
@@ -825,7 +775,8 @@ def summarize_stats(table, tag=TRACKED, stat_names=stat_funcs.keys()):
                      and columns corresponding to the uppercased names of the argued
                      stats functions. Table includes metadata: n_positioners, n_targets
     '''
-    super_tag = get_super_tag(tag)
+    reduce_to_accepted = tag == ACCEPTED
+    tag = REQUESTED if reduce_to_accepted else tag
     missing_funcs = set(stat_names) - set(stat_funcs)
     assert not(any(missing_funcs)), f'undefined stat funcs {missing_funcs}'
     uppercase_names = {key: key.upper() for key in stat_names}
@@ -839,16 +790,16 @@ def summarize_stats(table, tag=TRACKED, stat_names=stat_funcs.keys()):
     min_radius = math.inf
     for submove in submoves:
         submove_selection = table['SUBMOVE'] == submove
-        if tag == ACCEPTED:
+        if reduce_to_accepted:
             submove_selection = np.logical_and(submove_selection, table[ACCEPTED])
-        radii = table[add_tag(super_tag, 'RADIUS')][submove_selection].tolist()
+        radii = table[add_tag(tag, 'RADIUS')][submove_selection].tolist()
         max_radius = max(max_radius, max(radii))
         min_radius = min(min_radius, min(radii))
         for sigma in sigmas:
             quantile = sigmas[sigma]
             within_quantile = table[add_tag(tag, 'QUANTILE_CEILING')] <= quantile
             quantile_selection = np.logical_and(within_quantile, submove_selection)
-            err = table[add_tag(super_tag, 'ERR_XY')][quantile_selection].tolist()
+            err = table[add_tag(tag, 'ERR_XY')][quantile_selection].tolist()
             new_dict['SUBMOVE'].append(submove)
             new_dict['SIGMA'].append(sigma)
             new_dict['QUANTILE'].append(quantile)
@@ -986,27 +937,15 @@ def get_span(table, coord='PTL_X', target_tag=TRACKED):
     vec += table[add_tag(MEASURED, coord)].tolist()
     return max(vec) - min(vec)
 
-def get_unique_condensed_list_str(table, for_filename=True, key='EXPOSURE_ID'):
-    '''Returns a string representing the set of unique values for argument key,
-    in the astropy table. Argument for_filename controls whether to return version
-    for use in filenames vs for use in plot labels, general printouts, etc.
+def get_expids_str(table, for_filename=True):
+    '''Returns a string representing the set of unique 'EXPOSURE_ID' in the astropy
+    table. Argument for_filename controls whether to return version for use in
+    filenames vs for use in plot labels, general printouts, etc.
     '''
-    if key == 'DATE':
-        vals = {d.split(' ')[0] for d in table['DATE']}
-    else:
-        vals = set(table[key])
-    vals = sorted(vals)
-    if for_filename:
-        separator = '_' if key == 'DATE' else '-'
-    else:
-        separator = ','
-    vals_str = separator.join([str(x) for x in vals])
-    if len(vals) > 2:
-        alt_middle = f'({len(vals)-2}-more)'
-        alt_vals_str = separator.join([str(vals[0]), alt_middle, str(vals[-1])])
-        if len(alt_vals_str) < len(vals_str):
-            return alt_vals_str
-    return vals_str
+    expids = sorted(set(table['EXPOSURE_ID']))
+    separator = '-' if for_filename else ','
+    expids_str = separator.join([str(x) for x in expids])
+    return expids_str
 
 def get_submoves_str(table, for_filename=True):
     '''Returns a string representing the set of unique submoves.
@@ -1055,10 +994,11 @@ def get_exposure_description(table):
     
     OUTPUT: string
     '''
-    expids_str = get_unique_condensed_list_str(table, for_filename=False)
-    dates_str = get_unique_condensed_list_str(table, for_filename=False, key='DATE')
+    dates = {d.split(' ')[0] for d in table['DATE']}
+    dates = sorted(dates)
+    expids_str = get_expids_str(table, for_filename=False)
     s = f'Exposure ID{"s" if "," in expids_str else ""}: {expids_str}\n'
-    s += f'Date{"s" if "," in dates_str else ""} measured: {dates_str}\n'
+    s += f'Date{"s" if len(dates) > 1 else ""} measured: {dates if len(dates) > 1 else dates[0]}\n'
     s += f'Date analyzed: {Time.now().iso.split(" ")[0]}'
     return s
 
@@ -1159,7 +1099,7 @@ def bigchart(table, note1='', note2='', limits={}):
     place_notes(note1, note2, level='axes')
     plt.legend(loc='upper left')
     plt.axis('equal')
-    expids_str = get_unique_condensed_list_str(table, for_filename=True)
+    expids_str = get_expids_str(table, for_filename=True)
     submove = get_submoves_str(table, for_filename=True)
     path = os.path.join(save_dir, f'expid_{expids_str}_chart_submove{submove}.' + img_format)
     _ = finalize_plot(path, limits)
@@ -1233,7 +1173,7 @@ def histogram(table, tag, sigma):
     
     title = f'Errors w.r.t. {tag} targets\n' + title
     plt.suptitle(title, fontfamily='monospace', verticalalignment='top', fontsize='medium')    
-    expids_str = get_unique_condensed_list_str(table, for_filename=True)
+    expids_str = get_expids_str(table, for_filename=True)
     sigma_str = get_sigma_str(sigma, for_filename=True)
     path = os.path.join(save_dir, f'expid_{expids_str}_hist_{tag}_sigma_{sigma_str}.{img_format}')
     limits = finalize_plot(path, limits)
@@ -1303,22 +1243,21 @@ if __name__ == '__main__':
     summaries = {}
     for tag in [TRACKED, REQUESTED, ACCEPTED]:
         moves = identify_quantiles(moves, tag=tag)
-        summaries[tag] = summarize_stats(moves, tag)
-    submoves = get_submove_ids(moves)
+        summaries[tag] = summarize_stats(moves, tag)  
     
     # plot big xy charts
-    if not user_args.sparse_output:
-        chart_limits = {}
-        for submove in submoves:
-            submove_selection = get_idxs(moves, submove)
-            table = moves[submove_selection]
-            note1 = get_description(table, submove)
-            note1 += '\n' + get_exposure_description(table)
-            note1 += '\n' + meta_str(summaries[TRACKED])
-            stats_tag = TRACKED if submove == 0 else ACCEPTED
-            note2 = get_summary_stats_str(summaries[stats_tag], submove=submove, tag=stats_tag)        
-            path, chart_limits = bigchart(table, note1, note2, chart_limits)
-            log.info(f'Saved big chart for submove {submove} to {path}')
+    chart_limits = {}
+    submoves = get_submove_ids(moves)
+    for submove in submoves:
+        submove_selection = get_idxs(moves, submove)
+        table = moves[submove_selection]
+        note1 = get_description(table, submove)
+        note1 += '\n' + get_exposure_description(table)
+        note1 += '\n' + meta_str(summaries[TRACKED])
+        stats_tag = TRACKED if submove == 0 else ACCEPTED
+        note2 = get_summary_stats_str(summaries[stats_tag], submove=submove, tag=stats_tag)        
+        path, chart_limits = bigchart(table, note1, note2, chart_limits)
+        log.info(f'Saved big chart for submove {submove} to {path}')
     
     # make big text string
     bigstr = ''  # text version of info that gets printed on bottoms of bigcharts
@@ -1368,7 +1307,7 @@ if __name__ == '__main__':
             log.info(f'Saved histogram for sigma={sigma} to {path}')
 
     # export tabular data
-    expids_str = 'expid_' + get_unique_condensed_list_str(moves, for_filename=True)
+    expids_str = 'expid_' + get_expids_str(moves, for_filename=True)
     moves_path = os.path.join(save_dir, f'{expids_str}_moves.csv')
     stats_path = os.path.join(save_dir, f'{expids_str}_stats_by_positioner.csv')
     text_path = os.path.join(save_dir, f'{expids_str}_report.txt')

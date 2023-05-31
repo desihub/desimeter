@@ -2,10 +2,54 @@
 desimeter change Log
 ====================
 
-0.6.3 (unreleased)
+0.7.1 (unreleased)
 ------------------
 
-* no changes yet
+* No changes yet.
+
+0.7.0 (2023-01-12)
+------------------
+
+* Add turbulence correction mode using stationary positioners [PR #186, #187].
+* Refactor desi_fvc_proc and add option to run directly w/o subprocess
+  [PR #189, #192].
+* Clip outlying stationary positioners from turbulence fits at 10 microns
+  [PR #190, #193].
+* Change print to log [PR #195]
+
+0.6.7 (2021-05-28)
+------------------
+
+* Use vectorized cross product for speed [PR #185].
+
+0.6.6 (2021-05-13)
+------------------
+
+* Add empirical desimeter to platemaker transforms and use for
+  fiberassign xy2radec and radec2xy [PR #184]
+
+0.6.5 (2021-05-11)
+------------------
+
+* add ``get_posmoves --latest`` option [PRs #179, #181, #182]
+* add ``analyze_pos_performance`` options to filter based upon positioner
+  movement scale factors [PR #180]
+* add ``desimeter.fiberassign`` with x,y <-> ra,dec transform predictions
+  for fiberassign (i.e. not using as-observed GFA data) [PR #183]
+
+0.6.4 (2021-03-31)
+------------------
+
+* posperf fix for normal tiles [PR #177]
+* Analyze pos options for large datasets [PR #178]
+
+0.6.3 (2021-02-15)
+------------------
+
+* Update posflags [PR #173]
+* Petal 0 in LBL 6040 [PR #174]
+* Put row deletion in conditional [PR #175]
+* Bright focal plane image analysis [PR #176]
 
 0.6.2 (2020-12-18)
 ------------------

@@ -47,7 +47,7 @@ if sys.argv[1] == 'version':
 
 #- boilerplate, not sure if this is needed
 setup_keywords['zip_safe'] = False
-setup_keywords['use_2to3'] = False
+### setup_keywords['use_2to3'] = False
 
 #- What to install
 setup_keywords['packages'] = find_packages('py')

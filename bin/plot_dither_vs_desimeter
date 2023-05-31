@@ -6,6 +6,7 @@ import astropy.io.fits as pyfits
 from astropy.table import Table
 import matplotlib.pyplot as plt
 import numpy as np
+from astropy.stats import sigma_clipped_stats
 
 from desimeter.transform.radec2tan import hadec2xy
 from desimeter.simplecorr import SimpleCorr
@@ -19,6 +20,7 @@ parser.add_argument('dither_file', type=str, help='dither file name')
 parser.add_argument('fvc_file', type=str, help='desi_fvc_proc file name')
 parser.add_argument('fiberassign_file', type=str, help='fiberassign file name')
 parser.add_argument('expid', type=int, help='expid to use from dither file')
+parser.add_argument('--pdf', '-p', type=str, default=None, help='file name for pdf output')
 args = parser.parse_args()
 
 def myquiver(x1,y1,x2,y2,title=None) :
@@ -33,7 +35,9 @@ def myquiver(x1,y1,x2,y2,title=None) :
     dy=(y2b-y1b)
     plt.quiver(x1b,y1b,dx,dy)
     dr=np.sqrt(dx[:-1]**2+dy[:-1]**2)
-    rms2d=np.sqrt(np.mean(dr**2))
+    # rms2d=np.sqrt(np.mean(dr**2))
+    mn, med, sig = sigma_clipped_stats(dr**2, sigma=5)
+    rms2d = np.sqrt(mn)
     plt.text(-1.3,y0,"{:2.1f}''".format(darcsec),fontsize=10,horizontalalignment="left",verticalalignment="center")
     text="rms$_{2D}$ = %3.2f''"%(rms2d*3600.)
     plt.text(1.6,y0,text,fontsize=10,horizontalalignment="right",verticalalignment="center")
@@ -76,7 +80,9 @@ else:
 
 err=np.sqrt(t['dxfiboff'][:,i]**2+t['dyfiboff'][:,i]**2)
 roff=np.sqrt(t['xfiboff'][:,i]**2+t['yfiboff'][:,i]**2)
-jj=np.where((err<0.5)&(roff<4.))[0]
+dchi2frac = ((t['chi2fibnull']-t['chi2fib'])/(
+    t['chi2fibnull']+(t['chi2fibnull'] == 0)))[:, i]
+jj=np.where((err<0.5)&(roff<4.)&(dchi2frac > 0.9))[0]
 
 dither_ra    = t['fiber_ditherfit_ra'][jj,i]
 dither_dec   = t['fiber_ditherfit_dec'][jj,i]
@@ -197,5 +203,9 @@ title="transformed(desimeter) -dither"
 plt.subplot(224,title=title)
 myquiver(dither_x,dither_y,desimeter_x_bis,desimeter_y_bis,title=title)
 
+plt.suptitle(args.expid)
 plt.tight_layout()
-plt.show()
+if args.pdf is not None:
+    plt.savefig(args.pdf)
+else:
+    plt.show()
