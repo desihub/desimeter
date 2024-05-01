@@ -5,7 +5,7 @@ desimeter change Log
 0.7.1 (unreleased)
 ------------------
 
-* No changes yet.
+* Add support for test Petal0 in lab (direct commits, not PR).
 
 0.7.0 (2023-01-12)
 ------------------
