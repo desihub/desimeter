@@ -23,17 +23,29 @@ from desimeter.transform.pos2ptl import ptl2flat,flat2ptl
 from desimeter.transform.dm2pm import DM2PM
 from desimeter.trig import sincosd
 import desimeter.log
+from pkg_resources import resource_filename
 
 
 log = desimeter.log.get_logger()
 
 
-def _measure_fieldrot_deg(ha,dec,tel_ha,tel_dec,xfp_mm,yfp_mm) :
+def _measure_fieldrot_deg(ha,dec,tel_ha,tel_dec,xfp_mm,yfp_mm, print_iloc=None) :
 
     ok = (~(np.isnan(ha*dec*xfp_mm*yfp_mm)))&(xfp_mm**2+yfp_mm**2>10**2)
+    log.info("ok.size\t{}".format(ok.size))
+    log.info("ok.sum()\t{}".format(ok.sum()))
     x2,y2=hadec2xy(ha[ok],dec[ok],tel_ha,tel_dec) # rad
-    return np.rad2deg(np.mean((yfp_mm[ok]*x2-xfp_mm[ok]*y2)/np.sqrt((xfp_mm[ok]**2+yfp_mm[ok]**2)*(x2**2+y2**2))))
+    fieldrot = np.rad2deg(np.mean((yfp_mm[ok]*x2-xfp_mm[ok]*y2)/np.sqrt((xfp_mm[ok]**2+yfp_mm[ok]**2)*(x2**2+y2**2))))
+    if print_iloc is not None:
+        for var in [
+            "xfp_mm[print_iloc]", "yfp_mm[print_iloc]",
+            "ha[print_iloc]", "dec[print_iloc]", "tel_ha", "tel_dec",
+            "xfp_mm[print_iloc]", "yfp_mm[print_iloc]",
+            "ok[print_iloc]", "x2[print_iloc]", "y2[print_iloc]", "fieldrot"
+    ]:
+            log.info("{}\t{}".format(var, eval(var)))
 
+    return fieldrot
 
 # This comes straight from PlateMaker: python/PlateMaker/astron.py
 # And it gives a value that = -1 * the DESI 'PARALLAC' header card.
@@ -170,7 +182,7 @@ def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_field
 
     return xfp,yfp
 
-def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,from_platemaker=True) :
+def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,from_platemaker=True, print_iloc=None, fp2tan_n_decimals=None) :
     """Computes RA Dec from focal plane coordinates of targets in CS5 coordinate system (inverse of fiberassign_radec2xy_cs5)
     Args:
       xfp  : 1D numpy.array with target X in mm (need an array of points to compute the field rotation)
@@ -196,6 +208,10 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
 
     if adc1 is None :
         adc1,adc2 =  pm_get_adc_angles(tile_ha,tile_dec)
+
+    if print_iloc is not None:
+        for var in ["adc1", "adc2"]:
+            log.info("{}\t{}".format(var, eval(var)))
 
     # start with pointing = tile center
     tel_ra=tile_ra+0.
@@ -231,17 +247,32 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
         tel_ra += dra
         tel_dec += ddec
 
+        if print_iloc is not None:
+            for var in ["_", "tel_ra", "tel_dec"]:
+                log.info("{}\t{}".format(var, eval(var)))
+
+
     if from_platemaker :
         # apply tranformation from desimeter to platemater
         dm2pm = DM2PM.read(dm2pm_filename())
         xfp,yfp = dm2pm.pm2dm(xfp,yfp)
+        if print_iloc is not None:
+            for var in ["dm2pm_filename()", "xfp[print_iloc]", "yfp[print_iloc]"]:
+                log.info("{}\t{}".format(var, eval(var)))
 
-    xtan,ytan = fp2tan(xfp,yfp,adc1,adc2)
+    xtan,ytan = fp2tan(xfp,yfp,adc1,adc2, n_decimals=fp2tan_n_decimals)
     tmp_ra,tmp_dec    = tan2radec(xtan,ytan,tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
+    if print_iloc is not None:
+        for var in [
+            "xtan[print_iloc]", "ytan[print_iloc]",
+            "tel_ra", "tel_dec", "tile_mjd", "lst",
+            "tmp_ra[print_iloc]", "tmp_dec[print_iloc]"
+    ]:
+            log.info("{}\t{}".format(var, eval(var)))
 
     # need to deal with field rotation
     # measure field rotation
-    tmp_fieldrot = _measure_fieldrot_deg(-tmp_ra,tmp_dec,-tile_ra,tile_dec,xfp,yfp)
+    tmp_fieldrot = _measure_fieldrot_deg(-tmp_ra,tmp_dec,-tile_ra,tile_dec,xfp,yfp, print_iloc=print_iloc)
 
     # apply field rotation to match request
     drot = tile_fieldrot-tmp_fieldrot
@@ -249,8 +280,15 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
     tmp_xfp = c * xfp + s * yfp
     tmp_yfp = -s * xfp + c * yfp
 
-    xtan,ytan      = fp2tan(tmp_xfp,tmp_yfp,adc1,adc2)
+    xtan,ytan      = fp2tan(tmp_xfp,tmp_yfp,adc1,adc2, n_decimals=fp2tan_n_decimals)
     ra,dec = tan2radec(xtan,ytan,tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
+
+    if print_iloc is not None:
+        filename = resource_filename('desimeter', 'data/raytrace-tan2fp.json')
+        for var in [
+            "filename", "tmp_fieldrot", "xtan[print_iloc]", "ytan[print_iloc]", "ra[print_iloc]", "dec[print_iloc]"
+        ]:
+            log.info("{}\t{}".format(var, eval(var)))
 
     # verify
     realised_fieldrot = _measure_fieldrot_deg(-ra,dec,-tile_ra,tile_dec,xfp,yfp)
@@ -275,7 +313,7 @@ def fiberassign_radec2xy_flat(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
     Returns xfp,yfp, focal plane coordinates in mm in the curved "flat" coordinate system, 1D numpy arrays of same size as ra,dec
     """
 
-    xfp,yfp = fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1,adc2,to_platemaker=to_platemaker)
+    xfp,yfp = fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1,adc2,to_platemaker=to_platemaker, print_iloc=print_iloc)
 
     # fiber assign coordinates are on the curved coordinates that follow the curved focal surface
     # the curved coordinates are called 'flat' in the focalplane parlance.
@@ -285,7 +323,7 @@ def fiberassign_radec2xy_flat(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
 
 
 
-def fiberassign_flat_xy2radec(xflat,yflat,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,from_platemaker=True) :
+def fiberassign_flat_xy2radec(xflat,yflat,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,from_platemaker=True, print_iloc=None, fp2tan_n_decimals=None) :
     """Computes RA Dec from focal plane coordinates of targets in curved "flat" coordinate system (inverse of fiberassign_radec2xy_flat)
     Args:
       xflat  : 1D numpy.array with target RA in degrees (need an array of points to compute the field rotation)
@@ -302,5 +340,11 @@ def fiberassign_flat_xy2radec(xflat,yflat,tile_ra,tile_dec,tile_mjd,tile_ha,tile
     """
 
     xfp,yfp = flat2ptl(xflat,yflat)
-    ra,dec  = fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=adc1,adc2=adc2,from_platemaker=from_platemaker)
+    ra,dec  = fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=adc1,adc2=adc2,from_platemaker=from_platemaker, print_iloc=print_iloc, fp2tan_n_decimals=fp2tan_n_decimals)
+    if print_iloc is not None:
+        for var in [
+            "tile_ra", "tile_dec", "tile_mjd", "tile_ha", "tile_fieldrot", "adc1", "adc2", "from_platemaker",
+            "xfp[print_iloc]", "yfp[print_iloc]", "ra[print_iloc]", "dec[print_iloc]"
+        ]:
+            log.info("{}\t{}".format(var, eval(var)))
     return ra,dec

@@ -211,7 +211,7 @@ class TAN2FP_RayTraceFit(object) :
 
         return xfp, yfp
 
-    def fp2tan(self, xfp, yfp, adc1, adc2):
+    def fp2tan(self, xfp, yfp, adc1, adc2, n_decimals=None):
         """
         Converts focal plane xfp,yfp -> tangent plane xtan,ytan
         """
@@ -259,6 +259,11 @@ class TAN2FP_RayTraceFit(object) :
 
         xtan, ytan = _expand_xytan(xx, yy)
 
+        if n_decimals is not None:
+            assert isinstance(n_decimals, int)
+            assert n_decimals >= 0
+            xtan, ytan = xtan.round(n_decimals), ytan.round(n_decimals)
+
         return xtan, ytan
 
 # generic function
@@ -274,5 +279,5 @@ def get_raytracefit() :
 def tan2fp(xtan, ytan, adc1, adc2):
     return get_raytracefit().tan2fp(xtan, ytan, adc1, adc2)
 
-def fp2tan(xtan, ytan, adc1, adc2):
-    return get_raytracefit().fp2tan(xtan, ytan, adc1, adc2)
+def fp2tan(xtan, ytan, adc1, adc2, n_decimals=None):
+    return get_raytracefit().fp2tan(xtan, ytan, adc1, adc2, n_decimals=n_decimals)
