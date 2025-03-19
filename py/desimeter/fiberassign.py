@@ -182,7 +182,7 @@ def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_field
 
     return xfp,yfp
 
-def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,from_platemaker=True, print_iloc=None, fp2tan_n_decimals=None) :
+def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,from_platemaker=True, print_iloc=None, fp2tan_n_decimals=None, return_outputs=False) :
     """Computes RA Dec from focal plane coordinates of targets in CS5 coordinate system (inverse of fiberassign_radec2xy_cs5)
     Args:
       xfp  : 1D numpy.array with target X in mm (need an array of points to compute the field rotation)
@@ -203,11 +203,20 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
     # LST from HA
     lst=tile_ha+tile_ra
 
+    if return_outputs:
+        d = {}
+        d["xfp"], d["yfp"] = xfp, yfp
+        d["tile_ra"], d["tile_dec"], d["tile_mjd"], d["tile_ha"], d["tile_fieldrot"] = tile_ra, tile_dec, tile_mjd, tile_ha, tile_fieldrot
+
+
     if ( (adc1 is None) and (adc2 is not None) ) or ( (adc1 is not None) and (adc2 is None) ) :
         raise ValueError("either set both adc angles or none")
 
     if adc1 is None :
         adc1,adc2 =  pm_get_adc_angles(tile_ha,tile_dec)
+
+    if return_outputs:
+        d["adc1"], d["adc2"] = adc1, adc2
 
     if print_iloc is not None:
         for var in ["adc1", "adc2"]:
@@ -259,9 +268,15 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
         if print_iloc is not None:
             for var in ["dm2pm_filename()", "xfp[print_iloc]", "yfp[print_iloc]"]:
                 log.info("{}\t{}".format(var, eval(var)))
+        if return_outputs:
+            d["xfp_pm"], d["yfp_pm"] = xfp,yfp
+
 
     xtan,ytan = fp2tan(xfp,yfp,adc1,adc2, n_decimals=fp2tan_n_decimals)
     tmp_ra,tmp_dec    = tan2radec(xtan,ytan,tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
+    if return_outputs:
+        d["tel_ra"], d["tel_dec"] = tel_ra, tel_dec
+        d["xtan"], d["ytan"], d["tmp_ra"], d["tmp_dec"] = xtan, ytan, tmp_ra, tmp_dec
     if print_iloc is not None:
         for var in [
             "xtan[print_iloc]", "ytan[print_iloc]",
@@ -273,6 +288,8 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
     # need to deal with field rotation
     # measure field rotation
     tmp_fieldrot = _measure_fieldrot_deg(-tmp_ra,tmp_dec,-tile_ra,tile_dec,xfp,yfp, print_iloc=print_iloc)
+    if return_outputs:
+        d["tmp_fieldrot"] = tmp_fieldrot
 
     # apply field rotation to match request
     drot = tile_fieldrot-tmp_fieldrot
@@ -282,6 +299,10 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
 
     xtan,ytan      = fp2tan(tmp_xfp,tmp_yfp,adc1,adc2, n_decimals=fp2tan_n_decimals)
     ra,dec = tan2radec(xtan,ytan,tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
+    if return_outputs:
+        d["tmp_xfp"], d["tmp_yfp"] = tmp_xfp, tmp_yfp
+        d["xtan2"], d["ytan2"] = xtan, ytan
+        d["ra"], d["dec"] = ra, dec
 
     if print_iloc is not None:
         filename = resource_filename('desimeter', 'data/raytrace-tan2fp.json')
@@ -294,7 +315,10 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
     realised_fieldrot = _measure_fieldrot_deg(-ra,dec,-tile_ra,tile_dec,xfp,yfp)
     log.info("Requested fieldrot={:3.1f} arcsec delta={:3.1f} arcsec".format(tile_fieldrot*3600.,(tile_fieldrot-realised_fieldrot)*3600.))
 
-    return ra,dec
+    if return_outputs:
+       return ra, dec, d
+    else:
+        return ra,dec
 
 
 def fiberassign_radec2xy_flat(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,to_platemaker=True) :
@@ -323,7 +347,7 @@ def fiberassign_radec2xy_flat(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
 
 
 
-def fiberassign_flat_xy2radec(xflat,yflat,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,from_platemaker=True, print_iloc=None, fp2tan_n_decimals=None) :
+def fiberassign_flat_xy2radec(xflat,yflat,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,from_platemaker=True, print_iloc=None, fp2tan_n_decimals=None, return_outputs=False) :
     """Computes RA Dec from focal plane coordinates of targets in curved "flat" coordinate system (inverse of fiberassign_radec2xy_flat)
     Args:
       xflat  : 1D numpy.array with target RA in degrees (need an array of points to compute the field rotation)
@@ -340,11 +364,21 @@ def fiberassign_flat_xy2radec(xflat,yflat,tile_ra,tile_dec,tile_mjd,tile_ha,tile
     """
 
     xfp,yfp = flat2ptl(xflat,yflat)
-    ra,dec  = fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=adc1,adc2=adc2,from_platemaker=from_platemaker, print_iloc=print_iloc, fp2tan_n_decimals=fp2tan_n_decimals)
-    if print_iloc is not None:
-        for var in [
-            "tile_ra", "tile_dec", "tile_mjd", "tile_ha", "tile_fieldrot", "adc1", "adc2", "from_platemaker",
-            "xfp[print_iloc]", "yfp[print_iloc]", "ra[print_iloc]", "dec[print_iloc]"
-        ]:
-            log.info("{}\t{}".format(var, eval(var)))
-    return ra,dec
+    if return_outputs:
+        ra,dec,outputs  = fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=adc1,adc2=adc2,from_platemaker=from_platemaker, print_iloc=print_iloc, fp2tan_n_decimals=fp2tan_n_decimals, return_outputs=return_outputs)
+        if print_iloc is not None:
+            for var in [
+                "tile_ra", "tile_dec", "tile_mjd", "tile_ha", "tile_fieldrot", "adc1", "adc2", "from_platemaker",
+                "xfp[print_iloc]", "yfp[print_iloc]", "ra[print_iloc]", "dec[print_iloc]"
+            ]:
+                log.info("{}\t{}".format(var, eval(var)))
+        return ra,dec,outputs
+    else:
+        ra,dec  = fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=adc1,adc2=adc2,from_platemaker=from_platemaker, print_iloc=print_iloc, fp2tan_n_decimals=fp2tan_n_decimals, return_outputs=return_outputs)
+        if print_iloc is not None:
+            for var in [
+                "tile_ra", "tile_dec", "tile_mjd", "tile_ha", "tile_fieldrot", "adc1", "adc2", "from_platemaker",
+                "xfp[print_iloc]", "yfp[print_iloc]", "ra[print_iloc]", "dec[print_iloc]"
+            ]:
+                log.info("{}\t{}".format(var, eval(var)))
+        return ra,dec
