@@ -448,7 +448,7 @@ def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, a
 
     return chex*x-shex*y , +shex*x+chex*y
 
-def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, aberration = True, polar_misalignment = True, use_astropy = False) :
+def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, aberration = True, polar_misalignment = True, use_astropy = False, return_outputs=False) :
     """
     Convert ICRS coordinates to tangent plane coordinates
 
@@ -469,54 +469,103 @@ def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = Tr
         use_astropy: boolean; use astropy coordinates for precession and aberration if True
     """
 
+    if return_outputs:
+        from astropy.table import Table
+        d = Table()
+        d.meta["TEL_RA0"], d.meta["TEL_DEC0"], d.meta["MJD"] = tel_ra, tel_dec, mjd
+        d.meta["LST_DEG"], d.meta["HEXROTDG"] = lst_deg, hexrot_deg
+        d.meta["PRECESS"], d.meta["ABERAT"], d.meta["POLMISAL"], d.meta["USEASTRP"] = precession, aberration, polar_misalignment, use_astropy
+        d["XTAN"], d["YTAN"] = x_tan, y_tan
+
+
     # undo hexapod rotation
     shex,chex = sincosd(hexrot_deg)
     x =  chex*x_tan+shex*y_tan
     y = -shex*x_tan+chex*y_tan
+    if return_outputs:
+        d.meta["SHEX"], d.meta["CHEX"] = shex, chex
+        d["X"], d["Y"] = x, y
 
     # need to apply precession ... etc to telescope pointing to interpret the x,y
     if precession :
         tel_ra,tel_dec = apply_precession_from_icrs(tel_ra, tel_dec, mjd, use_astropy)
+        if return_outputs:
+            d.meta["TEL_RA1"], d.meta["TEL_DEC1"] = tel_ra, tel_dec
+
     if aberration :
         tel_ra,tel_dec = apply_aberration(tel_ra,tel_dec,mjd, use_astropy)
+        if return_outputs:
+            d.meta["TEL_RA2"], d.meta["TEL_DEC2"] = tel_ra, tel_dec
 
     tel_ha = lst_deg - tel_ra
+    if return_outputs:
+        d.meta["TEL_HA2"] = tel_ha
 
     if polar_misalignment :
         polar_misalignment_matrix = compute_polar_misalignment_rotation_matrix(me_arcsec=ME_ARCSEC,ma_arcsec=MA_ARCSEC)
         tel_ha,tel_dec = getLONLAT(polar_misalignment_matrix.dot(getXYZ(tel_ha,tel_dec)))
+        if return_outputs:
+            d.meta["TEL_HA3"], d.meta["TEL_DEC3"] = tel_ha, tel_dec
 
     # we need to apply refraction for the telescope pointing to interpret the x,y
     tel_alt,tel_az = hadec2altaz(tel_ha,tel_dec)
+    if return_outputs:
+        d.meta["TEL_ALT3"], d.meta["TEL_AZ3"] = tel_alt, tel_az
+
     # apply refraction
     refracted_tel_alt = apply_refraction(tel_alt)
+    if return_outputs:
+        d.meta["TEL_ALT4"] = refracted_tel_alt
+
     # back to ha,dec
     refracted_tel_ha,refracted_tel_dec  = altaz2hadec(refracted_tel_alt,tel_az)
+    if return_outputs:
+        d.meta["TEL_HA4"], d.meta["TEL_DEC4"] = refracted_tel_ha, refracted_tel_dec
+
     # now convert x,y to ha,dec
     refracted_ha,refracted_dec = xy2hadec(x,y,refracted_tel_ha,refracted_tel_dec)
+    if return_outputs:
+        d["HA0"], d["DEC0"] = refracted_ha, refracted_dec
 
     # alt,az
     alt,az = hadec2altaz(refracted_ha,refracted_dec)
+    if return_outputs:
+        d["ALT0"], d["AZ0"] = alt, az
 
     # undo refraction
     alt = undo_refraction(alt)
+    if return_outputs:
+        d["ALT1"] = alt
 
     # back to ha,dec
     ha,dec  = altaz2hadec(alt,az)
+    if return_outputs:
+        d["HA1"], d["DEC1"] = ha, dec
 
     # now polar mis-alignment
     if polar_misalignment :
         # inverse matrix
         polar_misalignment_matrix = compute_polar_misalignment_rotation_matrix(me_arcsec=-ME_ARCSEC,ma_arcsec=-MA_ARCSEC)
         ha,dec  = getLONLAT(polar_misalignment_matrix.dot(getXYZ(ha,dec)))
+        if return_outputs:
+            d["HA2"], d["DEC2"] = ha, dec
 
     # ra
     ra = lst_deg - ha
+    if return_outputs:
+        d["RA2"] = ra
 
     if aberration :
         ra,dec = undo_aberration(ra,dec,mjd, use_astropy)
+        if return_outputs:
+            d["RA3"], d["DEC3"] = ra, dec
 
     if precession :
         ra,dec = undo_precession_from_icrs(ra, dec, mjd, use_astropy)
+        if return_outputs:
+            d["RA4"], d["DEC4"] = ra, dec
 
-    return ra,dec
+    if return_outputs:
+        return ra, dec, d
+    else:
+        return ra,dec
