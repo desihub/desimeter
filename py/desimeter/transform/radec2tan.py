@@ -36,12 +36,12 @@ from desimeter.trig import (sind, tand, put360, arctan2d, arcsind, getXYZ,
 ###################################################################################
 # constants
 # from http://asa.usno.navy.mil/static/files/2018/Astronomical_Constants_2018.pdf
-OBLIQ                      = np.longdouble(23.439279444444445) # 23+26/60.+21.406/3600. , obliquity of the ecliptic, Initial  Values  at  J2000·0
-DAYS_PER_YEAR              = np.longdouble(365.256363004)
-PRECESSION_PERIOD_IN_YEARS = np.longdouble(25771.5753382206) # 360./(5028.796195/100./3600.) , Rates of precession at J2000·0 (IAU 2006) , General precession in longitude
-ICRS_MJD                   = np.longdouble(51544.5) # 2451545.0-2400000.5 J2000
-LATITUDE                   = np.longdouble(31.96403) # DEG
-REFRACTION_AT_30DEG_ELEVATION = np.longdouble(79.) # arcsec
+OBLIQ                      = 23.439279444444445 # 23+26/60.+21.406/3600. , obliquity of the ecliptic, Initial  Values  at  J2000·0
+DAYS_PER_YEAR              = 365.256363004
+PRECESSION_PERIOD_IN_YEARS = 25771.5753382206 # 360./(5028.796195/100./3600.) , Rates of precession at J2000·0 (IAU 2006) , General precession in longitude
+ICRS_MJD                   = 51544.5 # 2451545.0-2400000.5 J2000
+LATITUDE                   = 31.96403 # DEG
+REFRACTION_AT_30DEG_ELEVATION = 79. # arcsec
 
 # polar mis-alignment
 # values based on DESI-5186, fit of commissioning instrument field rotation rotation
