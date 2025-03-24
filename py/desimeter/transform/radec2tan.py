@@ -274,9 +274,9 @@ def compute_polar_misalignment_rotation_matrix(me_arcsec,ma_arcsec) :
     compute a rotation matrix to move the polar axis to the north
     vector product
     """
-    ha1,dec1=altaz2hadec(alt=LATITUDE-me_arcsec/3600.,az=ma_arcsec/3600.)
+    ha1,dec1=altaz2hadec(alt=np.longdouble(LATITUDE)-me_arcsec/3600.,az=ma_arcsec/3600.)
     xyz1=getXYZ(ha1,dec1)
-    ha2,dec2=altaz2hadec(alt=LATITUDE,az=0.)
+    ha2,dec2=altaz2hadec(alt=np.longdouble(LATITUDE),az=0.)
     xyz2=getXYZ(ha2,dec2)
     cross = np.cross(xyz1,xyz2)
 
@@ -286,7 +286,7 @@ def compute_polar_misalignment_rotation_matrix(me_arcsec,ma_arcsec) :
     else :
         polar_misalignment_rotation = np.eye(3)
 
-    return polar_misalignment_rotation
+    return polar_misalignment_rotation.astype(dtype='float64')
 
 def hadec2altaz(ha,dec) :
     """
@@ -325,10 +325,17 @@ def altaz2hadec(alt,az) :
     """
     salt,calt = sincosd(alt)
     saz,caz   = sincosd(az)
-    slat,clat = sincosd(LATITUDE)
+    slat,clat = sincosd(np.longdouble(LATITUDE))
     ha  = arctan2d( -saz*calt, -caz*slat*calt+salt*clat)
     dec = arcsind(slat*salt+clat*calt*caz)
-    return ha,dec
+
+    # Type cleanup: output must be a float64
+    if isinstance(ha, np.ndarray):
+        return np.asarray(ha, dtype='float64'), np.asarray(dec, dtype='float64')
+    elif not isinstance(ha, np.float64):
+        return np.float64(ha), np.float64(dec)
+
+    return ha, dec
 
 
 def hadec2xy(ha,dec,tel_ha,tel_dec) :
