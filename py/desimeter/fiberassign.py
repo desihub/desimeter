@@ -92,7 +92,7 @@ def pm_get_adc_angles(ha, dec):
     adc2 = psi - dadc/2.
     return adc1, adc2
 
-def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,to_platemaker=True) :
+def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,to_platemaker=True, use_hardcoded_polmis_rotmat=False) :
     """Computes X Y focal plane coordinates of targets in CS5 coordinate system.
     Args:
       ra  : 1D numpy.array with target RA in degrees (need an array of points to compute the field rotation)
@@ -127,15 +127,15 @@ def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_field
     # in order to fp coordinates of tile RA and DEC, it's not zero because of the ADC angles
     for _ in range(2) :
 
-        xtan,ytan = radec2tan(np.array([tile_ra]),np.array([tile_dec]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
+        xtan,ytan = radec2tan(np.array([tile_ra]),np.array([tile_dec]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0, use_hardcoded_polmis_rotmat=use_hardcoded_polmis_rotmat)
         xfp_0,yfp_0   = tan2fp(xtan,ytan,adc1,adc2) #mm
         #log.info("Temp tile center in FP coordinates = {},{} mm".format(xfp_0[0],yfp_0[0]))
 
         # numeric derivative
         eps = 1./3600. #
-        xtan,ytan = radec2tan(np.array([tile_ra+eps]),np.array([tile_dec]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
+        xtan,ytan = radec2tan(np.array([tile_ra+eps]),np.array([tile_dec]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0, use_hardcoded_polmis_rotmat=use_hardcoded_polmis_rotmat)
         xfp_dra,yfp_dra   = tan2fp(xtan,ytan,adc1,adc2) #mm
-        xtan,ytan = radec2tan(np.array([tile_ra]),np.array([tile_dec+eps]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
+        xtan,ytan = radec2tan(np.array([tile_ra]),np.array([tile_dec+eps]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0, use_hardcoded_polmis_rotmat=use_hardcoded_polmis_rotmat)
         xfp_ddec,yfp_ddec   = tan2fp(xtan,ytan,adc1,adc2) #mm
         dxdra=(xfp_dra[0]-xfp_0[0])/eps
         dydra=(yfp_dra[0]-yfp_0[0])/eps
@@ -154,12 +154,12 @@ def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_field
         tel_dec += ddec
 
     # verify
-    xtan,ytan = radec2tan(np.array([tile_ra]),np.array([tile_dec]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
+    xtan,ytan = radec2tan(np.array([tile_ra]),np.array([tile_dec]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0, use_hardcoded_polmis_rotmat=use_hardcoded_polmis_rotmat)
     xfp_0,yfp_0   = tan2fp(xtan,ytan,adc1,adc2) #mm
     log.info("Tile center in FP coordinates = {},{} mm".format(xfp_0[0],yfp_0[0]))
 
     # now compute coordinates of all targets
-    xtan,ytan = radec2tan(ra,dec,tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
+    xtan,ytan = radec2tan(ra,dec,tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0, use_hardcoded_polmis_rotmat=use_hardcoded_polmis_rotmat)
     tmp_xfp,tmp_yfp = tan2fp(xtan,ytan,adc1,adc2)
 
     if to_platemaker :
@@ -182,7 +182,7 @@ def fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_field
 
     return xfp,yfp
 
-def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,from_platemaker=True, print_iloc=None, fp2tan_n_decimals=None, return_outputs=False) :
+def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,from_platemaker=True, print_iloc=None, fp2tan_n_decimals=None, return_outputs=False, use_hardcoded_polmis_rotmat=False) :
     """Computes RA Dec from focal plane coordinates of targets in CS5 coordinate system (inverse of fiberassign_radec2xy_cs5)
     Args:
       xfp  : 1D numpy.array with target X in mm (need an array of points to compute the field rotation)
@@ -230,15 +230,15 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
     # in order to fp coordinates of tile RA and DEC, it's not zero because of the ADC angles
     for _ in range(2) :
 
-        xtan,ytan = radec2tan(np.array([tile_ra]),np.array([tile_dec]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
+        xtan,ytan = radec2tan(np.array([tile_ra]),np.array([tile_dec]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0, use_hardcoded_polmis_rotmat=use_hardcoded_polmis_rotmat)
         xfp_0,yfp_0   = tan2fp(xtan,ytan,adc1,adc2) #mm
         #log.info("Temp tile center in FP coordinates = {},{} mm".format(xfp_0[0],yfp_0[0]))
 
         # numeric derivative
         eps = 1./3600. #
-        xtan,ytan = radec2tan(np.array([tile_ra+eps]),np.array([tile_dec]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
+        xtan,ytan = radec2tan(np.array([tile_ra+eps]),np.array([tile_dec]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0, use_hardcoded_polmis_rotmat=use_hardcoded_polmis_rotmat)
         xfp_dra,yfp_dra   = tan2fp(xtan,ytan,adc1,adc2) #mm
-        xtan,ytan = radec2tan(np.array([tile_ra]),np.array([tile_dec+eps]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
+        xtan,ytan = radec2tan(np.array([tile_ra]),np.array([tile_dec+eps]),tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0, use_hardcoded_polmis_rotmat=use_hardcoded_polmis_rotmat)
         xfp_ddec,yfp_ddec   = tan2fp(xtan,ytan,adc1,adc2) #mm
         dxdra=(xfp_dra[0]-xfp_0[0])/eps
         dydra=(yfp_dra[0]-yfp_0[0])/eps
@@ -273,7 +273,7 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
 
 
     xtan,ytan = fp2tan(xfp,yfp,adc1,adc2, n_decimals=fp2tan_n_decimals)
-    tmp_ra,tmp_dec    = tan2radec(xtan,ytan,tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
+    tmp_ra,tmp_dec    = tan2radec(xtan,ytan,tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0, use_hardcoded_polmis_rotmat=use_hardcoded_polmis_rotmat)
     if return_outputs:
         d["tel_ra"], d["tel_dec"] = tel_ra, tel_dec
         d["xtan"], d["ytan"], d["tmp_ra"], d["tmp_dec"] = xtan, ytan, tmp_ra, tmp_dec
@@ -298,7 +298,7 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
     tmp_yfp = -s * xfp + c * yfp
 
     xtan,ytan      = fp2tan(tmp_xfp,tmp_yfp,adc1,adc2, n_decimals=fp2tan_n_decimals)
-    ra,dec = tan2radec(xtan,ytan,tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0)
+    ra,dec = tan2radec(xtan,ytan,tel_ra,tel_dec,tile_mjd,lst,hexrot_deg=0, use_hardcoded_polmis_rotmat=use_hardcoded_polmis_rotmat)
     if return_outputs:
         d["tmp_xfp"], d["tmp_yfp"] = tmp_xfp, tmp_yfp
         d["xtan2"], d["ytan2"] = xtan, ytan
@@ -321,7 +321,7 @@ def fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
         return ra,dec
 
 
-def fiberassign_radec2xy_flat(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,to_platemaker=True) :
+def fiberassign_radec2xy_flat(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,to_platemaker=True, use_hardcoded_polmis_rotmat=False) :
     """Computes X Y focal plane coordinates of targets in the curved, "flat" coordinate system.
     Args:
       ra  : 1D numpy.array with target RA in degrees (need an array of points to compute the field rotation)
@@ -337,7 +337,7 @@ def fiberassign_radec2xy_flat(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
     Returns xfp,yfp, focal plane coordinates in mm in the curved "flat" coordinate system, 1D numpy arrays of same size as ra,dec
     """
 
-    xfp,yfp = fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1,adc2,to_platemaker=to_platemaker, print_iloc=print_iloc)
+    xfp,yfp = fiberassign_radec2xy_cs5(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1,adc2,to_platemaker=to_platemaker, print_iloc=print_iloc, use_hardcoded_polmis_rotmat=use_hardcoded_polmis_rotmat)
 
     # fiber assign coordinates are on the curved coordinates that follow the curved focal surface
     # the curved coordinates are called 'flat' in the focalplane parlance.
@@ -347,7 +347,7 @@ def fiberassign_radec2xy_flat(ra,dec,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fiel
 
 
 
-def fiberassign_flat_xy2radec(xflat,yflat,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,from_platemaker=True, print_iloc=None, fp2tan_n_decimals=None, return_outputs=False) :
+def fiberassign_flat_xy2radec(xflat,yflat,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=None,adc2=None,from_platemaker=True, print_iloc=None, fp2tan_n_decimals=None, return_outputs=False, use_hardcoded_polmis_rotmat=False) :
     """Computes RA Dec from focal plane coordinates of targets in curved "flat" coordinate system (inverse of fiberassign_radec2xy_flat)
     Args:
       xflat  : 1D numpy.array with target RA in degrees (need an array of points to compute the field rotation)
@@ -365,7 +365,7 @@ def fiberassign_flat_xy2radec(xflat,yflat,tile_ra,tile_dec,tile_mjd,tile_ha,tile
 
     xfp,yfp = flat2ptl(xflat,yflat)
     if return_outputs:
-        ra,dec,outputs  = fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=adc1,adc2=adc2,from_platemaker=from_platemaker, print_iloc=print_iloc, fp2tan_n_decimals=fp2tan_n_decimals, return_outputs=return_outputs)
+        ra,dec,outputs  = fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=adc1,adc2=adc2,from_platemaker=from_platemaker, print_iloc=print_iloc, fp2tan_n_decimals=fp2tan_n_decimals, return_outputs=return_outputs, use_hardcoded_polmis_rotmat=use_hardcoded_polmis_rotmat)
         if print_iloc is not None:
             for var in [
                 "tile_ra", "tile_dec", "tile_mjd", "tile_ha", "tile_fieldrot", "adc1", "adc2", "from_platemaker",
@@ -374,7 +374,7 @@ def fiberassign_flat_xy2radec(xflat,yflat,tile_ra,tile_dec,tile_mjd,tile_ha,tile
                 log.info("{}\t{}".format(var, eval(var)))
         return ra,dec,outputs
     else:
-        ra,dec  = fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=adc1,adc2=adc2,from_platemaker=from_platemaker, print_iloc=print_iloc, fp2tan_n_decimals=fp2tan_n_decimals, return_outputs=return_outputs)
+        ra,dec  = fiberassign_cs5_xy2radec(xfp,yfp,tile_ra,tile_dec,tile_mjd,tile_ha,tile_fieldrot,adc1=adc1,adc2=adc2,from_platemaker=from_platemaker, print_iloc=print_iloc, fp2tan_n_decimals=fp2tan_n_decimals, return_outputs=return_outputs, use_hardcoded_polmis_rotmat=use_hardcoded_polmis_rotmat)
         if print_iloc is not None:
             for var in [
                 "tile_ra", "tile_dec", "tile_mjd", "tile_ha", "tile_fieldrot", "adc1", "adc2", "from_platemaker",
