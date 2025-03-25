@@ -29,9 +29,12 @@ Inputs are pointing TEL_RA,TEL_DEC,MJD,LST,HEXROT and a list of  TARGET_RA,TARGE
 """
 
 import numpy as np
-#from desimeter.log import get_logger
+from desimeter.log import get_logger
 from desimeter.trig import (sind, tand, put360, arctan2d, arcsind, getXYZ,
                             getNormalized, sincosd)
+
+log = get_logger()
+
 
 ###################################################################################
 # constants
@@ -464,6 +467,10 @@ def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, a
             polar_misalignment_matrix = get_hardcoded_polmis_rotmat(inverse=False)
         else:
             polar_misalignment_matrix = compute_polar_misalignment_rotation_matrix(me_arcsec=ME_ARCSEC,ma_arcsec=MA_ARCSEC)
+        log.info("polar_misalignment_matrix computed with use_hardcoded_polmis_rotmat={}:\n{}".format(
+            use_hardcoded_polmis_rotmat, polar_misalignment_matrix
+            )
+        )
         ha,dec = getLONLAT(polar_misalignment_matrix.dot(getXYZ(ha,dec)))
         tel_ha,tel_dec = getLONLAT(polar_misalignment_matrix.dot(getXYZ(tel_ha,tel_dec)))
 
@@ -545,6 +552,10 @@ def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = Tr
             polar_misalignment_matrix = get_hardcoded_polmis_rotmat(inverse=False)
         else:
             polar_misalignment_matrix = compute_polar_misalignment_rotation_matrix(me_arcsec=ME_ARCSEC,ma_arcsec=MA_ARCSEC)
+        log.info("polar_misalignment_matrix computed with use_hardcoded_polmis_rotmat={}:\n{}".format(
+            use_hardcoded_polmis_rotmat, polar_misalignment_matrix
+            )
+        )
         tel_ha,tel_dec = getLONLAT(polar_misalignment_matrix.dot(getXYZ(tel_ha,tel_dec)))
         if return_outputs:
             d.meta["TEL_HA3"], d.meta["TEL_DEC3"] = tel_ha, tel_dec
@@ -591,6 +602,10 @@ def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = Tr
             polar_misalignment_matrix = get_hardcoded_polmis_rotmat(inverse=True)
         else:
             polar_misalignment_matrix = compute_polar_misalignment_rotation_matrix(me_arcsec=-ME_ARCSEC,ma_arcsec=-MA_ARCSEC)
+        log.info("inverse polar_misalignment_matrix computed with use_hardcoded_polmis_rotmat={}:\n{}".format(
+            use_hardcoded_polmis_rotmat, polar_misalignment_matrix
+            )
+        )
         ha,dec  = getLONLAT(polar_misalignment_matrix.dot(getXYZ(ha,dec)))
         if return_outputs:
             d["HA2"], d["DEC2"] = ha, dec
