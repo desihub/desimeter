@@ -70,29 +70,47 @@ for instrument control, only for target selection or analyis purposes. Therefore
 angular range limits are NOT implemented here.
 """
 
+import os
 import numpy as np
 import desimeter.transform.xy2qs as xy2qs
 import desimeter.transform.xy2tp as xy2tp
+from desimeter.log import get_logger
+
+log = get_logger()
 
 _default_t_int_range = [-180. + xy2tp.epsilon, 180.] # theta min, max
 _default_p_int_range = [-20., 200.] # phi min, max
 
 def ptl2flat(x_ptl, y_ptl):
     '''Converts (x_ptl, y_ptl) coordinates to (x_ptl, y_ptl).'''
-    q = np.arctan2(y_ptl, x_ptl)
     r = np.hypot(x_ptl, y_ptl)
     s = xy2qs.r2s(r)
-    x_flat = s * np.cos(q)
-    y_flat = s * np.sin(q)
+    fba_behave = os.getenv("FIBERASSIGN_BEHAVIOR", -1)
+    if fba_behave == 1:
+        log.info("$FIBERASSIGN_BEHAVIOR={}, bypass trigonometric calls".format(fba_behave))
+        x_ptl = s * x_flat / r
+        y_ptl = s * y_flat / r
+    else:
+        log.info("$FIBERASSIGN_BEHAVIOR={}, use trigonometric calls".format(fba_behave))
+        q = np.arctan2(y_ptl, x_ptl)
+        x_flat = s * np.cos(q)
+        y_flat = s * np.sin(q)
     return x_flat, y_flat
 
 def flat2ptl(x_flat, y_flat):
     '''Converts (x_flat, y_flat) coordinates to (x_ptl, y_ptl).'''
-    q = np.arctan2(y_flat, x_flat)
     s = np.hypot(x_flat, y_flat)
     r = xy2qs.s2r(s)
-    x_ptl = r * np.cos(q)
-    y_ptl = r * np.sin(q)
+    fba_behave = os.getenv("FIBERASSIGN_BEHAVIOR", -1)
+    if fba_behave == 1:
+        log.info("$FIBERASSIGN_BEHAVIOR={}, bypass trigonometric calls".format(fba_behave))
+        x_ptl = r * x_flat / s
+        y_ptl = r * y_flat / s
+    else:
+        log.info("$FIBERASSIGN_BEHAVIOR={}, use trigonometric calls".format(fba_behave))
+        q = np.arctan2(y_flat, x_flat)
+        x_ptl = r * np.cos(q)
+        y_ptl = r * np.sin(q)
     return x_ptl, y_ptl
 
 def flat2loc(u_flat, u_offset):

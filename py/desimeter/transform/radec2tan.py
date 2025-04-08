@@ -28,6 +28,7 @@ Inputs are pointing TEL_RA,TEL_DEC,MJD,LST,HEXROT and a list of  TARGET_RA,TARGE
 
 """
 
+import os
 import numpy as np
 from desimeter.log import get_logger
 from desimeter.trig import (sind, tand, put360, arctan2d, arcsind, getXYZ,
@@ -301,17 +302,41 @@ def undo_refraction(alt) :
         daprev = da
     return alt
 
+def get_xyz_bypass_trigo(alt, az):
+    """
+    replaces:
+        ha, dec = altaz2hadec(alt, az)
+        xys = getXYZ(ha, dec)
+    """
+    salt,calt = sincosd(alt)
+    saz,caz   = sincosd(az)
+    slat,clat = sincosd(LATITUDE)
+    #
+    ha_arg0, ha_arg1 = -saz * calt, -caz * slat * calt + salt * clat
+    dec_arg = -caz * slat * calt + salt * clat
+    x = ha_arg0 / np.sqrt(ha_arg0 ** 2 + ha_arg1 ** 2) * np.sqrt(1 - dec_arg ** 2)
+    y = ha_arg1 / np.sqrt(ha_arg0 ** 2 + ha_arg1 ** 2) * np.sqrt(1 - dec_arg ** 2)
+    z = dec_arg
+    return np.array([x, y, z])
+
 def compute_polar_misalignment_rotation_matrix(me_arcsec,ma_arcsec) :
     """
     compute a rotation matrix to move the polar axis to the north
     vector product
     """
-    ha1,dec1=altaz2hadec(alt=LATITUDE-me_arcsec/3600.,az=ma_arcsec/3600.)
-    # ha1,dec1=altaz2hadec(alt=np.longdouble(LATITUDE)-me_arcsec/3600.,az=ma_arcsec/3600.)
-    xyz1=getXYZ(ha1,dec1)
-    ha2,dec2=altaz2hadec(alt=LATITUDE,az=0.)
-    # ha2,dec2=altaz2hadec(alt=np.longdouble(LATITUDE),az=0.)
-    xyz2=getXYZ(ha2,dec2)
+    fba_behave = os.getenv("FIBERASSIGN_BEHAVIOR", -1)
+    if fba_behave == 1:
+        log.info("$FIBERASSIGN_BEHAVIOR={}, bypass trigonometric calls".format(fba_behave))
+        xyz1 = get_xyz_bypass_trigo(LATITUDE-me_arcsec/3600., ma_arcsec/3600.)
+        xyz2 = get_xyz_bypass_trigo(LATITUDE, 0.)
+    else:
+        log.info("$FIBERASSIGN_BEHAVIOR={}, use trigonometric calls".format(fba_behave))
+        ha1,dec1=altaz2hadec(alt=LATITUDE-me_arcsec/3600.,az=ma_arcsec/3600.)
+        # ha1,dec1=altaz2hadec(alt=np.longdouble(LATITUDE)-me_arcsec/3600.,az=ma_arcsec/3600.)
+        xyz1=getXYZ(ha1,dec1)
+        ha2,dec2=altaz2hadec(alt=LATITUDE,az=0.)
+        # ha2,dec2=altaz2hadec(alt=np.longdouble(LATITUDE),az=0.)
+        xyz2=getXYZ(ha2,dec2)
     cross = np.cross(xyz1,xyz2)
 
     norme = np.sqrt(np.sum(cross**2))
