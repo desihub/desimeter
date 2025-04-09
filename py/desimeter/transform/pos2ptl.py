@@ -88,8 +88,8 @@ def ptl2flat(x_ptl, y_ptl):
     fba_behave = os.getenv("FIBERASSIGN_BEHAVIOR", "-1")
     if fba_behave == "1":
         log.info("$FIBERASSIGN_BEHAVIOR={}, bypass trigonometric calls".format(fba_behave))
-        x_ptl = s * x_flat / r
-        y_ptl = s * y_flat / r
+        x_flat = s * x_ptl / r
+        y_flat = s * y_ptl / r
     else:
         log.info("$FIBERASSIGN_BEHAVIOR={}, use trigonometric calls".format(fba_behave))
         q = np.arctan2(y_ptl, x_ptl)
