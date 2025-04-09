@@ -324,8 +324,8 @@ def compute_polar_misalignment_rotation_matrix(me_arcsec,ma_arcsec) :
     compute a rotation matrix to move the polar axis to the north
     vector product
     """
-    fba_behave = os.getenv("FIBERASSIGN_BEHAVIOR", -1)
-    if fba_behave == 1:
+    fba_behave = os.getenv("FIBERASSIGN_BEHAVIOR", "-1")
+    if fba_behave == "1":
         log.info("$FIBERASSIGN_BEHAVIOR={}, bypass trigonometric calls".format(fba_behave))
         xyz1 = get_xyz_bypass_trigo(LATITUDE-me_arcsec/3600., ma_arcsec/3600.)
         xyz2 = get_xyz_bypass_trigo(LATITUDE, 0.)

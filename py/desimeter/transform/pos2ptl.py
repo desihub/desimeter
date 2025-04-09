@@ -85,8 +85,8 @@ def ptl2flat(x_ptl, y_ptl):
     '''Converts (x_ptl, y_ptl) coordinates to (x_ptl, y_ptl).'''
     r = np.hypot(x_ptl, y_ptl)
     s = xy2qs.r2s(r)
-    fba_behave = os.getenv("FIBERASSIGN_BEHAVIOR", -1)
-    if fba_behave == 1:
+    fba_behave = os.getenv("FIBERASSIGN_BEHAVIOR", "-1")
+    if fba_behave == "1":
         log.info("$FIBERASSIGN_BEHAVIOR={}, bypass trigonometric calls".format(fba_behave))
         x_ptl = s * x_flat / r
         y_ptl = s * y_flat / r
@@ -101,8 +101,8 @@ def flat2ptl(x_flat, y_flat):
     '''Converts (x_flat, y_flat) coordinates to (x_ptl, y_ptl).'''
     s = np.hypot(x_flat, y_flat)
     r = xy2qs.s2r(s)
-    fba_behave = os.getenv("FIBERASSIGN_BEHAVIOR", -1)
-    if fba_behave == 1:
+    fba_behave = os.getenv("FIBERASSIGN_BEHAVIOR", "-1")
+    if fba_behave == "1":
         log.info("$FIBERASSIGN_BEHAVIOR={}, bypass trigonometric calls".format(fba_behave))
         x_ptl = r * x_flat / s
         y_ptl = r * y_flat / s
