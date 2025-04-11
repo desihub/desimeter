@@ -29,9 +29,11 @@ Inputs are pointing TEL_RA,TEL_DEC,MJD,LST,HEXROT and a list of  TARGET_RA,TARGE
 """
 
 import numpy as np
-#from desimeter.log import get_logger
+from desimeter.log import get_logger
 from desimeter.trig import (sind, tand, put360, arctan2d, arcsind, getXYZ,
                             getNormalized, sincosd)
+
+log = get_logger()
 
 ###################################################################################
 # constants
@@ -47,6 +49,45 @@ REFRACTION_AT_30DEG_ELEVATION = 79. # arcsec
 # values based on DESI-5186, fit of commissioning instrument field rotation rotation
 MA_ARCSEC = -2. # arcsec; in the northern hemisphere, positive MA means that the pole of the mounting is to the right of due north
 ME_ARCSEC = -120. # arcsec; in the northern hemisphere, positive ME means that the pole of the mounting is below the true (unrefracted) north (so elevation=latitude-me)
+
+def get_hardcoded_polmis_rotmat(inverse=False):
+    """
+    Polar_misalignment_matrix value computed with compute_polar_misalignment_rotation_matrix().
+
+    Args:
+        inverse (optional, defaults to False): compute the inverse matrix? (bool)
+
+    Returns:
+        The 3x3 matrix (np.array() of floats)
+
+    Notes:
+        This function is used to bypass instable computation at kpno with the new conda environment.
+        Behavior:
+        - inverse=False -> compute_polar_misalignment_rotation_matrix(me_arcsec=ME_ARCSEC,ma_arcsec=MA_ARCSEC)
+        - inverse=True  -> compute_polar_misalignment_rotation_matrix(me_arcsec=-ME_ARCSEC,ma_arcsec=-MA_ARCSEC)
+        We take here the values returned by the current (i.e. until Apr. 2025) kpno environment used for operations.
+        Checks on get_hardcoded_polmis_rotmat(inverse=False) case:
+        - nersc/godesi_23.10, nersc/godesi_main, kpno/desiconda-20200924-operations provide the same answer
+        - kpno/desiconda-20250320* provide a different answer
+        See this thread: https://desisurvey.slack.com/archives/C08HYEP7BN0/p1742863505853309
+
+    """
+    if inverse:
+        return np.array(
+            [
+                [ 9.99999831e-01, -2.39375263e-09,  5.81776364e-04],
+                [-2.39375263e-09,  1.00000000e+00,  8.22911544e-06],
+                [-5.81776364e-04, -8.22911544e-06,  9.99999831e-01]
+            ]
+        )
+    else:
+        return np.array(
+            [
+                [ 9.99999831e-01, -2.39201544e-09, -5.81776405e-04],
+                [-2.39201544e-09,  1.00000000e+00, -8.22314283e-06],
+                [ 5.81776405e-04,  8.22314283e-06,  9.99999831e-01],
+            ]
+        )
 
 def getLONLAT(xyz):
     """Convert xyz into its spherical angles"""
@@ -383,7 +424,7 @@ def rotation_matrix(axis,theta) :
     uxx=np.array([[0,-u[2],u[1]],[u[2],0,-u[0]],[-u[1],u[0],0]])
     return ct*np.eye(axis.size)+st*uxx+(1-ct)*uut
 
-def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, aberration = True, polar_misalignment = True, use_astropy = False) :
+def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, aberration = True, polar_misalignment = True, use_astropy = False, use_hardcoded_polmis_rotmat=False) :
     """
     Convert ICRS coordinates to tangent plane coordinates
 
@@ -408,6 +449,7 @@ def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, a
         aberration: boolean; compute aberration if True
         polar_misalignment: boolean; compute polar misalignment if True
         use_astropy: boolean; use astropy coordinates for precession and aberration if True
+        use_hardcoded_polmis_rotmat: boolean (defaults to False):  use pre-computed polar misalignment matrix, from get_hardcoded_polmis_rotmat()
     """
     if precession :
         ra,dec = apply_precession_from_icrs(ra, dec, mjd, use_astropy)
@@ -424,7 +466,14 @@ def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, a
 
     if polar_misalignment :
         # rotate
-        polar_misalignment_matrix = compute_polar_misalignment_rotation_matrix(me_arcsec=ME_ARCSEC,ma_arcsec=MA_ARCSEC)
+        if use_hardcoded_polmis_rotmat:
+            polar_misalignment_matrix = get_hardcoded_polmis_rotmat(inverse=False)
+        else:
+            polar_misalignment_matrix = compute_polar_misalignment_rotation_matrix(me_arcsec=ME_ARCSEC,ma_arcsec=MA_ARCSEC)
+        log.info("polar_misalignment_matrix computed with use_hardcoded_polmis_rotmat={}:\n{}".format(
+            use_hardcoded_polmis_rotmat, polar_misalignment_matrix
+            )
+        )
         ha,dec = getLONLAT(polar_misalignment_matrix.dot(getXYZ(ha,dec)))
         tel_ha,tel_dec = getLONLAT(polar_misalignment_matrix.dot(getXYZ(tel_ha,tel_dec)))
 
@@ -448,7 +497,7 @@ def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, a
 
     return chex*x-shex*y , +shex*x+chex*y
 
-def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, aberration = True, polar_misalignment = True, use_astropy = False) :
+def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, aberration = True, polar_misalignment = True, use_astropy = False, use_hardcoded_polmis_rotmat = False) :
     """
     Convert ICRS coordinates to tangent plane coordinates
 
@@ -467,6 +516,7 @@ def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = Tr
         aberration: boolean; compute aberration if True
         polar_misalignment: boolean; compute polar misalignment if True
         use_astropy: boolean; use astropy coordinates for precession and aberration if True
+        use_hardcoded_polmis_rotmat: boolean (defaults to False):  use pre-computed polar misalignment matrix, from get_hardcoded_polmis_rotmat()
     """
 
     # undo hexapod rotation
@@ -483,7 +533,14 @@ def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = Tr
     tel_ha = lst_deg - tel_ra
 
     if polar_misalignment :
-        polar_misalignment_matrix = compute_polar_misalignment_rotation_matrix(me_arcsec=ME_ARCSEC,ma_arcsec=MA_ARCSEC)
+        if use_hardcoded_polmis_rotmat:
+            polar_misalignment_matrix = get_hardcoded_polmis_rotmat(inverse=False)
+        else:
+            polar_misalignment_matrix = compute_polar_misalignment_rotation_matrix(me_arcsec=ME_ARCSEC,ma_arcsec=MA_ARCSEC)
+        log.info("polar_misalignment_matrix computed with use_hardcoded_polmis_rotmat={}:\n{}".format(
+            use_hardcoded_polmis_rotmat, polar_misalignment_matrix
+            )
+        )
         tel_ha,tel_dec = getLONLAT(polar_misalignment_matrix.dot(getXYZ(tel_ha,tel_dec)))
 
     # we need to apply refraction for the telescope pointing to interpret the x,y
@@ -507,7 +564,14 @@ def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = Tr
     # now polar mis-alignment
     if polar_misalignment :
         # inverse matrix
-        polar_misalignment_matrix = compute_polar_misalignment_rotation_matrix(me_arcsec=-ME_ARCSEC,ma_arcsec=-MA_ARCSEC)
+        if use_hardcoded_polmis_rotmat:
+            polar_misalignment_matrix = get_hardcoded_polmis_rotmat(inverse=True)
+        else:
+            polar_misalignment_matrix = compute_polar_misalignment_rotation_matrix(me_arcsec=-ME_ARCSEC,ma_arcsec=-MA_ARCSEC)
+        log.info("inverse polar_misalignment_matrix computed with use_hardcoded_polmis_rotmat={}:\n{}".format(
+            use_hardcoded_polmis_rotmat, polar_misalignment_matrix
+            )
+        )
         ha,dec  = getLONLAT(polar_misalignment_matrix.dot(getXYZ(ha,dec)))
 
     # ra
