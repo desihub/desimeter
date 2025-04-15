@@ -66,11 +66,16 @@ def get_hardcoded_polmis_rotmat(inverse=False):
         - inverse=False -> compute_polar_misalignment_rotation_matrix(me_arcsec=ME_ARCSEC,ma_arcsec=MA_ARCSEC)
         - inverse=True  -> compute_polar_misalignment_rotation_matrix(me_arcsec=-ME_ARCSEC,ma_arcsec=-MA_ARCSEC)
         We take here the values returned by the current (i.e. until Apr. 2025) kpno environment used for operations.
-        Checks on get_hardcoded_polmis_rotmat(inverse=False) case:
-        - nersc/godesi_23.10, nersc/godesi_main, kpno/desiconda-20200924-operations provide the same answer
-        - kpno/desiconda-20250320* provide a different answer
-        See this thread: https://desisurvey.slack.com/archives/C08HYEP7BN0/p1742863505853309
-
+        Checks on get_hardcoded_polmis_rotmat() and get_hardcoded_polmis_rotmat(inverse=False):
+        - nersc/godesi_23.10 (desiconda/20230111-2.1.0),
+          nersc/godesi_main  (desiconda/20240425-2.2.0),
+          kpno/desiconda-20200924 (used for operations up to Mar. 2025):
+            all three environments provide the same answers, hard-coded here
+        - kpno/kpno-20250320-2.2.1.dev (planned to be used for operations starting from Apr. 2025):
+            provides different answers; bypassed with this hard-coding
+        See:
+        - this thread: https://desisurvey.slack.com/archives/C08HYEP7BN0/p1742863505853309
+        - https://github.com/desihub/desimeter/pull/196
     """
     if inverse:
         return np.array(
