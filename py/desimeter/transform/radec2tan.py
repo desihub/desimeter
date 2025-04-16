@@ -476,7 +476,8 @@ def radec2tan(ra,dec,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = True, a
         else:
             polar_misalignment_matrix = compute_polar_misalignment_rotation_matrix(me_arcsec=ME_ARCSEC,ma_arcsec=MA_ARCSEC)
         log.info("polar_misalignment_matrix computed with use_hardcoded_polmis_rotmat={}:\n{}".format(
-            use_hardcoded_polmis_rotmat, polar_misalignment_matrix
+                use_hardcoded_polmis_rotmat,
+                "\n".join(["\t".join([str(_) for _ in row]) for row in polar_misalignment_matrix])
             )
         )
         ha,dec = getLONLAT(polar_misalignment_matrix.dot(getXYZ(ha,dec)))
@@ -543,7 +544,8 @@ def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = Tr
         else:
             polar_misalignment_matrix = compute_polar_misalignment_rotation_matrix(me_arcsec=ME_ARCSEC,ma_arcsec=MA_ARCSEC)
         log.info("polar_misalignment_matrix computed with use_hardcoded_polmis_rotmat={}:\n{}".format(
-            use_hardcoded_polmis_rotmat, polar_misalignment_matrix
+                use_hardcoded_polmis_rotmat,
+                "\n".join(["\t".join([str(_) for _ in row]) for row in polar_misalignment_matrix])
             )
         )
         tel_ha,tel_dec = getLONLAT(polar_misalignment_matrix.dot(getXYZ(tel_ha,tel_dec)))
@@ -574,7 +576,8 @@ def tan2radec(x_tan,y_tan,tel_ra,tel_dec,mjd,lst_deg,hexrot_deg, precession = Tr
         else:
             polar_misalignment_matrix = compute_polar_misalignment_rotation_matrix(me_arcsec=-ME_ARCSEC,ma_arcsec=-MA_ARCSEC)
         log.info("inverse polar_misalignment_matrix computed with use_hardcoded_polmis_rotmat={}:\n{}".format(
-            use_hardcoded_polmis_rotmat, polar_misalignment_matrix
+                use_hardcoded_polmis_rotmat,
+                "\n".join(["\t".join([str(_) for _ in row]) for row in polar_misalignment_matrix])
             )
         )
         ha,dec  = getLONLAT(polar_misalignment_matrix.dot(getXYZ(ha,dec)))
