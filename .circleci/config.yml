@@ -78,7 +78,7 @@ workflows:
       - runtests:
           name: runtests-38
           pyver: "3.8"
-          coveralls: true
+          coveralls: false
       - runtests:
           name: runtests-37
           pyver: "3.7"
