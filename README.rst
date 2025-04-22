@@ -2,7 +2,15 @@
 desimeter
 ========
 
-[![CI](https://github.com/desihub/desimeter/actions/workflows/python-package.yml/badge.svg)](https://github.com/desihub/desimeter/actions/workflows/python-package.yml)
+|Actions Status| |Coveralls Status|
+
+.. |Actions Status| image:: https://github.com/desihub/desimeter/workflows/CI/badge.svg
+    :target: https://github.com/desihub/desimeter/actions
+    :alt: GitHub Actions CI Status
+
+.. |Coveralls Status| image:: https://coveralls.io/repos/desihub/desimeter/badge.svg
+    :target: https://coveralls.io/github/desihub/desimeter
+    :alt: Test Coverage Status
 
 Introduction
 ------------
