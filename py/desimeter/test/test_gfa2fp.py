@@ -1,5 +1,4 @@
 import unittest
-from pkg_resources import resource_filename
 
 import numpy as np
 from desimeter.transform.gfa2fp import gfa2fp, fp2gfa

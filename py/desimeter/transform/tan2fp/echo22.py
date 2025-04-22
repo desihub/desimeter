@@ -4,7 +4,7 @@ Echo22 optics model in DESI-0329v18 Echo22Platescale.txt
 """
 
 import numpy as np
-from pkg_resources import resource_filename
+from importlib.resources import files as resource_files
 from desimeter.trig import sind, arcsind
 
 _r2t_coeff = None
@@ -90,7 +90,7 @@ def _fit_r2theta(deg=5):
     # 1	0.004114797	3.678711788	3.678708901	13.92436237	13.92435007	67.50721377	67.50715416
     # ...
     #
-    echo22file = resource_filename('desimeter.transform.tan2fp', 'data/Echo22Platescale.txt')
+    echo22file = resource_files('desimeter.transform.tan2fp').joinpath('data/Echo22Platescale.txt')
     dtype = [('radius', float), ('theta', float)]
     echo22 = np.loadtxt(echo22file, dtype=dtype, usecols=[0,1])
 

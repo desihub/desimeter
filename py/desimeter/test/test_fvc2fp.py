@@ -4,7 +4,7 @@ Test FVC <-> FP transformation code.
 
 import os
 import unittest
-from pkg_resources import resource_filename
+from importlib.resources import files as resource_files
 import tempfile
 
 import numpy as np
@@ -17,11 +17,11 @@ class _TestFVC2FP(object):
     @classmethod
     def setUpClass(cls):
         cls.TransformClass = None
-        cls.spotfile = resource_filename('desimeter', 'test/data/test-spots.csv')
+        cls.spotfile = resource_files('desimeter').joinpath('test/data/test-spots.csv')
         cls.tempdir = tempfile.mkdtemp()
 
     def setUp(self):
-        self.spotfile = resource_filename('desimeter', 'test/data/test-spots.csv')
+        self.spotfile = resource_files('desimeter').joinpath('test/data/test-spots.csv')
 
     @classmethod
     def tearDownClass(cls):
@@ -161,7 +161,7 @@ class _TestFVC2FP(object):
 class TestFVC2FP(_TestFVC2FP, unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.spotfile = resource_filename('desimeter', 'test/data/test-spots.csv')
+        cls.spotfile = resource_files('desimeter').joinpath('test/data/test-spots.csv')
         cls.tempdir = tempfile.mkdtemp()
         cls.TransformClass = FVC2FP
 
@@ -185,7 +185,7 @@ class TestFVC2FP(_TestFVC2FP, unittest.TestCase):
 
 class TestDefaultFit(unittest.TestCase):
     def test_fit(self):
-        spotfile = resource_filename('desimeter', 'test/data/test-spots.csv')
+        spotfile = resource_files('desimeter').joinpath('test/data/test-spots.csv')
         spots = Table.read(spotfile)
         tx = fit(spots)
         self.assertTrue(isinstance(tx, FVC2FP))
