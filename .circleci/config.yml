@@ -76,8 +76,8 @@ workflows:
   main:
     jobs:
       - runtests:
-          name: runtests-310
-          pyver: "3.10"
+          name: runtests-38
+          pyver: "3.8"
           coveralls: true
       - runtests:
           name: runtests-37
