@@ -21,7 +21,6 @@ jobs:
                 astropy-version: ['<6.1']         # KPNO+NERSC, 2025/04
                 fitsio-version: ['<2']            # latest
                 numpy-version: ['<1.23']          # to keep asscalar, used by astropy
-                scipy-version: ['<1.9']           # compatibility with older NumPy
         env:
             DESIUTIL_VERSION: 3.5.0
 
@@ -44,7 +43,6 @@ jobs:
                 python -m pip install -U 'astropy${{ matrix.astropy-version }}'
                 python -m pip cache remove fitsio
                 python -m pip install --no-deps --force-reinstall --ignore-installed 'fitsio${{ matrix.fitsio-version }}'
-                python -m pip install --no-deps --force-reinstall --ignore-installed 'scipy${{ matrix.scipy-version }}'
             - name: Run the test
               run: pytest
 
