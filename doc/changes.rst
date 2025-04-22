@@ -2,10 +2,10 @@
 desimeter change Log
 ====================
 
-0.8.0 (unreleased)
+0.7.2 (unreleased)
 ------------------
 
-* Enable precomputed polar misalignment matrix with ``use_hardcoded_polmis_rotmat`` option in ``fiberassign`` and ``transform.radec2tan`` submodules [PR #196].
+* No changes yet.
 
 0.7.1 (2024-08-15)
 ------------------
