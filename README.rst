@@ -2,6 +2,16 @@
 desimeter
 ========
 
+|Actions Status| |Coveralls Status|
+
+.. |Actions Status| image:: https://github.com/desihub/desimeter/workflows/CI/badge.svg
+    :target: https://github.com/desihub/desimeter/actions
+    :alt: GitHub Actions CI Status
+
+.. |Coveralls Status| image:: https://coveralls.io/repos/desihub/desimeter/badge.svg
+    :target: https://coveralls.io/github/desihub/desimeter
+    :alt: Test Coverage Status
+
 Introduction
 ------------
 
@@ -20,18 +30,6 @@ It comprises
 * prediction of fiber sky RA,Dec coordinates
 
 See `desimeter/doc/coordinates.rst` for a definition of the coordinate systems.
-
-
-Automated build & testing
--------------------------
-
-.. |Actions Status| image:: https://github.com/desihub/desimeter/workflows/CI/badge.svg
-    :target: https://github.com/desihub/desimeter/actions
-    :alt: GitHub Actions CI Status
-
-.. |Coveralls Status| image:: https://coveralls.io/repos/desihub/desimeter/badge.svg
-    :target: https://coveralls.io/github/desihub/desimeter
-    :alt: Test Coverage Status
 
 Script Examples
 ---------------
