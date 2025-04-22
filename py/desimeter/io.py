@@ -1,5 +1,5 @@
 import os
-from pkg_resources import resource_filename
+from importlib.resources import files as resource_files
 from astropy.table import Table
 import yaml
 from desimeter.log import get_logger
@@ -39,7 +39,7 @@ def desimeter_data_dir():
     if "DESIMETER_DATA" in os.environ :
         return os.environ["DESIMETER_DATA"]
     else :
-        return resource_filename('desimeter', 'data')
+        return resource_files('desimeter').joinpath('data')
 
 def load_metrology():
     '''

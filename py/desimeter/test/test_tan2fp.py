@@ -1,5 +1,5 @@
 import unittest
-from pkg_resources import resource_filename
+from importlib.resources import files as resource_files
 
 import numpy as np
 from astropy.table import Table
@@ -95,7 +95,7 @@ class TestTan2FP(unittest.TestCase):
         self.assertLess(np.max(np.abs(dt)), 0.1)
 
     def test_raytracefit_tan2fp(self) :
-        ifilename = resource_filename("desimeter","data/raytrace-tan2fp-4957-v18.csv")
+        ifilename = resource_files('desimeter').joinpath('data/raytrace-tan2fp-4957-v18.csv')
         table = Table.read(ifilename,format="csv")
         tmp=np.unique(table["ADC1"])
         adc1=float(tmp[tmp.size//2]) # one random value of adc1 on grid
@@ -112,7 +112,7 @@ class TestTan2FP(unittest.TestCase):
         self.assertLess(rms, 3e-3) # less than 3 um
 
     def test_raytracefit_fp2tan(self) :
-        ifilename = resource_filename("desimeter","data/raytrace-tan2fp-4957-v18.csv")
+        ifilename = resource_files('desimeter').joinpath('data/raytrace-tan2fp-4957-v18.csv')
         table = Table.read(ifilename,format="csv")
         tmp=np.unique(table["ADC1"])
         adc1=float(tmp[tmp.size//2]) # one random value of adc1 on grid
@@ -141,7 +141,7 @@ class TestTan2FP(unittest.TestCase):
         self.assertLess(rms,0.1) # less than 0.1 arcsec
 
     def test_default_tan2fp(self) :
-        ifilename = resource_filename("desimeter","data/raytrace-tan2fp-4957-v18.csv")
+        ifilename = resource_files('desimeter').joinpath('data/raytrace-tan2fp-4957-v18.csv')
         table = Table.read(ifilename,format="csv")
         tmp=np.unique(table["ADC1"])
         adc1=float(tmp[tmp.size//2]) # one random value of adc1 on grid
