@@ -29,9 +29,9 @@ Automated build & testing
   :alt: Build
   :target: https://circleci.com/gh/desihub/desimeter
 
-.. image:: https://coveralls.io/repos/github/desihub/desimeter/badge.svg?branch=master
+.. image:: https://coveralls.io/repos/github/desihub/desimeter/badge.svg?branch=main
   :alt: Coverage
-  :target: https://coveralls.io/github/desihub/desimeter?branch=master
+  :target: https://coveralls.io/github/desihub/desimeter?branch=main
 
 Script Examples
 ---------------
