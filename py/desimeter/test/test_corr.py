@@ -1,5 +1,4 @@
 import unittest
-from pkg_resources import resource_filename
 from collections import Counter
 
 import numpy as np
