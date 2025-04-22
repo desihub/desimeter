@@ -17,11 +17,11 @@ desimeter change Log
 0.7.0 (2023-01-12)
 ------------------
 
-* Add turbulence correction mode using stationary positioners [PR `#186, #187`_].
+* Add turbulence correction mode using stationary positioners [PR `#186`_, `#187`_].
 * Refactor desi_fvc_proc and add option to run directly w/o subprocess
-  [PR `#189, #192`_].
+  [PR `#189`_, `#192`_].
 * Clip outlying stationary positioners from turbulence fits at 10 microns
-  [PR `#190, #193`_].
+  [PR `#190`_, `#193`_].
 * Change print to log [PR `#195`_]
 
 .. _`#186`: https://github.com/desihub/desimeter/pull/186
@@ -50,7 +50,7 @@ desimeter change Log
 0.6.5 (2021-05-11)
 ------------------
 
-* add ``get_posmoves --latest`` option [PRs `#179, #181, #182`_]
+* add ``get_posmoves --latest`` option [PRs `#179`_, `#181`_, `#182`_]
 * add ``analyze_pos_performance`` options to filter based upon positioner
   movement scale factors [PR `#180`_]
 * add ``desimeter.fiberassign`` with x,y <-> ra,dec transform predictions
