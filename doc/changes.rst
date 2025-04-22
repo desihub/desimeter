@@ -5,7 +5,9 @@ desimeter change Log
 0.7.2 (unreleased)
 ------------------
 
-* Switch integration testing from CirclCI to GitHub actions [PR #197].
+* Switch integration testing from CirclCI to GitHub actions [PR `#197`_].
+
+.. _`#197`: https://github.com/desihub/desimeter/pull/197
 
 0.7.1 (2024-08-15)
 ------------------
@@ -15,98 +17,165 @@ desimeter change Log
 0.7.0 (2023-01-12)
 ------------------
 
-* Add turbulence correction mode using stationary positioners [PR #186, #187].
+* Add turbulence correction mode using stationary positioners [PR `#186, #187`_].
 * Refactor desi_fvc_proc and add option to run directly w/o subprocess
-  [PR #189, #192].
+  [PR `#189, #192`_].
 * Clip outlying stationary positioners from turbulence fits at 10 microns
-  [PR #190, #193].
-* Change print to log [PR #195]
+  [PR `#190, #193`_].
+* Change print to log [PR `#195`_]
+
+.. _`#186`: https://github.com/desihub/desimeter/pull/186
+.. _`#187`: https://github.com/desihub/desimeter/pull/187
+.. _`#189`: https://github.com/desihub/desimeter/pull/189
+.. _`#190`: https://github.com/desihub/desimeter/pull/190
+.. _`#192`: https://github.com/desihub/desimeter/pull/192
+.. _`#193`: https://github.com/desihub/desimeter/pull/193
+.. _`#195`: https://github.com/desihub/desimeter/pull/195
 
 0.6.7 (2021-05-28)
 ------------------
 
-* Use vectorized cross product for speed [PR #185].
+* Use vectorized cross product for speed [PR `#185`_].
+
+.. _`#185`: https://github.com/desihub/desimeter/pull/185
 
 0.6.6 (2021-05-13)
 ------------------
 
 * Add empirical desimeter to platemaker transforms and use for
-  fiberassign xy2radec and radec2xy [PR #184]
+  fiberassign xy2radec and radec2xy [PR `#184`_]
+
+.. _`#184`: https://github.com/desihub/desimeter/pull/184
 
 0.6.5 (2021-05-11)
 ------------------
 
-* add ``get_posmoves --latest`` option [PRs #179, #181, #182]
+* add ``get_posmoves --latest`` option [PRs `#179, #181, #182`_]
 * add ``analyze_pos_performance`` options to filter based upon positioner
-  movement scale factors [PR #180]
+  movement scale factors [PR `#180`_]
 * add ``desimeter.fiberassign`` with x,y <-> ra,dec transform predictions
-  for fiberassign (i.e. not using as-observed GFA data) [PR #183]
+  for fiberassign (i.e. not using as-observed GFA data) [PR `#183`_]
+
+.. _`#179`: https://github.com/desihub/desimeter/pull/179
+.. _`#180`: https://github.com/desihub/desimeter/pull/180
+.. _`#181`: https://github.com/desihub/desimeter/pull/181
+.. _`#182`: https://github.com/desihub/desimeter/pull/182
+.. _`#183`: https://github.com/desihub/desimeter/pull/183
 
 0.6.4 (2021-03-31)
 ------------------
 
-* posperf fix for normal tiles [PR #177]
-* Analyze pos options for large datasets [PR #178]
+* posperf fix for normal tiles [PR `#177`_]
+* Analyze pos options for large datasets [PR `#178`_]
+
+.. _`#177`: https://github.com/desihub/desimeter/pull/177
+.. _`#178`: https://github.com/desihub/desimeter/pull/178
 
 0.6.3 (2021-02-15)
 ------------------
 
-* Update posflags [PR #173]
-* Petal 0 in LBL 6040 [PR #174]
-* Put row deletion in conditional [PR #175]
-* Bright focal plane image analysis [PR #176]
+* Update posflags [PR `#173`_]
+* Petal 0 in LBL 6040 [PR `#174`_]
+* Put row deletion in conditional [PR `#175`_]
+* Bright focal plane image analysis [PR `#176`_]
+
+.. _`#173`: https://github.com/desihub/desimeter/pull/173
+.. _`#174`: https://github.com/desihub/desimeter/pull/174
+.. _`#175`: https://github.com/desihub/desimeter/pull/175
+.. _`#176`: https://github.com/desihub/desimeter/pull/176
 
 0.6.2 (2020-12-18)
 ------------------
 
-* Update to field rotation model [PR #172]
+* Update to field rotation model [PR `#172`_]
+
+.. _`#172`: https://github.com/desihub/desimeter/pull/172
 
 0.6.1 (2020-12-11)
 ------------------
 
-* Fixes in prepare_posparams used for FP calibration of 20201210 [PR #167]
+* Fixes in prepare_posparams used for FP calibration of 20201210 [PR `#167`_]
+
+.. _`#167`: https://github.com/desihub/desimeter/pull/167
 
 0.6.0 (2020-12-10)
 ------------------
 
-* Update to prepare_posparams [PR #166]
-* Several changes for KPNO focal plane calibration [PR #165]
-* Increase max bin size to accommodate corner case [PR #164]
-* Make new fvc2fp parameters optional. [PR #163]
-* Disable bad performers [PR #160]
-* Spots coordinates statistical uncertainties [PR #159]
-* Unmask POSTSCRIPT and CALIB_NOTE fields when necessary [PR #158]
-* Get enabled history [PR #157]
-* Better handle ADC settings in unusual configurations. [PR #156]
-* Empirical field rotation rate [PR #155]
-* Remove parsing 'freeze' in log_note string from inclusion as "FROZEN" [PR #154]
-* Fix some ADC angle computations [PR #153]
-* Update to spotmatch usage [PR #152]
-* Let desimeter routines make directories for output if needed. [PR #151]
-* Update X_FP, Y_FP for GFA pixel corners to match target_ra/dec. [PR #150]
-* Accepted targets [PR #149]
-* Update fp-metrology file based on fiducial systematics script. [PR #148]
-* Add DEVICE_ID,BUS_ID... to metrology table using online positioner index table. [PR #146]
-* Set dtype to object for cols that can carry None or int [PR #144]
-* Clear tmp before analyze bright [PR #143]
-* plot_posparams -- skip files where data is missing [PR #142]
-* Add option --force-recent-rehome to fit_posparams [PR #141]
-* Let fetched posmovedb rows have same timestamp as calib [PR #140]
-* Pos analysis updates [PR #139]
-* Posmoves tp updates [PR #138]
-* Identify requests [PR #137]
-* Dither analysis [PR #136]
-* Proper motion [PR #135]
-* Take into account proper motions [PR #134]
-* Bug fix when reading hexapod rotation in fits header [PR #127]
-* Turbulence opt [PR #126]
-* Turbulence modeling code. [PR #125]
-* Use desimeter logger [PR #124]
-* Analyze pos perf updates [PR #123]
-* Doc xy analysis [PR #122]
-* Use device centers [PR #121]
-* Spotmatch [PR #120]
+* Update to prepare_posparams [PR `#166`_]
+* Several changes for KPNO focal plane calibration [PR `#165`_]
+* Increase max bin size to accommodate corner case [PR `#164`_]
+* Make new fvc2fp parameters optional. [PR `#163`_]
+* Disable bad performers [PR `#160`_]
+* Spots coordinates statistical uncertainties [PR `#159`_]
+* Unmask POSTSCRIPT and CALIB_NOTE fields when necessary [PR `#158`_]
+* Get enabled history [PR `#157`_]
+* Better handle ADC settings in unusual configurations. [PR `#156`_]
+* Empirical field rotation rate [PR `#155`_]
+* Remove parsing 'freeze' in log_note string from inclusion as "FROZEN" [PR `#154`_]
+* Fix some ADC angle computations [PR `#153`_]
+* Update to spotmatch usage [PR `#152`_]
+* Let desimeter routines make directories for output if needed. [PR `#151`_]
+* Update X_FP, Y_FP for GFA pixel corners to match target_ra/dec. [PR `#150`_]
+* Accepted targets [PR `#149`_]
+* Update fp-metrology file based on fiducial systematics script. [PR `#148`_]
+* Add DEVICE_ID,BUS_ID... to metrology table using online positioner index table. [PR `#146`_]
+* Set dtype to object for cols that can carry None or int [PR `#144`_]
+* Clear tmp before analyze bright [PR `#143`_]
+* plot_posparams -- skip files where data is missing [PR `#142`_]
+* Add option --force-recent-rehome to fit_posparams [PR `#141`_]
+* Let fetched posmovedb rows have same timestamp as calib [PR `#140`_]
+* Pos analysis updates [PR `#139`_]
+* Posmoves tp updates [PR `#138`_]
+* Identify requests [PR `#137`_]
+* Dither analysis [PR `#136`_]
+* Proper motion [PR `#135`_]
+* Take into account proper motions [PR `#134`_]
+* Bug fix when reading hexapod rotation in fits header [PR `#127`_]
+* Turbulence opt [PR `#126`_]
+* Turbulence modeling code. [PR `#125`_]
+* Use desimeter logger [PR `#124`_]
+* Analyze pos perf updates [PR `#123`_]
+* Doc xy analysis [PR `#122`_]
+* Use device centers [PR `#121`_]
+* Spotmatch [PR `#120`_]
 
+.. _`#120`: https://github.com/desihub/desimeter/pull/120
+.. _`#121`: https://github.com/desihub/desimeter/pull/121
+.. _`#122`: https://github.com/desihub/desimeter/pull/122
+.. _`#123`: https://github.com/desihub/desimeter/pull/123
+.. _`#124`: https://github.com/desihub/desimeter/pull/124
+.. _`#125`: https://github.com/desihub/desimeter/pull/125
+.. _`#126`: https://github.com/desihub/desimeter/pull/126
+.. _`#127`: https://github.com/desihub/desimeter/pull/127
+.. _`#134`: https://github.com/desihub/desimeter/pull/134
+.. _`#135`: https://github.com/desihub/desimeter/pull/135
+.. _`#136`: https://github.com/desihub/desimeter/pull/136
+.. _`#137`: https://github.com/desihub/desimeter/pull/137
+.. _`#138`: https://github.com/desihub/desimeter/pull/138
+.. _`#139`: https://github.com/desihub/desimeter/pull/139
+.. _`#140`: https://github.com/desihub/desimeter/pull/140
+.. _`#141`: https://github.com/desihub/desimeter/pull/141
+.. _`#142`: https://github.com/desihub/desimeter/pull/142
+.. _`#143`: https://github.com/desihub/desimeter/pull/143
+.. _`#144`: https://github.com/desihub/desimeter/pull/144
+.. _`#146`: https://github.com/desihub/desimeter/pull/146
+.. _`#148`: https://github.com/desihub/desimeter/pull/148
+.. _`#149`: https://github.com/desihub/desimeter/pull/149
+.. _`#150`: https://github.com/desihub/desimeter/pull/150
+.. _`#151`: https://github.com/desihub/desimeter/pull/151
+.. _`#152`: https://github.com/desihub/desimeter/pull/152
+.. _`#153`: https://github.com/desihub/desimeter/pull/153
+.. _`#154`: https://github.com/desihub/desimeter/pull/154
+.. _`#155`: https://github.com/desihub/desimeter/pull/155
+.. _`#156`: https://github.com/desihub/desimeter/pull/156
+.. _`#157`: https://github.com/desihub/desimeter/pull/157
+.. _`#158`: https://github.com/desihub/desimeter/pull/158
+.. _`#159`: https://github.com/desihub/desimeter/pull/159
+.. _`#160`: https://github.com/desihub/desimeter/pull/160
+.. _`#163`: https://github.com/desihub/desimeter/pull/163
+.. _`#164`: https://github.com/desihub/desimeter/pull/164
+.. _`#165`: https://github.com/desihub/desimeter/pull/165
+.. _`#166`: https://github.com/desihub/desimeter/pull/166
 
 0.5.1 (2020-09-01)
 ------------------
