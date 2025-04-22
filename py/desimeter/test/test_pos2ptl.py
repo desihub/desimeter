@@ -1,6 +1,6 @@
 import unittest
 import json
-from pkg_resources import resource_filename
+from importlib.resources import files as resource_files
 import os
 import numpy as np
 import desimeter.transform.pos2ptl as pos2ptl
@@ -13,9 +13,8 @@ class TestPos2Ptl(unittest.TestCase):
     '''
     def test_all(self):
         tol = 0.005
-        desimeter_data_dir = resource_filename("desimeter", "data")
-        filename = 'pos2ptl_test_data.json'
-        path = os.path.join(desimeter_data_dir, filename)
+        path = resource_files('desimeter').joinpath('data/pos2ptl_test_data.json')
+
         with open(path, 'r') as file:
             u = json.load(file)
                                                                                  

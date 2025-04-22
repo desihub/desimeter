@@ -1,5 +1,5 @@
 import unittest
-from pkg_resources import resource_filename
+from importlib.resources import files as resource_files
 from collections import Counter
 
 import numpy as np
@@ -16,7 +16,7 @@ class TestDetectSpots(unittest.TestCase):
         '''
         Create test image based upon input spots
         '''
-        cls.spotfile = resource_filename('desimeter', 'test/data/test-spots.csv')
+        cls.spotfile = resource_files('desimeter').joinpath('test/data/test-spots.csv')
         cls.spots = spots = Table.read(cls.spotfile)
         np.random.seed(1)
         cls.img = np.random.normal(loc=1000.0, scale=35, size=(6000, 6000))

@@ -1,5 +1,4 @@
 import unittest
-from pkg_resources import resource_filename
 import numpy as np
 from desimeter.match import match_same_system,match_arbitrary_translation_dilatation
 

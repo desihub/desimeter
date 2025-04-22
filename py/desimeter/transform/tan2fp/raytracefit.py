@@ -2,7 +2,7 @@
 Utility functions to fit and apply coordinates transformation from FVC to FP
 """
 import json
-from pkg_resources import resource_filename
+from importlib.resources import files as resource_files
 
 import numpy as np
 from scipy.interpolate import interp1d
@@ -267,7 +267,7 @@ raytracefit_instance = None
 def get_raytracefit() :
     global raytracefit_instance
     if raytracefit_instance is None :
-        filename = resource_filename('desimeter', 'data/raytrace-tan2fp.json')
+        filename = resource_files('desimeter').joinpath('data/raytrace-tan2fp.json')
         raytracefit_instance = TAN2FP_RayTraceFit.read_jsonfile(filename=filename)
     return raytracefit_instance
 

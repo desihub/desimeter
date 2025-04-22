@@ -1,5 +1,5 @@
 import unittest
-from pkg_resources import resource_filename
+from importlib.resources import files as resource_files
 
 import numpy as np
 from scipy import ndimage
@@ -15,10 +15,10 @@ class TestFindFiducials(unittest.TestCase):
         '''
         Create test image based upon input spots
         '''
-        cls.spotfile = resource_filename('desimeter', 'test/data/test-spots.csv')
+        cls.spotfile = resource_files('desimeter').joinpath('test/data/test-spots.csv')
         cls.spots = Table.read(cls.spotfile)
         cls.spots = cls.spots[:][cls.spots['PINHOLE_ID']>0] # keep only FIF or GIF
-        cls.input_transform = resource_filename('desimeter',"data/canon-lens-fvc2fp.json")
+        cls.input_transform = resource_files('desimeter').joinpath('data/canon-lens-fvc2fp.json')
 
     def setUp(self):
         pass
