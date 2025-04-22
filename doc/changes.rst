@@ -5,7 +5,7 @@ desimeter change Log
 0.7.2 (unreleased)
 ------------------
 
-* No changes yet.
+* Switch integration testing from CirclCI to GitHub actions [PR #197].
 
 0.7.1 (2024-08-15)
 ------------------
