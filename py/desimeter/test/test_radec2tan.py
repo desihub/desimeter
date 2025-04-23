@@ -6,11 +6,16 @@ Test RA Dec <-> Tangent plane transformation code
 import unittest
 
 import numpy as np
+from desiutil.iers import freeze_iers
 import desimeter.transform.radec2tan as radec2tan
 
 
 class TestRADEC2TAN(unittest.TestCase):
     
+    @classmethod
+    def setUpClass(cls):
+        # Freeze the IERS table to prevent unneeded downloads.
+        freeze_iers()
     
     def test_hadec2xy(self):
 

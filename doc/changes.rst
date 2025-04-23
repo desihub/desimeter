@@ -2,11 +2,13 @@
 desimeter change Log
 ====================
 
-0.7.2 (unreleased)
+0.8.0 (unreleased)
 ------------------
 
 * Switch integration testing from CirclCI to GitHub actions [PR `#197`_].
+* Enable precomputed polar misalignment matrix with ``use_hardcoded_polmis_rotmat`` option in ``fiberassign`` and ``transform.radec2tan`` submodules. Freeze IERS in radec2tan tests [PR #196].
 
+.. _`#196`: https://github.com/desihub/desimeter/pull/196
 .. _`#197`: https://github.com/desihub/desimeter/pull/197
 
 0.7.1 (2024-08-15)
