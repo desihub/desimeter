@@ -528,7 +528,8 @@ def dfieldrotdt_empirical_model(ra,dec,lst_deg) :
     x=ha/60.
     y=(dec-30)/30.
 
-    rotation_rate_arcsec_per_min = -0.396 + 0.012*x + 0.012*y + 0.124*x*y + 0.439*x**2 - 0.144*y**2 + 0.012*x**3 - 0.021*x**2*y + 0.095*x*y**2 -0.062*y**3
+    # updated 9/14/2022 using new results from S. Kent
+    rotation_rate_arcsec_per_min = -0.447 + 0.065*x - 0.067*y  +0.382*x**2 + 0.021*x*y - 0.121*y**2 - 0.031*x**3 + 0.196*x**2*y  +0.096*x*y**2 - 0.043*y**3
 
     # saturation to avoid crazy values if we run outside of the validity range of the polynomial
     min_val = -1.5
