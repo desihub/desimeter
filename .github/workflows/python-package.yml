@@ -23,12 +23,14 @@ jobs:
                   astropy-version: '<6.1'         # KPNO+NERSC, 2025/04
                   fitsio-version: '<2'            # latest
                   numpy-version: '<1.23'          # to keep asscalar, used by astropy
+                  scipy-version: '<1.9'           # for old numpy compatibility
 
                 - os: ubuntu-latest
                   python-version: '3.12'
                   astropy-version: '<7.0'         # KPNO+NERSC, 2025/04
                   fitsio-version: ''              # latest
                   numpy-version: '<2.3'
+                  scipy-version: ''               # latest
 
         env:
             DESIUTIL_VERSION: 3.5.0
@@ -49,6 +51,7 @@ jobs:
                 python -m pip install git+https://github.com/desihub/desiutil.git@${DESIUTIL_VERSION}#egg=desiutil
                 python -m pip install -r requirements.txt
                 python -m pip install -U 'numpy${{ matrix.numpy-version }}'
+                python -m pip install -U 'scipy${{ matrix.scipy-version }}'
                 python -m pip install -U 'astropy${{ matrix.astropy-version }}'
                 python -m pip cache remove fitsio
                 python -m pip install --no-deps --force-reinstall --ignore-installed 'fitsio${{ matrix.fitsio-version }}'
