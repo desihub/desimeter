@@ -6,7 +6,14 @@ Test RA Dec <-> Tangent plane transformation code
 import unittest
 
 import numpy as np
-from desiutil.iers import freeze_iers
+
+# Optionally use desiutil to prevent iers downloads, if desiutil is installed
+try:
+    from desiutil.iers import freeze_iers
+except ImportError:
+    def freeze_iers():
+        pass
+
 import desimeter.transform.radec2tan as radec2tan
 
 
