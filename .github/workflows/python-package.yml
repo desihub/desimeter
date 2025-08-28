@@ -32,9 +32,6 @@ jobs:
                   numpy-version: '<2.3'
                   scipy-version: ''               # latest
 
-        env:
-            DESIUTIL_VERSION: 3.5.0
-
         steps:
             - name: Checkout code
               uses: actions/checkout@v2
@@ -48,7 +45,6 @@ jobs:
               run: |
                 python -m pip install --upgrade pip setuptools wheel
                 python -m pip install pytest
-                python -m pip install git+https://github.com/desihub/desiutil.git@${DESIUTIL_VERSION}#egg=desiutil
                 python -m pip install -r requirements.txt
                 python -m pip install -U 'numpy${{ matrix.numpy-version }}'
                 python -m pip install -U 'scipy${{ matrix.scipy-version }}'
@@ -70,8 +66,6 @@ jobs:
                 fitsio-version: ['<2']     # latest
                 numpy-version: ['<1.23']   # to keep asscalar, used by astropy
                 scipy-version: ['<1.9']           # compatibility with older NumPy
-        env:
-            DESIUTIL_VERSION: 3.5.0
 
         steps:
             - name: Checkout code
@@ -86,7 +80,6 @@ jobs:
               run: |
                 python -m pip install --upgrade pip setuptools wheel
                 python -m pip install pytest pytest-cov coveralls
-                python -m pip install git+https://github.com/desihub/desiutil.git@${DESIUTIL_VERSION}#egg=desiutil
                 python -m pip install -r requirements.txt
                 python -m pip install specutils
                 python -m pip install -U 'numpy${{ matrix.numpy-version }}'

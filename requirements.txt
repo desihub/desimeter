@@ -1,3 +1,4 @@
+desiutil
 numpy
 scipy
 matplotlib
