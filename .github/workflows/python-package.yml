@@ -16,11 +16,20 @@ jobs:
         strategy:
             fail-fast: true
             matrix:
-                os: [ubuntu-latest]
-                python-version: ['3.10', '3.11']  # Py 3.10.14 as of 2025-04
-                astropy-version: ['<6.1']         # KPNO+NERSC, 2025/04
-                fitsio-version: ['<2']            # latest
-                numpy-version: ['<1.23']          # to keep asscalar, used by astropy
+              include:
+
+                - os: ubuntu-latest
+                  python-version: '3.10'          # Py 3.10.14 as of 2025-04
+                  astropy-version: '<6.1'         # KPNO+NERSC, 2025/04
+                  fitsio-version: '<2'            # latest
+                  numpy-version: '<1.23'          # to keep asscalar, used by astropy
+
+                - os: ubuntu-latest
+                  python-version: '3.12'
+                  astropy-version: '<7.0'         # KPNO+NERSC, 2025/04
+                  fitsio-version: ''              # latest
+                  numpy-version: '<2.3'
+
         env:
             DESIUTIL_VERSION: 3.5.0
 
