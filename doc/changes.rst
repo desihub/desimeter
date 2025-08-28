@@ -5,7 +5,13 @@ desimeter change Log
 0.8.1 (unreleased)
 ------------------
 
-* No changes yet.
+* Add rst links in docs [PR `#198`_].
+* Replace ``pkg_resources`` with ``importlib.resources`` [PR `#200`_].
+* Address deprecation warnings with numpy 2.x [PR `#203`_].
+
+.. _`#198`: https://github.com/desihub/desimeter/pull/198
+.. _`#200`: https://github.com/desihub/desimeter/pull/200
+.. _`#203`: https://github.com/desihub/desimeter/pull/203
 
 0.8.0 (2025-04-29)
 ------------------
