@@ -33,10 +33,10 @@ class TestFindFiducials(unittest.TestCase):
                               'X_FP_METRO', 'Y_FP_METRO'])
         spots = findfiducials(spots, input_transform=self.input_transform)
         #- All fiducial locations found
-        self.assertTrue(np.all(np.in1d(self.spots['LOCATION'], spots['LOCATION'])))
+        self.assertTrue(np.all(np.isin(self.spots['LOCATION'], spots['LOCATION'])))
 
         #- No extra locations found
-        self.assertTrue(np.all(np.in1d(spots['LOCATION'], self.spots['LOCATION'])))
+        self.assertTrue(np.all(np.isin(spots['LOCATION'], self.spots['LOCATION'])))
 
         #- FAILS: All individual pinholes found
         test_pinholes = list(zip(self.spots['LOCATION'], self.spots['PINHOLE_ID']))

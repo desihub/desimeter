@@ -19,9 +19,9 @@ extracted from DESI-0530.
 import os
 import numpy as np
 from astropy.table import Table
-from pkg_resources import resource_filename
+from importlib.resources import files
 
-data_directory = resource_filename('desimeter','data')
+data_directory = str(files('desimeter').joinpath('data'))
 lookup_file = 'focal_surface_lookup.csv'
 lookup_path = os.path.join(data_directory, lookup_file)
 table = Table.read(lookup_path, format='csv', comment='#')

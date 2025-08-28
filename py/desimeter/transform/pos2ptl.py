@@ -173,11 +173,13 @@ def loc2ext(x_loc, y_loc, r1, r2, t_offset, p_offset,
     t_ext = []
     p_ext = []
     unreachable = []
+
     for i in range(n):
-        ext_ranges = [[float(int2ext(_default_t_int_range[0], t_offset[i])),
-                       float(int2ext(_default_t_int_range[1], t_offset[i]))],
-                      [float(int2ext(_default_p_int_range[0], p_offset[i])),
-                       float(int2ext(_default_p_int_range[1], p_offset[i]))]]
+        # Note: int2ext(a,b) returns a length-1 array, not scalar
+        ext_ranges = [[float(int2ext(_default_t_int_range[0], t_offset[i])[0]),
+                       float(int2ext(_default_t_int_range[1], t_offset[i])[0])],
+                      [float(int2ext(_default_p_int_range[0], p_offset[i])[0]),
+                       float(int2ext(_default_p_int_range[1], p_offset[i])[0])]]
         tp_ext, unreach = xy2tp.xy2tp(xy=[x_loc[i], y_loc[i]],
                                      r=[r1[i], r2[i]],
                                      ranges=ext_ranges,

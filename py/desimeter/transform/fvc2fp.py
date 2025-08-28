@@ -148,7 +148,7 @@ class FVC2FP(object):
         #- trim metrology to just the ones that have spots
         fidspots_pinloc = fidspots['LOCATION']*10 + fidspots['PINHOLE_ID']
         metro_pinloc = self.metrology['LOCATION']*10 + self.metrology['PINHOLE_ID']
-        jj = np.in1d(metro_pinloc, fidspots_pinloc)
+        jj = np.isin(metro_pinloc, fidspots_pinloc)
         metrology = self.metrology[jj]
 
         #- Sort so that they match each other
