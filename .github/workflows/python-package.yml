@@ -36,7 +36,7 @@ jobs:
                   python-version: '3.13'
                   astropy-version: '<8.0'
                   fitsio-version: ''              # latest
-                  numpy-version: '<2.3'           # for numba compatibility
+                  numpy-version: '<3'
                   scipy-version: ''               # latest
 
         steps:
