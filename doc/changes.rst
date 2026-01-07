@@ -8,10 +8,12 @@ desimeter change Log
 * Add rst links in docs [PR `#198`_].
 * Replace ``pkg_resources`` with ``importlib.resources`` [PR `#200`_].
 * Address deprecation warnings with numpy 2.x [PR `#203`_].
+* Add python/3.13 and astropy/7.x to CI testing matrix [PR `#204`_].
 
 .. _`#198`: https://github.com/desihub/desimeter/pull/198
 .. _`#200`: https://github.com/desihub/desimeter/pull/200
 .. _`#203`: https://github.com/desihub/desimeter/pull/203
+.. _`#204`: https://github.com/desihub/desimeter/pull/204
 
 0.8.0 (2025-04-29)
 ------------------
