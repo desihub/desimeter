@@ -32,6 +32,13 @@ jobs:
                   numpy-version: '<2.3'
                   scipy-version: ''               # latest
 
+                - os: ubuntu-latest
+                  python-version: '3.13'
+                  astropy-version: '<8.0'
+                  fitsio-version: ''              # latest
+                  numpy-version: '<2.3'           # for numba compatibility
+                  scipy-version: ''               # latest
+
         steps:
             - name: Checkout code
               uses: actions/checkout@v2
