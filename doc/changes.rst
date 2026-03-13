@@ -89,11 +89,19 @@ desimeter change Log
 0.6.3 (2021-02-15)
 ------------------
 
+* Fix get posmoves merge [PR `#161`_].
+* Add routine to print groups of ambigous positioners. [PR `#168`_].
+* Improve dither comparison. [PR `#169`_].
+* desi_fvc_proc with --sequence: save extnames and use them in output filenames [PR `#171`_].
 * Update posflags [PR `#173`_]
 * Petal 0 in LBL 6040 [PR `#174`_]
 * Put row deletion in conditional [PR `#175`_]
 * Bright focal plane image analysis [PR `#176`_]
 
+.. _`#161`: https://github.com/desihub/desimeter/pull/161
+.. _`#168`: https://github.com/desihub/desimeter/pull/168
+.. _`#169`: https://github.com/desihub/desimeter/pull/169
+.. _`#171`: https://github.com/desihub/desimeter/pull/171
 .. _`#173`: https://github.com/desihub/desimeter/pull/173
 .. _`#174`: https://github.com/desihub/desimeter/pull/174
 .. _`#175`: https://github.com/desihub/desimeter/pull/175
