@@ -2,7 +2,12 @@
 desimeter change Log
 ====================
 
-0.8.1 (unreleased)
+0.9.1 (unreleased)
+------------------
+
+* No changes yet.
+
+0.9.0 (unreleased)
 ------------------
 
 * Add rst links in docs [PR `#198`_].
@@ -352,4 +357,24 @@ desimeter change Log
 0.1.0 (2019-12-29)
 ------------------
 
-* Initial release
+* Fvc format [PR `#1`_].
+* Transform reorganize [PR `#2`_].
+* Metrology v3 [PR `#3`_].
+* Improved match [PR `#4`_].
+* Zhao-Burge FVC/FP transforms (PR `#5`_).
+* Threshold [PR `#6`_].
+* More unit tests [PR `#7`_].
+* add desimeter.log to avoid desiutil dependency [PR `#9`_].
+* adds setup.py for tests and installation [PR `#10`_].
+* Docs [PR `#11`_].
+
+.. _`#1`: https://github.com/desihub/desimeter/pull/1
+.. _`#2`: https://github.com/desihub/desimeter/pull/2
+.. _`#3`: https://github.com/desihub/desimeter/pull/3
+.. _`#4`: https://github.com/desihub/desimeter/pull/4
+.. _`#5`: https://github.com/desihub/desimeter/pull/5
+.. _`#6`: https://github.com/desihub/desimeter/pull/6
+.. _`#7`: https://github.com/desihub/desimeter/pull/7
+.. _`#9`: https://github.com/desihub/desimeter/pull/9
+.. _`#10`: https://github.com/desihub/desimeter/pull/10
+.. _`#11`: https://github.com/desihub/desimeter/pull/11
